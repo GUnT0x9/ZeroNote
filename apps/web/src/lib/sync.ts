@@ -21,6 +21,7 @@ import {
 
 let running: Promise<void> | undefined,
   timer: ReturnType<typeof setTimeout> | undefined,
+  requested = false,
   started = false;
 export function requestSync(): void {
   if (timer) clearTimeout(timer);
@@ -60,17 +61,30 @@ export function startSync(): () => void {
   };
 }
 export async function synchronize(): Promise<void> {
-  if (running) return running;
+  if (running) {
+    requested = true;
+    return running;
+  }
   if (!navigator.onLine) {
     useUiStore.getState().patch({ syncState: "offline" });
     return;
   }
-  running = runSync();
+  running = drainSyncRequests();
   try {
     await running;
   } finally {
     running = undefined;
   }
+}
+async function drainSyncRequests(): Promise<void> {
+  do {
+    requested = false;
+    if (!navigator.onLine) {
+      useUiStore.getState().patch({ syncState: "offline" });
+      return;
+    }
+    await runSync();
+  } while (requested);
 }
 async function runSync(): Promise<void> {
   try {
