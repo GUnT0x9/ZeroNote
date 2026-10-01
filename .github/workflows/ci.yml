@@ -64,6 +64,16 @@ jobs:
           export BACKUP_FILE="$(find "$BACKUP_DIRECTORY" -name 'zeronote-*.age' -print -quit)"
           bash scripts/restore.sh
           DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atc 'SELECT count(*) FROM schema_migrations' | grep -Ex '2'
+          node scripts/postgres-client.mjs psql -Atc 'SELECT EXISTS(SELECT 1 FROM pages) AND EXISTS(SELECT 1 FROM document_checkpoints)' | grep -Ex 't'
+          for table in workspaces pages document_checkpoints document_operations document_snapshots memberships grants comments beta_codes beta_devices; do
+            query="SELECT count(*)::text || ':' || md5(COALESCE(jsonb_agg(to_jsonb(data) ORDER BY to_jsonb(data)::text)::text, '[]')) FROM $table data"
+            source_fingerprint="$(node scripts/postgres-client.mjs psql -Atqc "$query")"
+            restored_fingerprint="$(DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atqc "$query")"
+            if [[ "$source_fingerprint" != "$restored_fingerprint" ]]; then
+              printf 'Restored data does not match table %s.\n' "$table" >&2
+              exit 1
+            fi
+          done
           if bash scripts/restore.sh; then
             echo 'Restore unexpectedly allowed a non-empty database.' >&2
             exit 1

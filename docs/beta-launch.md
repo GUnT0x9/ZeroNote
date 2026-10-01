@@ -64,7 +64,7 @@ export BACKUP_FILE=/absolute/private/path/backups/zeronote-<timestamp>.age
 pnpm restore
 ```
 
-DB 백업에는 서버 인증 Hash와 Membership도 포함되므로 암호화 파일로만 보관한다. Workspace Export는 사용자 데이터 이전용이며 인증 Secret을 제외한다. `restore`는 비어 있지 않은 DB와 원본과 같은 URL을 거절하고 하나의 Transaction으로 복원한다. CI는 별도 DB에서 암호화·복원과 Migration 개수를 검사한다. 실제 Production 백업도 공개 전에 별도 DB로 복원하고 문서/Task/권한을 Smoke Test한다.
+DB 백업에는 서버 인증 Hash와 Membership도 포함되므로 암호화 파일로만 보관한다. Workspace Export는 사용자 데이터 이전용이며 인증 Secret을 제외한다. `restore`는 비어 있지 않은 DB와 원본과 같은 URL을 거절하고 하나의 Transaction으로 복원한다. CI는 별도 DB에서 암호화·복원, Migration 개수, 주요 테이블의 행 수와 전체 내용 일치를 검사한다. 실제 Production 백업도 공개 전에 별도 DB로 복원하고 문서/Task/권한을 Smoke Test한다.
 
 ## 공개·Roll Back
 
