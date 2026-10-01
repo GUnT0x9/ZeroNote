@@ -12,4 +12,4 @@ RUN pnpm --filter @zeronote/server build && chown -R node:node /app
 USER node
 ENV NODE_ENV=production
 EXPOSE 10000
-CMD ["pnpm", "--filter", "@zeronote/server", "start"]
+CMD ["node", "--import", "./apps/server/node_modules/tsx/dist/loader.mjs", "apps/server/src/index.ts"]

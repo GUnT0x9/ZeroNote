@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { createBrowserBetaCode } from "./beta-helpers";
-const ORIGIN = "http://localhost:3002";
+const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
 async function createWorkspace(
   page: Page,
   name = "Browser workspace",
@@ -23,6 +23,17 @@ async function createWorkspace(
   await expect(
     page.getByText("서버 동기화 완료", { exact: true }),
   ).toBeVisible();
+  if (ORIGIN.startsWith("https://")) {
+    const session = (await page.context().cookies()).find(
+      (cookie) => cookie.name === "zn_session",
+    );
+    expect(session).toMatchObject({
+      domain: new URL(ORIGIN).hostname,
+      httpOnly: true,
+      secure: true,
+      sameSite: "Strict",
+    });
+  }
   return key;
 }
 async function createInvite(page: Page, role = "editor"): Promise<string> {

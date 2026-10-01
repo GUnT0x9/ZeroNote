@@ -31,6 +31,16 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm test:e2e
       - run: docker build -f Dockerfile.server -t zeronote-server:ci .
+      - name: Server starts within the Free memory limit
+        run: |
+          docker run -d --name zeronote-server-smoke --memory=512m --network host \
+            -e DATABASE_URL -e NODE_ENV=test -e BETA_REQUIRED=true -e PORT=3006 \
+            -e WEB_ORIGIN=http://localhost:3000 zeronote-server:ci
+          trap 'docker rm -f zeronote-server-smoke >/dev/null' EXIT
+          if ! curl --fail --retry 15 --retry-delay 2 --retry-connrefused --max-time 5 http://127.0.0.1:3006/v1/health; then
+            docker logs zeronote-server-smoke
+            exit 1
+          fi
       - name: Encrypted backup and restore drill
         run: |
           sudo apt-get update
