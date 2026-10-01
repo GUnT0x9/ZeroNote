@@ -1,11 +1,13 @@
 import "fake-indexeddb/auto";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import * as Y from "yjs";
+import { IndexeddbPersistence, storeState } from "y-indexeddb";
 import {
   createTaskRow,
   replaceSharedText,
   bytesToBase64,
   type WorkspaceExport,
+  getDocumentProjection,
 } from "@zeronote/shared";
 import { database, type LocalPage, type LocalDocument } from "./database";
 import {
@@ -34,7 +36,61 @@ async function workspace() {
   return result;
 }
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const id of created.splice(0)) await deleteLocalWorkspace(id);
+});
+it("opens an unchanged cached page without rewriting its local projection", async () => {
+  const { page: original } = await workspace();
+  const page = { ...original, id: crypto.randomUUID(), title: "Cached" };
+  const document = new Y.Doc({ gc: false });
+  document.getText("title").insert(0, page.title);
+  await database.pages.put(page);
+  await database.documents.put({
+    id: page.id,
+    workspaceId: page.workspaceId,
+    ...getDocumentProjection(document),
+    update: Y.encodeStateAsUpdate(document),
+    generation: 0,
+    committedGeneration: 0,
+    state: "saved",
+    updatedAt: Date.now(),
+  });
+  const write = vi.spyOn(database.documents, "put");
+  const session = await openDocument(page);
+  expect(session.document.getText("title").toString()).toBe("Cached");
+  expect(write).not.toHaveBeenCalled();
+  expect(session.generation).toBe(0);
+  document.destroy();
+});
+it("recovers newer persisted edits after a crash and marks them uncommitted", async () => {
+  const { page: original } = await workspace();
+  const page = { ...original, id: crypto.randomUUID(), title: "Cached" };
+  const document = new Y.Doc({ gc: false });
+  document.getText("title").insert(0, page.title);
+  await database.pages.put(page);
+  await database.documents.put({
+    id: page.id,
+    workspaceId: page.workspaceId,
+    ...getDocumentProjection(document),
+    update: Y.encodeStateAsUpdate(document),
+    generation: 0,
+    committedGeneration: 0,
+    state: "saved",
+    updatedAt: Date.now(),
+  });
+  const persistence = new IndexeddbPersistence(`zeronote:${page.id}`, document);
+  await persistence.whenSynced;
+  document
+    .getText("title")
+    .insert(document.getText("title").length, " recovered");
+  await storeState(persistence, true);
+  await persistence.destroy();
+  document.destroy();
+  const session = await openDocument(page);
+  const record = await database.documents.get(page.id);
+  expect(session.document.getText("title").toString()).toBe("Cached recovered");
+  expect(record?.title).toBe("Cached recovered");
+  expect(record!.generation).toBeGreaterThan(record!.committedGeneration);
 });
 describe("Local-first data", () => {
   it("creates a workspace with only a recovery hash and durable local pages", async () => {

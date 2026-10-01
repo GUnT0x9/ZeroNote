@@ -44,7 +44,7 @@ async function issueCodes(): Promise<void> {
     await repository.close();
   }
 }
-void issueCodes().catch(() => {
+await issueCodes().catch(() => {
   process.stderr.write(
     "Unable to issue Beta codes. Check database access and output path.\n",
   );

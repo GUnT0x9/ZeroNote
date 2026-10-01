@@ -1,17 +1,25 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 const execute = promisify(execFile);
+const serverRequire = createRequire(resolve("apps/server/package.json"));
 /** Operator-side test setup only; no public code-issuance endpoint. */
 export async function createBrowserBetaCode(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "zeronote-beta-test-"));
   const output = join(directory, "codes.txt");
   try {
     await execute(
-      "pnpm",
-      ["--filter", "@zeronote/server", "beta:issue", output],
+      process.execPath,
+      [
+        "--import",
+        pathToFileURL(serverRequire.resolve("tsx")).href,
+        resolve("apps/server/src/beta-cli.ts"),
+        output,
+      ],
       {
         timeout: 15_000,
       },

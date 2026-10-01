@@ -197,7 +197,10 @@ export function DocumentView({
         "database",
       );
     const target = await openDocument(project);
-    const rowId = createTaskRow(target.document, text);
+    const rowId = createTaskRow(
+      target.document,
+      text.trim().slice(0, 500) || "제목 없음",
+    );
     return { databaseId: project.id, rowId };
   };
   if (error)

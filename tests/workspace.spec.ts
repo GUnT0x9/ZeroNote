@@ -315,7 +315,7 @@ test("Slash Commands, stable Page Mention, Backlinks and Todo conversion", async
   await editor.fill("");
   await editor.pressSequentially("/todo");
   await page.getByRole("option", { name: /^Todo/ }).click();
-  await editor.pressSequentially("Implement feature");
+  await editor.pressSequentially("  Implement feature  ");
   await page.getByRole("button", { name: "Block 메뉴", exact: true }).click();
   await page.getByRole("button", { name: "Task로 변환", exact: true }).click();
   await expect(

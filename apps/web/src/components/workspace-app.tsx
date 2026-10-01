@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Menu,
   Plus,
@@ -48,20 +48,28 @@ export default function WorkspaceApp() {
     [trashOpen, setTrashOpen] = useState(false),
     [historyPage, setHistoryPage] = useState<LocalPage | null>(null),
     [openingInvite, setOpeningInvite] = useState(false);
+  const preservedPageIds = useMemo(
+    () =>
+      new Set(
+        data.documents
+          .filter((record) => record.state === "preserved")
+          .map((record) => record.id),
+      ),
+    [data.documents],
+  );
+  const visiblePages = useMemo(
+    () => [
+      ...availablePages(data.pages),
+      ...data.pages.filter(
+        (item) =>
+          (item.accessLost && !item.deletedAt) || preservedPageIds.has(item.id),
+      ),
+    ],
+    [data.pages, preservedPageIds],
+  );
   const workspace =
       data.workspaces.find((item) => item.id === ui.workspaceId) ?? null,
-    page =
-      [
-        ...availablePages(data.pages),
-        ...data.pages.filter(
-          (item) =>
-            (item.accessLost && !item.deletedAt) ||
-            data.documents.some(
-              (document) =>
-                document.id === item.id && document.state === "preserved",
-            ),
-        ),
-      ].find((item) => item.id === ui.pageId) ?? null;
+    page = visiblePages.find((item) => item.id === ui.pageId) ?? null;
   useEffect(() => {
     const stop = startSync(),
       params = new URLSearchParams(window.location.search);

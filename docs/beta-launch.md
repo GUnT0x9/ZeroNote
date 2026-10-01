@@ -11,6 +11,8 @@
 5. Render에 `NODE_ENV=production`, `BETA_REQUIRED=true`, `DATABASE_URL`, `WEB_ORIGIN=https://<project>.vercel.app`를 설정한다. Origin에 경로나 끝 `/`를 붙이지 않는다. Secret은 Dashboard/환경변수로만 관리한다.
 6. CI가 통과한 Commit을 Render에서 먼저 수동 배포하고 `/v1/health`를 확인한 뒤 Vercel Production을 수동 배포한다. 아직 CI가 통과하지 않은 Commit을 승격하지 않는다.
 
+처음 서비스를 만들 때 Render의 `WEB_ORIGIN`에는 사용할 Vercel 프로젝트의 예정 Production Origin을 입력한다. Vercel에서 실제 주소를 확인한 뒤 값이 다르면 Render 설정을 고치고 Render → Vercel 순서로 다시 배포한다. 운영 초대코드는 주소와 Origin을 확정한 뒤 발급한다. Vercel의 수동 배포는 Dashboard에서 CI가 통과한 Git Commit을 지정할 수 있다. [Vercel Deployment Methods](https://vercel.com/docs/deployments)
+
 REST는 Web의 `/v1`에서 Render로 Rewrite한다. Domain 속성 없는 Session Cookie는 Web Origin에 귀속되며 Secure·HttpOnly·SameSite=Strict다. WebSocket은 Render로 직접 연결하고 REST에서 받은 5분 문서 범위 Token을 인증 Frame으로 보낸다. API는 `no-store`이며 SW가 Cache하지 않는다.
 
 ## Beta 코드와 사용자 진입

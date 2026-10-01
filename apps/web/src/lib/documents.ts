@@ -116,6 +116,18 @@ async function hydrate(
   );
   if (!session.document.getText("title").length && locallyCreated)
     replaceSharedText(session.document.getText("title"), page.title);
+  if (cached) {
+    const state = Y.encodeStateAsUpdate(session.document);
+    if (
+      state.byteLength === cached.update.byteLength &&
+      state.every((byte, index) => byte === cached.update[index])
+    ) {
+      if (cached.generation > cached.committedGeneration) requestSync();
+      return;
+    }
+    // IndexedDB may contain newer edits than the debounced projection after a crash.
+    session.generation = Math.max(session.generation, cached.generation + 1);
+  }
   await saveLocal(session, page);
 }
 async function saveLocal(

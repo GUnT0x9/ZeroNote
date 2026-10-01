@@ -79,6 +79,18 @@ export function Sidebar({
     ),
     inbox = pages.find((page) => page.isInbox),
     owner = pages.some((page) => page.role === "owner" && !page.accessLost);
+  const preservedPages = useMemo(() => {
+    const ids = new Set(
+      data.documents
+        .filter((record) => record.state === "preserved")
+        .map((record) => record.id),
+    );
+    return data.pages.filter(
+      (page) =>
+        page.workspaceId === ui.workspaceId &&
+        (page.accessLost || ids.has(page.id)),
+    );
+  }, [data.documents, data.pages, ui.workspaceId]);
   return (
     <>
       <div
@@ -250,40 +262,21 @@ export function Sidebar({
               </div>
             )}
           </section>
-          {data.pages.some(
-            (page) =>
-              page.workspaceId === ui.workspaceId &&
-              (page.accessLost ||
-                data.documents.some(
-                  (document) =>
-                    document.id === page.id && document.state === "preserved",
-                )),
-          ) && (
+          {preservedPages.length > 0 && (
             <section className="sidebar-section">
               <div className="section-heading">
                 <span>로컬 보존본</span>
               </div>
-              {data.pages
-                .filter(
-                  (page) =>
-                    page.workspaceId === ui.workspaceId &&
-                    (page.accessLost ||
-                      data.documents.some(
-                        (document) =>
-                          document.id === page.id &&
-                          document.state === "preserved",
-                      )),
-                )
-                .map((page) => (
-                  <button
-                    className="tree-row"
-                    key={page.id}
-                    onClick={() => ui.select(page.workspaceId, page.id)}
-                  >
-                    <CloudOff size={14} />
-                    <span>{page.title}</span>
-                  </button>
-                ))}
+              {preservedPages.map((page) => (
+                <button
+                  className="tree-row"
+                  key={page.id}
+                  onClick={() => ui.select(page.workspaceId, page.id)}
+                >
+                  <CloudOff size={14} />
+                  <span>{page.title}</span>
+                </button>
+              ))}
             </section>
           )}
           {!owner && pages.length > 0 && (
