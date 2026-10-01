@@ -1,6 +1,6 @@
 # ZeroNote 초대 Beta 운영
 
-2026-10-01. 배포 대상은 Vercel Hobby(Web), Render Free(REST/WebSocket), Neon Free(PostgreSQL 17)다. 초대 대상은 5–10명이며 유료 Upgrade와 자동 Production/Preview 배포를 사용하지 않는다. 이 문서는 배포 설정과 운영 절차이며 실제 배포 완료를 의미하지 않는다.
+2026-10-01. 배포 대상은 Vercel Hobby(Web), Render Free(REST/WebSocket), Neon Free(PostgreSQL 17)다. 초대 대상은 5–10명이며 유료 Upgrade와 자동 Production/Preview 배포를 사용하지 않는다. Vercel·Render·Neon 서비스를 생성하고 Production HTTPS 배포를 완료했다. 실제 기기의 Mobile 확인과 운영자 2명 시범 사용 후 초대 대상을 확대한다.
 
 ## 계정과 서비스 생성
 
@@ -75,14 +75,24 @@ DB 백업에는 서버 인증 Hash와 Membership도 포함되므로 암호화 �
 
 ## 배포 기록
 
-| 항목                   | 현재 상태                    |
-| ---------------------- | ---------------------------- |
-| Vercel Production 주소 | 계정 연결/프로젝트 생성 필요 |
-| Render API/WSS 주소    | 계정 연결/서비스 생성 필요   |
-| Neon 프로젝트/Region   | 계정 연결/프로젝트 생성 필요 |
-| 실제 HTTPS Smoke Test  | 서비스 배포 후 실행          |
-| 실제 Mobile 확인       | 운영 기기에서 실행           |
-| Production 백업 복원   | Production DB 생성 후 실행   |
+| 항목                 | 현재 상태                                                                                             |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| Vercel Production    | https://zeronote-kohl.vercel.app · Hobby · Node.js 24                                                 |
+| Render API/WSS       | https://zeronote-api.onrender.com · `/collaboration` · Free · Singapore                               |
+| Render Service       | `srv-dauvutk1nsns73fvhmp0` · 단일 인스턴스 · 자동 배포/Preview 꺼짐                                   |
+| Neon                 | `zeronote-beta` / `mute-frost-94656200` · Free · PostgreSQL 17 · Singapore                            |
+| Neon DB              | `zeronote` · 복원 검증용 별도 DB `zeronote_restore`                                                   |
+| 실제 HTTPS           | Web/API 200, 잘못된 Origin 403, Web 도메인의 Secure·HttpOnly·SameSite=Strict Cookie 확인              |
+| Production 백업/복원 | pg_dump 17.11 + age 1.3.2 · 별도 `zeronote_restore` DB · 10개 테이블 내용 일치 및 문서/Task/권한 확인 |
+| 실제 Mobile 기기     | Android Chrome/iOS Safari에서 수동 확인 필요                                                          |
+
+실제 Production HTTPS에서 Browser 8개 시나리오를 통과했고, 서버 재시작 후 새 브라우저 Recovery와 문서·Task·Comments·기록·기존 Viewer 권한 유지도 확인했다. 운영용 일회성 초대코드 10개는 2026-10-01 발급했으며 7일 뒤 만료한다. 먼저 운영자 2명에게 사용하고 실제 Android/iOS 및 Sleep 이후 연결 상태를 확인한 뒤 5–10명으로 확대한다.
+
+현재 Render는 미병합 Beta PR의 `codex/beta-release` Branch를 사용한다. Vercel은 CI 통과 후 해당 Checkout을 CLI로 수동 업로드한다. PR 병합 후 Render의 Branch를 `main`으로 바꾸고 같은 순서로 배포한다. DB Schema는 되감지 않는다.
+
+Render Free의 512MiB 제한에서 첫 배포가 실패했다. 원인은 Runtime의 `pnpm start`가 다시 전체 Workspace 의존성을 설치한 것이었다. `Dockerfile.server`에서 설치된 Loader로 Node.js를 직접 실행하도록 수정했고, CI에 512MiB Container 시작/Health 검증을 추가했다. 서버가 Ready가 된 뒤 Vercel을 배포했다.
+
+운영 코드·Recovery Key·DB URL·복호화 Key·브라우저 인증 상태는 저장소 밖의 Private 디렉터리에만 보관한다. 발급한 코드 파일을 운영자가 개별 전달하며 추가 공개와 유료 전환은 자동으로 하지 않는다.
 
 공식 설정 참고: [Vercel Git 설정](https://vercel.com/docs/project-configuration/git-configuration), [Render Blueprint](https://render.com/docs/blueprint-spec), [Render Free](https://render.com/docs/free), [age](https://github.com/FiloSottile/age).
 

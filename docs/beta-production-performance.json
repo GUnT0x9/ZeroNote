@@ -1,0 +1,11 @@
+{
+  "pages": 1000,
+  "blocks": 500,
+  "tasks": 1000,
+  "cachedPageOpenMs": 170.30000000074506,
+  "automationOpenMs": 308.0729030000002,
+  "localSearchMs": 95,
+  "automationSearchMs": 402.7291440000008,
+  "baseUrl": "https://zeronote-kohl.vercel.app",
+  "measuredDate": "2026-10-01"
+}

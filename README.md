@@ -2,6 +2,8 @@
 
 회원가입 없이 문서를 작성하고 Page에 사람을 초대하는 Local-first Workspace입니다. Pretendard를 자체 제공하며 Light/Dark/System Theme과 Mobile 읽기·Quick Capture·Comments를 지원합니다.
 
+[ZeroNote Beta 열기](https://zeronote-kohl.vercel.app). 새 Workspace에는 운영자가 전달하는 일회성 Beta 코드가 필요합니다. Page 초대 수락과 기존 Workspace Recovery는 코드 없이 이용할 수 있습니다.
+
 ## 코드 저장소
 
 [GUnT0x9/ZeroNote](https://github.com/GUnT0x9/ZeroNote)에서 관리합니다. 기본 브랜치는 `main`이며 기능 작업은 `codex/<topic>` 브랜치에서 진행합니다. GitHub Actions에서 lint·TypeScript·단위/통합 테스트·Build·Browser 테스트를 검증합니다.
