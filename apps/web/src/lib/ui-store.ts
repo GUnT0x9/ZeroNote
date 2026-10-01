@@ -1,5 +1,6 @@
 import { create } from "zustand";
-export type Panel = "comments" | "properties" | "backlinks" | "share" | null;
+export type Panel =
+  "comments" | "properties" | "backlinks" | "share" | "history" | null;
 interface UiState {
   workspaceId: string | null;
   pageId: string | null;
@@ -13,6 +14,7 @@ interface UiState {
   syncState: "connecting" | "online" | "offline" | "error";
   syncError: string | null;
   offlineReady: boolean;
+  storageWarning: boolean;
   theme: "light" | "dark" | "system";
   select: (
     workspaceId: string,
@@ -34,6 +36,7 @@ export const useUiStore = create<UiState>((set) => ({
   syncState: "connecting",
   syncError: null,
   offlineReady: false,
+  storageWarning: false,
   theme: "system",
   select: (workspaceId, pageId, taskId = null) => {
     set({ workspaceId, pageId, taskId, sidebarOpen: false });

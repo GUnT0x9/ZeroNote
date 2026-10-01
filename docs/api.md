@@ -39,3 +39,24 @@ WebSocket Token은 `deviceId`, `resourceId`, 만료·Issuer·Audience를 검증�
 초대는 7일·1회 사용이며 Secret Hash만 저장한다. 같은 기기의 성공 요청 재전송은 허용한다. 동시 수락은 DB Row Lock으로 한 기기만 승인한다. Grant의 범위는 Page 기본, Descendants 옵션 선택 시 하위 Page, Database의 Task Row는 Database 권한을 상속한다.
 
 새 Page Metadata 생성과 Workspace 관리·공유 정책 관리는 Alpha에서 Owner가 수행한다. 초대된 Editor는 문서·Task 편집과 기존 Page Metadata 수정 권한을 가진다. 일반 멤버의 새 Page 생성 정책은 권한 모델 확장 시 조정한다.
+
+## Beta API
+
+기존 `/v1` 계약을 유지한다. 아래 Endpoint는 Session 인증을 요구하고 Mutation은 고정 `WEB_ORIGIN`을 검사한다. Snapshot은 Trash에서도 Workspace Owner만 접근한다.
+
+| Method | Path                           | Request                     | Response                                           |
+| ------ | ------------------------------ | --------------------------- | -------------------------------------------------- |
+| GET    | /v1/beta/status                | —                           | required, approved, workspaceCount, workspaceLimit |
+| POST   | /v1/beta/redeem                | code                        | Beta Status                                        |
+| GET    | /v1/storage                    | —                           | bytes, warning, blocked                            |
+| GET    | /v1/pages/:id/snapshots        | —                           | Snapshot metadata[]                                |
+| POST   | /v1/pages/:id/snapshots        | operationId, name(optional) | Snapshot metadata                                  |
+| GET    | /v1/snapshots/:id              | —                           | metadata + Base64 update                           |
+| DELETE | /v1/snapshots/:id              | —                           | deleted                                            |
+| POST   | /v1/snapshots/:id/restore-copy | operationId                 | new Page                                           |
+
+Snapshot metadata: id, pageId, kind(manual/automatic), name, schemaVersion(1), createdAt. UUID Operation ID로 재전송을 식별한다.
+
+Beta 코드는 Hash만 저장한다. Recovery/Page Invite는 Beta 자격을 요구하지 않는다. 신규 Workspace는 자격당 3개로 제한한다. Snapshot 생성/복구는 Operation ID·Device·대상·동작을 확인하여 재시도한다. 권한은 서버에서 검증한다.
+
+저장 공간 부족은 507, 문서 크기 초과는 413, Operation 충돌/수동 Snapshot 제한/Version 미지원은 409다. Durable Ack는 PostgreSQL Commit 후 반환한다. REST와 WebSocket은 같은 Transaction 저장 경로를 사용한다.

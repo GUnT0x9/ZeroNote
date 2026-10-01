@@ -12,6 +12,7 @@ import {
   Loader2,
   Share2,
   MoreHorizontal,
+  History,
   Trash2,
   Star,
 } from "lucide-react";
@@ -121,8 +122,13 @@ export function DocumentView({
     if (ui.syncState === "offline") {
       session.provider?.disconnect();
     } else if (ui.syncState === "online") {
-      if (session.provider) session.provider.connect();
-      else
+      if (session.provider && document.visibilityState === "visible") {
+        session.awareness.setLocalStateField("user", {
+          name: "내 기기",
+          color: "#5277cc",
+        });
+        session.provider.connect();
+      } else
         void connectDocument(session, page)
           .then(() => setProviderRevision((value) => value + 1))
           .catch((problem) => ui.patch({ notice: errorMessage(problem) }));
@@ -275,6 +281,18 @@ export function DocumentView({
               <SlidersHorizontal size={16} />
             </button>
           }
+          {page.role === "owner" && !page.accessLost && (
+            <button
+              className="icon-button"
+              aria-label="기록"
+              title="기록"
+              onClick={() =>
+                ui.patch({ panel: ui.panel === "history" ? null : "history" })
+              }
+            >
+              <History size={16} />
+            </button>
+          )}
           {page.role === "owner" && !page.accessLost && (
             <button
               className="button button-small"

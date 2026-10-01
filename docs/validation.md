@@ -1,5 +1,7 @@
 # ZeroNote Alpha 구현 및 검증 기록
 
+최신 초대 Beta 검증은 [beta-validation.md](beta-validation.md)를 참고한다. 아래 내용은 Alpha 구현 당시 기록이다.
+
 검증일: 2026-10-01. 승인된 핵심 Alpha를 로컬에서 실행하고 실제 PostgreSQL 및 Browser로 검증했다. Calendar, 일반 Property Builder, Branch/Merge, Public/Burn Share, 파일 업로드, Automation, Native Desktop은 Deferred다.
 
 ## 실행 환경

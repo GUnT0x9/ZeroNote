@@ -232,3 +232,44 @@ describe("Durable state comparison", () => {
     ).toThrow();
   });
 });
+
+it("clones visible Task content and remaps only self references without CRDT tombstones", async () => {
+  const { cloneDocumentContent } = await import("./index");
+  const oldId = crypto.randomUUID(),
+    newId = crypto.randomUUID(),
+    external = crypto.randomUUID();
+  const source = new Y.Doc({ gc: false });
+  source.getText("title").insert(0, "Old title");
+  source.getText("title").delete(0, 4);
+  const mention = new Y.XmlElement("pageMention");
+  mention.setAttribute("pageId", oldId);
+  const externalMention = new Y.XmlElement("pageMention");
+  externalMention.setAttribute("pageId", external);
+  source.getXmlFragment("content").insert(0, [mention, externalMention]);
+  const task = createTaskRow(source, "Task");
+  updateTaskField(source, task, "dueDate", "2026-10-01");
+  const copy = cloneDocumentContent(source, oldId, newId);
+  expect(copy.getText("title").toString()).toBe("title");
+  expect(getTaskRows(copy)).toEqual(getTaskRows(source));
+  const nodes = copy.getXmlFragment("content").toArray() as Y.XmlElement[];
+  expect(nodes[0]?.getAttribute("pageId")).toBe(newId);
+  expect(nodes[1]?.getAttribute("pageId")).toBe(external);
+  expect(
+    Y.decodeUpdate(Y.encodeStateAsUpdate(copy)).ds.clients.has(source.clientID),
+  ).toBe(false);
+  source.destroy();
+  copy.destroy();
+});
+it("clones empty documents without inventing task rows", async () => {
+  const { cloneDocumentContent } = await import("./index");
+  const source = new Y.Doc(),
+    copy = cloneDocumentContent(
+      source,
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+    );
+  expect(copy.getText("title").toString()).toBe("");
+  expect(getTaskRows(copy)).toEqual([]);
+  source.destroy();
+  copy.destroy();
+});

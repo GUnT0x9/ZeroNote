@@ -14,6 +14,7 @@ import { database, type LocalWorkspace, type LocalPage } from "./database";
 import { openDocument, flushDocuments, removeLocalDocument } from "./documents";
 import { availablePages } from "./search";
 import { useUiStore } from "./ui-store";
+import { requireBetaAccess } from "./beta";
 let sequence = 0;
 export async function enqueuePageOperation(
   payload: PageOperation,
@@ -61,6 +62,7 @@ export async function createLocalPage(
 export async function createLocalWorkspace(
   name: string,
 ): Promise<{ workspace: LocalWorkspace; key: string; page: LocalPage }> {
+  await requireBetaAccess();
   const key = createRecoveryKey(),
     workspace: LocalWorkspace = {
       id: crypto.randomUUID(),
@@ -163,6 +165,7 @@ export async function exportWorkspace(
 export async function importWorkspace(
   input: unknown,
 ): Promise<{ key: string; workspace: LocalWorkspace }> {
+  await requireBetaAccess();
   const parsed = ExportSchema.parse(input);
   validateImportedTree(parsed);
   const documents = parsed.pages.map((page) => {
@@ -175,6 +178,7 @@ export async function importWorkspace(
       throw new Error("Import 파일에 손상된 문서가 있습니다.");
     }
   });
+  await requireBetaAccess();
   const key = createRecoveryKey(),
     workspace: LocalWorkspace = {
       id: crypto.randomUUID(),

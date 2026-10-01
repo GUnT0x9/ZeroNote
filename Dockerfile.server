@@ -1,0 +1,15 @@
+FROM node:24-bookworm-slim
+RUN npm install -g pnpm@11.9.0
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY apps/server/package.json apps/server/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN pnpm install --frozen-lockfile --filter @zeronote/server... --filter zeronote
+COPY apps/server apps/server
+COPY packages/shared packages/shared
+RUN pnpm --filter @zeronote/server build && chown -R node:node /app
+USER node
+ENV NODE_ENV=production
+EXPOSE 10000
+CMD ["pnpm", "--filter", "@zeronote/server", "start"]

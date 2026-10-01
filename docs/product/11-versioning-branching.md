@@ -1,13 +1,13 @@
 # Versioning과 Branching
 
-Status: Accepted Alpha specification
+Status: Accepted Beta specification
 
-Alpha의 DocumentUpdate/Checkpoint는 내구성과 재시작 복구용이다. 사용자에게 완성된 Version History나 Git Branch로 표시하지 않는다.
+Alpha의 Update/Checkpoint는 내구성과 재시작 복구용이다. Beta에서 사용자 Snapshot을 별도 Entity로 제공한다. Snapshot은 서버에 Commit된 Page 또는 Task Database 전체 상태이며 Owner만 생성·조회·삭제·복구한다.
 
-후속 1: Named Snapshot과 자동 Snapshot, 문서/Task Database 단위 Restore. Restore는 현재 문서에 새로운 변경으로 적용해 연결된 기기에 반영한다. 권한과 Invite는 과거 Snapshot으로 되돌리지 않는다.
+Trigger: Context Panel/Trash의 기록. 수동 생성 전 Local 저장·서버 동기화를 확인한다. 변경된 문서의 하루 첫 Commit에 자동 기록을 만든다. UTC 기준 자동 7일/최대 7개, 수동 최대 3개다. Offline에서는 서버 기록 작업을 하지 않는다. 개수 초과는 409, 공간 부족은 507이며 원본·로컬 변경을 보존한다.
 
-후속 2: 문서/Block Diff, 삭제된 Block·Property 표현, Restore 전 현재 상태 Snapshot. Code Block은 Text Diff를 사용하고 Database Property는 Field Diff를 사용한다.
+Restore는 새 CRDT 문서와 새 Page ID를 사용하는 비공유 Root Page로 수행한다. 자기 참조만 새 ID로 변경하고 외부 링크는 유지한다. Task Property/Row 본문과 날짜를 보존한다. Page 하위 구조·Comments·Invite·Grant는 복제하지 않는다. Trash에서도 Owner 복구를 허용한다. Operation ID 재시도는 같은 결과를 반환한다. 미리보기는 읽기 전용이다.
 
-후속 3: Page Branch의 실제 리뷰 용도를 검증한 뒤 구현한다. Branch 기준 Snapshot과 공통 조상을 기록하고 CRDT 실시간 병합과 사용자 승인 Merge를 구분한다. 내용·참조·Task Row의 Merge 정책은 이 단계에서 결정한다.
+Acceptance: Owner 외 기록 접근 거절, 원본 내용·링크 유지, 복구 결과의 Page/Task 데이터 일치, 동시 편집 후 Commit된 Snapshot 복원, 지원하지 않는 Version 거절.
 
-DEC 상태: 사용자 Version History, Compare, Branch/Merge는 Deferred. Alpha 코드가 미래 Merge 알고리즘을 가정하지 않는다.
+Deferred: 현재 문서 되감기, 문서/Block Diff, Compare, Branch/Review/Merge. Beta의 새 Page 복구는 기존 Alpha 후속안의 in-place Restore를 대체한다. 자세한 운영 정책은 `docs/beta-launch.md`를 따른다.

@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 const env = {
   ...process.env,
+  NEXT_PUBLIC_BETA_REQUIRED: "true",
   ZERONOTE_BUILD_DIR: ".next-e2e",
   API_INTERNAL_ORIGIN: "http://127.0.0.1:3003",
 };

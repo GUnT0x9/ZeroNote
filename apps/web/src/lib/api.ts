@@ -1,13 +1,8 @@
 import { bytesToBase64 } from "@zeronote/shared";
 import { database, type LocalDevice } from "./database";
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { requestJson, ApiError, WAKE_TIMEOUT_MS } from "./http";
+import { useUiStore } from "./ui-store";
+export { ApiError } from "./http";
 let authenticatedUntil = 0,
   authentication: Promise<LocalDevice> | undefined;
 let deviceLoading: Promise<LocalDevice> | undefined;
@@ -16,27 +11,15 @@ export async function api<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const response = await fetch(`/v1${path}`, {
-    method,
-    credentials: "same-origin",
-    headers:
-      body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const result: unknown = await response.json();
-  if (!response.ok) {
-    if (response.status === 401) authenticatedUntil = 0;
-    const message =
-      typeof result === "object" &&
-      result &&
-      "error" in result &&
-      typeof result.error === "string"
-        ? result.error
-        : "서버에 연결할 수 없습니다.";
-    throw new ApiError(response.status, message);
+  try {
+    return await requestJson<T>(path, method, body);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401)
+      authenticatedUntil = 0;
+    throw error;
   }
-  return result as T;
 }
+
 export async function getDevice(): Promise<LocalDevice> {
   if (deviceLoading) return deviceLoading;
   deviceLoading = loadDevice();
@@ -69,6 +52,8 @@ export async function authenticate(force = false): Promise<LocalDevice> {
   authentication = (async () => {
     const device = await getDevice();
     if (!force && Date.now() < authenticatedUntil) return device;
+    useUiStore.getState().patch({ syncState: "connecting" });
+    await requestJson("/health", "GET", undefined, WAKE_TIMEOUT_MS);
     await api("/devices", "POST", {
       id: device.id,
       name: device.name,

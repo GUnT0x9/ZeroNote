@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: zeronote-api
+    runtime: docker
+    plan: free
+    region: singapore
+    repo: https://github.com/GUnT0x9/ZeroNote
+    branch: main
+    dockerfilePath: ./Dockerfile.server
+    autoDeployTrigger: off
+    healthCheckPath: /v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BETA_REQUIRED
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: REALTIME_SECRET
+        generateValue: true

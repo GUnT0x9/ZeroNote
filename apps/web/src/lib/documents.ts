@@ -10,6 +10,7 @@ import {
 } from "@zeronote/shared";
 import { database, errorMessage, type LocalPage } from "./database";
 import { api, ApiError } from "./api";
+import { collaborationUrl } from "./env";
 import { useUiStore } from "./ui-store";
 
 export interface DocumentSession {
@@ -205,7 +206,10 @@ export async function connectDocument(
   page: LocalPage,
 ): Promise<HocuspocusProvider | undefined> {
   if (page.accessLost || page.deletedAt || !navigator.onLine) return undefined;
-  if (session.provider) return session.provider;
+  if (session.provider) {
+    session.provider.connect();
+    return session.provider;
+  }
   if (session.connecting) return session.connecting;
   session.connecting = createProvider(session, page);
   try {
@@ -241,7 +245,7 @@ async function createProvider(
     return undefined;
   }
   const provider = new HocuspocusProvider({
-    url: `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/collaboration`,
+    url: collaborationUrl(window.location.origin),
     name: page.id,
     document: session.document,
     awareness: session.awareness,
@@ -251,6 +255,24 @@ async function createProvider(
         "POST",
       );
       return response.token;
+    },
+    onStateless: ({ payload }) => {
+      try {
+        const event: unknown = JSON.parse(payload);
+        if (
+          typeof event === "object" &&
+          event &&
+          "type" in event &&
+          event.type === "comments-changed" &&
+          "pageId" in event &&
+          event.pageId === page.id
+        )
+          window.dispatchEvent(
+            new CustomEvent("zeronote:comments-changed", { detail: page.id }),
+          );
+      } catch {
+        /* Ignore unsupported events. */
+      }
     },
     onAuthenticationFailed: () => {
       void markAccessFailure(page.id).catch((error) =>
@@ -301,4 +323,8 @@ export async function removeLocalDocument(pageId: string): Promise<void> {
     await persistence.clearData();
     persistence.doc.destroy();
   }
+}
+
+export function disconnectAllDocuments(): void {
+  for (const session of sessions.values()) disconnectDocument(session);
 }

@@ -21,6 +21,7 @@ import type { LocalPage } from "@/lib/database";
 import type { WorkspaceData } from "@/lib/hooks";
 import { availablePages } from "@/lib/search";
 import { useUiStore } from "@/lib/ui-store";
+import { publicEnvironment } from "@/lib/env";
 export function Logo() {
   return (
     <span className="brand-mark" aria-hidden="true">
@@ -91,7 +92,12 @@ export function Sidebar({
         <div className="brand">
           <Logo />
           <strong>ZeroNote</strong>
-          <span className="alpha-badge">α</span>
+          <span
+            className="alpha-badge"
+            aria-label={publicEnvironment.betaRequired ? "Beta" : "Alpha"}
+          >
+            {publicEnvironment.betaRequired ? "β" : "α"}
+          </span>
         </div>
         <div className="workspace-switcher">
           <button

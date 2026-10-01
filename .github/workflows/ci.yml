@@ -1,7 +1,7 @@
 name: ZeroNote validation
 on: [push, pull_request]
 jobs:
-  alpha:
+  beta:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -27,6 +27,39 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm test:e2e
+      - run: docker build -f Dockerfile.server -t zeronote-server:ci .
+      - name: Encrypted backup and restore drill
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age
+          mkdir -p "$RUNNER_TEMP/pg-client"
+          for command in pg_dump pg_restore psql; do
+            cat > "$RUNNER_TEMP/pg-client/$command" <<'CLIENT'
+          #!/usr/bin/env bash
+          exec docker run --rm -i --network host -e PGDATABASE postgres:17 "$(basename "$0")" "$@"
+          CLIENT
+            chmod +x "$RUNNER_TEMP/pg-client/$command"
+          done
+          export PATH="$RUNNER_TEMP/pg-client:$PATH"
+          age-keygen -o "$RUNNER_TEMP/backup.agekey"
+          export AGE_RECIPIENT="$(age-keygen -y "$RUNNER_TEMP/backup.agekey")"
+          export BACKUP_DIRECTORY="$RUNNER_TEMP/zeronote-backups"
+          for iteration in 1 2 3 4 5; do bash scripts/backup.sh; done
+          test "$(find "$BACKUP_DIRECTORY" -name 'zeronote-*.age' | wc -l)" -eq 4
+          if BACKUP_DIRECTORY="$GITHUB_WORKSPACE/backups" bash scripts/backup.sh; then
+            echo 'Backup unexpectedly allowed a repository path.' >&2
+            exit 1
+          fi
+          PGDATABASE="$DATABASE_URL" psql -c 'CREATE DATABASE zeronote_restore'
+          export RESTORE_DATABASE_URL='postgresql://zeronote:integration-only-password@localhost:5432/zeronote_restore'
+          export AGE_IDENTITY_FILE="$RUNNER_TEMP/backup.agekey"
+          export BACKUP_FILE="$(find "$BACKUP_DIRECTORY" -name 'zeronote-*.age' -print -quit)"
+          bash scripts/restore.sh
+          PGDATABASE="$RESTORE_DATABASE_URL" psql -Atc 'SELECT count(*) FROM schema_migrations' | grep -Ex '2'
+          if bash scripts/restore.sh; then
+            echo 'Restore unexpectedly allowed a non-empty database.' >&2
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

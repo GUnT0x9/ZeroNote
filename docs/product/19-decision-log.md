@@ -37,3 +37,17 @@ Status: Accepted Alpha specification
 | DEC-022 | 읽기 전용 Replica도 PG Snapshot을 비교해 저장 확인 | 원격 Update 수신과 Durable 저장을 구분              | Accepted default |
 | DEC-023 | E2E는 3002/3003과 별도 Build                       | 개발 Preview와 Offline 검증을 분리                  | Accepted default |
 | DEC-024 | WSL Native PostgreSQL로 통합 검증                  | 현재 Docker 실행 경로가 끊겨 있어 독립 Cluster 사용 | Accepted default |
+
+## 초대 Beta 결정
+
+| ID      | Decision                                                               | Reason                                   | Status           |
+| ------- | ---------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
+| DEC-025 | Vercel Hobby + Render Free + Neon Free, 5–10명 초대 Beta               | 사용자 무료 예산과 지정 플랫폼           | Confirmed        |
+| DEC-026 | 신규 Workspace만 Beta 코드로 입장; 7일/1회/자격당 3개                  | 승인된 출시 계획, 소규모 운영            | Confirmed        |
+| DEC-027 | Snapshot은 Owner만 사용하고 새 비공유 Root Page로 복구                 | 원본·링크·협업 상태 보호                 | Confirmed        |
+| DEC-028 | 자동 기록 UTC 7일/최대 7개, 수동 최대 3개                              | 무료 저장 한도                           | Confirmed        |
+| DEC-029 | 문서 Commit과 Checkpoint/로그 정리 Atomic 처리, Dedup Hash 유지        | 장애·재접속 시 데이터 보존               | Confirmed        |
+| DEC-030 | Production/Preview 자동 배포 끄고 CI 후 Render → Vercel 수동 배포      | 계정/Schema/Origin 설정 검증             | Confirmed        |
+| DEC-031 | 암호화 pg_dump + age, 배포 전/주 1회, 최근 4개                         | 승인된 수동 백업 운영                    | Confirmed        |
+| DEC-032 | Alpha 코드 없는 Owner는 복구 가능; 새 생성 자격은 코드 발급            | 기존 사용자 데이터 보존과 Beta 입장 경계 | Accepted default |
+| DEC-033 | 유휴 Polling 제거, Comment는 WS 변경 이벤트/Panel 재열기/명시 새로고침 | 무료 서버/DB 사용량 제한                 | Accepted default |

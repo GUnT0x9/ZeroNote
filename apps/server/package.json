@@ -8,7 +8,8 @@
     "start": "tsx src/index.ts",
     "build": "tsc --noEmit",
     "type-check": "tsc --noEmit",
-    "db:migrate": "tsx src/migrate.ts"
+    "db:migrate": "tsx src/migrate.ts",
+    "beta:issue": "tsx src/beta-cli.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",

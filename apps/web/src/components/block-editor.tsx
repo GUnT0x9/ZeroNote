@@ -162,7 +162,7 @@ export function BlockEditor({
   pages,
   onConvertTask,
 }: {
-  session: DocumentSession;
+  session: Pick<DocumentSession, "id" | "document" | "awareness">;
   fragmentName?: string;
   editable: boolean;
   pages: LocalPage[];

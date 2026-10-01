@@ -9,3 +9,9 @@ Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Rec
 후속: Database Property 모델 → Calendar/Timeline/Gallery → Relation/Rollup/Formula. Snapshot/Restore → Compare → Branch/Review/Merge. Share 권한 → Public/Temporary/Burn. 파일 저장 → Media/Canvas/Developer Blocks. 안정된 API → Automation/Webhook/Integration. Web 안정화 → Desktop/Global Capture/Pairing.
 
 각 후속 단계는 구현 전 요구사항·권한·Offline·완료 기준을 추가한다. Alpha에 없는 기능을 완성했다고 표시하지 않는다. 목표 기간은 보장된 완료 날짜가 아니며 검증 결과로 출시한다.
+
+## 초대 Beta
+
+배포 연결(Vercel/Render/Neon Free) → 버전별 Migration·Commit/Checkpoint/압축 → Beta 코드·Quota → Snapshot/새 Page 복구 → HTTPS/Mobile/백업 검증 → 운영자 2명 → 5–10명 확대.
+
+예상 1–2주이며 실제 공개는 CI·배포·Mobile·Production 복원 검증으로 결정한다. Snapshot 복구는 원본을 유지하는 새 비공유 Page다. 계정 설정·배포 주소·운영 체크는 `docs/beta-launch.md`를 따른다. 일반 Database 확장과 Branch/Merge는 이후 단계다.

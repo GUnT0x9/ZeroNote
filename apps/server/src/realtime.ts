@@ -1,11 +1,6 @@
 import { Hocuspocus } from "@hocuspocus/server";
 import { SignJWT, jwtVerify } from "jose";
-import * as Y from "yjs";
-import {
-  canEdit,
-  getDocumentProjection,
-  MAX_DOCUMENT_BYTES,
-} from "@zeronote/shared";
+import { bytesToBase64, canEdit, MAX_TRANSPORT_BYTES } from "@zeronote/shared";
 import { AccessService, DocumentService, DomainError } from "./services";
 import { env } from "./env";
 import type { FastifyBaseLogger } from "fastify";
@@ -51,13 +46,11 @@ export function createRealtime(
         },
       };
     },
-    async beforeHandleMessage({ context, documentName, connection, update }) {
+    async beforeHandleMessage({ context, update }) {
       if (!context.deviceId) throw new DomainError(401, "Device required");
       if (!context.expiresAt || context.expiresAt <= Date.now() / 1000)
         throw new DomainError(401, "Token expired");
-      const permission = await access.page(context.deviceId, documentName);
-      connection.readOnly = !canEdit(permission.role);
-      if (update.byteLength > MAX_DOCUMENT_BYTES)
+      if (update.byteLength > MAX_TRANSPORT_BYTES)
         throw new DomainError(413, "Message too large");
     },
     async beforeHandleAwareness({ states, context }) {
@@ -67,36 +60,31 @@ export function createRealtime(
     async onLoadDocument({ documentName }) {
       return documents.load(documentName);
     },
-    async onChange({ documentName, update, document, instance }) {
+    async beforeSync({ context, documentName, connection, type, payload }) {
+      if (!context.deviceId) throw new DomainError(401, "Device required");
+      // Awareness heartbeats stay in memory. Revalidate every document read/write;
+      // permission mutations also close the affected active connections.
+      const permission = await access.page(context.deviceId, documentName);
+      connection.readOnly = !canEdit(permission.role);
+      if (type === 0 || connection.readOnly) return;
+      // Persist and validate before Hocuspocus applies or broadcasts the update.
       try {
-        await documents.repository.appendUpdate(
+        await documents.commit(
+          context.deviceId,
           documentName,
           crypto.randomUUID(),
-          update,
+          bytesToBase64(payload),
         );
-        await documents.repository.checkpoint(
-          documentName,
-          Y.encodeStateAsUpdate(document),
-          getDocumentProjection(document).title,
+      } catch (error) {
+        logger.warn("Realtime commit rejected");
+        throw new DomainError(
+          error instanceof DomainError ? error.status : 503,
+          "실시간 변경을 저장하지 못했습니다. 로컬 데이터로 다시 동기화해주세요.",
         );
-      } catch {
-        logger.error("Realtime persistence failed");
-        instance.closeConnections(documentName);
       }
     },
-    async onStoreDocument({ documentName, document }) {
-      if (!(await documents.repository.getPage(documentName))) return;
-      try {
-        await documents.repository.checkpoint(
-          documentName,
-          Y.encodeStateAsUpdate(document),
-          getDocumentProjection(document).title,
-        );
-      } catch {
-        logger.error("Document checkpoint failed");
-        throw new Error("Document persistence unavailable");
-      }
-    },
+    // beforeSync and REST commits already persist checkpoints atomically.
+    // A debounced room checkpoint would repeat writes and race with deletion.
   });
 }
 export async function createRealtimeToken(

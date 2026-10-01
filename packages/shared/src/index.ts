@@ -2,6 +2,8 @@ import { z } from "zod";
 import * as Y from "yjs";
 
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+// Allow JSON/base64 and WebSocket framing; decoded documents still use 5 MiB.
+export const MAX_TRANSPORT_BYTES = MAX_DOCUMENT_BYTES * 2;
 export const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 export const CHALLENGE_LIFETIME_MS = 60_000;
 export const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -217,7 +219,7 @@ export function replaceSharedText(text: Y.Text, value: string): void {
 export function createTaskRow(
   document: Y.Doc,
   title: string,
-  id = crypto.randomUUID(),
+  id: string = crypto.randomUUID(),
 ): string {
   const row = new Y.Map<unknown>();
   document.transact(() => {
@@ -333,4 +335,108 @@ export function updatesHaveSameSnapshot(
     left.destroy();
     right.destroy();
   }
+}
+
+export const BETA_WORKSPACE_LIMIT = 3;
+export const AUTO_SNAPSHOT_DAYS = 7;
+export const MANUAL_SNAPSHOT_LIMIT = 3;
+export const STORAGE_WARNING_BYTES = 200 * 1024 * 1024;
+export const STORAGE_LIMIT_BYTES = 300 * 1024 * 1024;
+export const BetaStatusSchema = z.object({
+  required: z.boolean(),
+  approved: z.boolean(),
+  workspaceCount: z.number().int().nonnegative(),
+  workspaceLimit: z.number().int(),
+});
+export type BetaStatus = z.infer<typeof BetaStatusSchema>;
+export const BetaRedeemSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .regex(/^ZNB1-[A-Za-z0-9_-]{43}$/),
+  })
+  .strict();
+export const SnapshotInputSchema = z
+  .object({
+    operationId: IdSchema,
+    name: z.string().trim().max(160).default(""),
+  })
+  .strict();
+export const RestoreSnapshotSchema = z
+  .object({ operationId: IdSchema })
+  .strict();
+export const SnapshotSchema = z.object({
+  id: IdSchema,
+  pageId: IdSchema,
+  kind: z.enum(["manual", "automatic"]),
+  name: z.string(),
+  schemaVersion: z.literal(1),
+  createdAt: z.string(),
+});
+export type DocumentSnapshot = z.infer<typeof SnapshotSchema>;
+export const SnapshotDetailSchema = SnapshotSchema.extend({
+  update: z.string(),
+});
+
+/** Copy visible state into fresh CRDT identities; never merge historical state into the original. */
+export function cloneDocumentContent(
+  source: Y.Doc,
+  oldPageId: string,
+  newPageId: string,
+): Y.Doc {
+  const target = new Y.Doc({ gc: false });
+  const copyFragment = (name: string) => {
+    const copyNode = (
+      node: Y.XmlElement | Y.XmlText,
+    ): Y.XmlElement | Y.XmlText => {
+      if (node instanceof Y.XmlText) {
+        const text = new Y.XmlText();
+        text.applyDelta(node.toDelta());
+        return text;
+      }
+      const element = new Y.XmlElement(node.nodeName);
+      for (const [key, value] of Object.entries(node.getAttributes()))
+        if (typeof value === "string")
+          element.setAttribute(
+            key,
+            ["pageId", "databaseId"].includes(key) && value === oldPageId
+              ? newPageId
+              : value,
+          );
+      element.insert(
+        0,
+        node
+          .toArray()
+          .flatMap((child) =>
+            child instanceof Y.XmlHook ? [] : [copyNode(child)],
+          ),
+      );
+      return element;
+    };
+    target.getXmlFragment(name).insert(
+      0,
+      source
+        .getXmlFragment(name)
+        .toArray()
+        .flatMap((child) =>
+          child instanceof Y.XmlHook ? [] : [copyNode(child)],
+        ),
+    );
+  };
+  target.getText("title").insert(0, source.getText("title").toString());
+  copyFragment("content");
+  for (const row of getTaskRows(source)) {
+    createTaskRow(target, row.title, row.id);
+    const map = target.getMap<Y.Map<unknown>>("tasks").get(row.id)!;
+    for (const field of [
+      "status",
+      "assigneeId",
+      "dueDate",
+      "priority",
+    ] as const)
+      map.set(field, row[field]);
+    copyFragment(`task:${row.id}`);
+  }
+  return target;
 }

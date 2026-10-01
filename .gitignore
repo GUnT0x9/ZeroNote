@@ -11,3 +11,7 @@ playwright-report/
 *.tsbuildinfo
 
 .next-e2e/
+.vercel/
+*.age
+*.agekey
+beta-codes*.txt
