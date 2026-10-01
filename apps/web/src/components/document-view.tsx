@@ -1,20 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   ArrowLeft,
   FileText,
-  Columns3,
   Link2,
   MessageSquare,
   SlidersHorizontal,
-  Cloud,
   CloudOff,
-  Loader2,
-  Share2,
-  MoreHorizontal,
   History,
   Trash2,
-  Star,
 } from "lucide-react";
 import * as Y from "yjs";
 import {
@@ -44,6 +38,7 @@ import { TaskDatabase } from "./task-database";
 import { downloadJson } from "@/lib/workspace";
 import { bytesToBase64 } from "@zeronote/shared";
 import { EmptyState } from "./primitives";
+import { DesignIcon } from "./design-icon";
 export function DocumentView({
   page,
   data,
@@ -56,8 +51,22 @@ export function DocumentView({
   const [session, setSession] = useState<DocumentSession | null>(null),
     [error, setError] = useState<string | null>(null),
     [menu, setMenu] = useState(false),
+    menuRef = useRef<HTMLDivElement>(null),
+    menuButton = useRef<HTMLButtonElement>(null),
     [providerRevision, setProviderRevision] = useState(0),
     [presence, setPresence] = useState<{ name: string; color: string }[]>([]);
+  useEffect(() => {
+    if (!menu) return;
+    const dismiss = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !menuRef.current?.contains(event.target)
+      )
+        setMenu(false);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [menu]);
   useDocumentRevision(session?.document ?? null);
   useEffect(() => {
     let cancelled = false;
@@ -191,11 +200,7 @@ export function DocumentView({
         "Task로 변환하려면 Owner에게 프로젝트 초대를 요청해주세요.",
       );
     if (!project)
-      project = await createLocalPage(
-        page.workspaceId,
-        "나의 프로젝트",
-        "database",
-      );
+      project = await createLocalPage(page.workspaceId, "To-Do", "database");
     const target = await openDocument(project);
     const rowId = createTaskRow(
       target.document,
@@ -251,49 +256,16 @@ export function DocumentView({
               </span>
             ))}
           </div>
-          <button
-            className="icon-button"
-            title="Backlinks"
-            aria-label="Backlinks"
-            onClick={() =>
-              ui.patch({ panel: ui.panel === "backlinks" ? null : "backlinks" })
-            }
-          >
-            <Link2 size={16} />
-          </button>
-          <button
-            className="icon-button"
-            title="Comments"
-            aria-label="Comments"
-            onClick={() =>
-              ui.patch({ panel: ui.panel === "comments" ? null : "comments" })
-            }
-          >
-            <MessageSquare size={16} />
-          </button>
-          {
+          {mobile && (
             <button
               className="icon-button"
-              aria-label="Properties"
+              title="Comments"
+              aria-label="Comments"
               onClick={() =>
-                ui.patch({
-                  panel: ui.panel === "properties" ? null : "properties",
-                })
+                ui.patch({ panel: ui.panel === "comments" ? null : "comments" })
               }
             >
-              <SlidersHorizontal size={16} />
-            </button>
-          }
-          {page.role === "owner" && !page.accessLost && (
-            <button
-              className="icon-button"
-              aria-label="기록"
-              title="기록"
-              onClick={() =>
-                ui.patch({ panel: ui.panel === "history" ? null : "history" })
-              }
-            >
-              <History size={16} />
+              <MessageSquare size={16} />
             </button>
           )}
           {page.role === "owner" && !page.accessLost && (
@@ -303,33 +275,98 @@ export function DocumentView({
                 ui.patch({ panel: ui.panel === "share" ? null : "share" })
               }
             >
-              <Share2 size={14} />
+              <DesignIcon name="share" />
               Share
             </button>
           )}
-          <div className="relative">
+          <button
+            className={`icon-button favorite-button ${page.favorite ? "active" : ""}`}
+            aria-label={page.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+            title={page.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+            aria-pressed={!!page.favorite}
+            onClick={() => {
+              void database.pages
+                .update(page.id, { favorite: !page.favorite })
+                .catch((problem) =>
+                  ui.patch({ notice: errorMessage(problem) }),
+                );
+            }}
+          >
+            <DesignIcon name="star" />
+          </button>
+          <div
+            className="relative"
+            ref={menuRef}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setMenu(false);
+                menuButton.current?.focus();
+              }
+            }}
+          >
             <button
+              ref={menuButton}
               className="icon-button"
               aria-label="Page 메뉴"
+              aria-expanded={menu}
               onClick={() => setMenu(!menu)}
             >
-              <MoreHorizontal size={18} />
+              <DesignIcon name="more" />
             </button>
             {menu && (
-              <div className="dropdown-menu">
+              <div
+                className="dropdown-menu"
+                role="region"
+                aria-label="Page 도구"
+              >
+                {!mobile && (
+                  <button
+                    onClick={() => {
+                      ui.patch({
+                        panel: ui.panel === "comments" ? null : "comments",
+                      });
+                      setMenu(false);
+                    }}
+                  >
+                    <MessageSquare size={14} />
+                    Comments
+                  </button>
+                )}
                 <button
                   onClick={() => {
-                    void database.pages
-                      .update(page.id, { favorite: !page.favorite })
-                      .catch((problem) =>
-                        ui.patch({ notice: errorMessage(problem) }),
-                      );
+                    ui.patch({
+                      panel: ui.panel === "properties" ? null : "properties",
+                    });
                     setMenu(false);
                   }}
                 >
-                  <Star size={14} />
-                  {page.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+                  <SlidersHorizontal size={14} />
+                  Properties
                 </button>
+                <button
+                  onClick={() => {
+                    ui.patch({
+                      panel: ui.panel === "backlinks" ? null : "backlinks",
+                    });
+                    setMenu(false);
+                  }}
+                >
+                  <Link2 size={14} />
+                  Backlinks
+                </button>
+                {page.role === "owner" && !page.accessLost && (
+                  <button
+                    onClick={() => {
+                      ui.patch({
+                        panel: ui.panel === "history" ? null : "history",
+                      });
+                      setMenu(false);
+                    }}
+                  >
+                    <History size={14} />
+                    기록
+                  </button>
+                )}
                 {editable && (
                   <button
                     className="danger-text"
@@ -351,26 +388,14 @@ export function DocumentView({
       </header>
       <div className="document-scroll">
         <main className="page-body">
-          <div className="page-eyebrow">
-            {row ? (
-              <>
-                <button onClick={() => ui.select(page.workspaceId, page.id)}>
-                  <ArrowLeft size={13} />
-                  프로젝트로 돌아가기
-                </button>
-              </>
-            ) : page.kind === "database" ? (
-              <>
-                <Columns3 size={15} />
-                PROJECT
-              </>
-            ) : (
-              <>
-                <FileText size={15} />
-                PAGE
-              </>
-            )}
-          </div>
+          {row && (
+            <div className="page-return">
+              <button onClick={() => ui.select(page.workspaceId, page.id)}>
+                <ArrowLeft size={13} />
+                프로젝트로 돌아가기
+              </button>
+            </div>
+          )}
           <input
             className="page-title"
             aria-label="Page 제목"
@@ -384,45 +409,27 @@ export function DocumentView({
                 replaceSharedText(titleText, event.target.value);
             }}
           />
-          <div className="document-meta">
-            <span
-              className={`save-indicator ${record?.state === "error" ? "save-error" : ""}`}
-            >
-              {ui.syncState === "offline" ? (
-                <CloudOff size={13} />
-              ) : record?.generation &&
-                record.generation > record.committedGeneration ? (
-                <Loader2 size={13} className="spin" />
-              ) : (
-                <Cloud size={13} />
-              )}{" "}
-              {session?.localSaveError
-                ? "이 기기 저장 실패"
-                : session && session.generation > (record?.generation ?? 0)
-                  ? "이 기기에 저장 중"
-                  : record?.state === "preserved"
-                    ? "로컬 보존본"
-                    : record?.state === "error"
-                      ? "동기화 실패"
-                      : !record
-                        ? "문서 준비 중"
-                        : ui.syncState === "offline"
-                          ? "Offline · 이 기기에 저장됨"
-                          : record.generation > record.committedGeneration
-                            ? "이 기기에 저장됨 · 동기화 중"
-                            : "서버 동기화 완료"}
-            </span>
-            <span className="meta-separator">·</span>
-            <span>
-              {page.role === "viewer"
-                ? "읽기 전용"
-                : page.role === "commenter"
-                  ? "읽기 및 Comment"
-                  : mobile
-                    ? "Mobile 읽기 모드"
-                    : "개인과 팀을 위한 문서"}
-            </span>
-          </div>
+          {(session?.localSaveError ||
+            page.role === "viewer" ||
+            page.role === "commenter" ||
+            mobile) && (
+            <div className="document-meta">
+              {session?.localSaveError && (
+                <span className="save-error" role="alert">
+                  이 기기 저장 실패 · {session.localSaveError}
+                </span>
+              )}
+              <span>
+                {page.role === "viewer"
+                  ? "읽기 전용"
+                  : page.role === "commenter"
+                    ? "읽기 및 Comment"
+                    : mobile
+                      ? "Mobile 읽기 모드"
+                      : ""}
+              </span>
+            </div>
+          )}
           {(page.accessLost || record?.state === "preserved") && record && (
             <div className="inline-warning">
               {record.error ?? "이 Page의 접근 권한이 변경되었습니다."} 저장된
@@ -474,37 +481,44 @@ export function DocumentView({
                   onConvertTask={editable ? convertTask : undefined}
                 />
               )}
-              {!row && (
-                <div className="child-pages">
-                  {data.pages
-                    .filter(
-                      (item) =>
-                        item.parentId === page.id &&
-                        !item.deletedAt &&
-                        !item.accessLost,
-                    )
-                    .map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => ui.select(item.workspaceId, item.id)}
-                      >
-                        <FileText size={16} />
-                        <span>{item.title}</span>
-                      </button>
-                    ))}
-                  {page.isInbox &&
-                    !data.pages.some(
-                      (item) =>
-                        item.parentId === page.id &&
-                        !item.deletedAt &&
-                        !item.accessLost,
-                    ) && (
-                      <p className="muted">
-                        Quick Capture로 첫 메모를 남겨보세요.
-                      </p>
-                    )}
-                </div>
-              )}
+              {!row &&
+                (page.isInbox ||
+                  data.pages.some(
+                    (item) =>
+                      item.parentId === page.id &&
+                      !item.deletedAt &&
+                      !item.accessLost,
+                  )) && (
+                  <div className="child-pages">
+                    {data.pages
+                      .filter(
+                        (item) =>
+                          item.parentId === page.id &&
+                          !item.deletedAt &&
+                          !item.accessLost,
+                      )
+                      .map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => ui.select(item.workspaceId, item.id)}
+                        >
+                          <FileText size={16} />
+                          <span>{item.title}</span>
+                        </button>
+                      ))}
+                    {page.isInbox &&
+                      !data.pages.some(
+                        (item) =>
+                          item.parentId === page.id &&
+                          !item.deletedAt &&
+                          !item.accessLost,
+                      ) && (
+                        <p className="muted">
+                          Quick Capture로 첫 메모를 남겨보세요.
+                        </p>
+                      )}
+                  </div>
+                )}
             </>
           ) : (
             <div className="editor-skeleton" />

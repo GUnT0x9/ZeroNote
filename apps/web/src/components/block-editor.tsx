@@ -478,7 +478,7 @@ export function BlockEditor({
           style={{ top: popup.top, left: Math.min(popup.left, 300) }}
         >
           <div className="menu-caption">
-            {popup.kind === "slash" ? "BLOCKS" : "PAGE 연결"}
+            {popup.kind === "slash" ? "Block 선택" : "Page 연결"}
           </div>
           {items.map((item, index) => {
             const Icon = "icon" in item ? item.icon : FileText;

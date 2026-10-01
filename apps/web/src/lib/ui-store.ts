@@ -7,6 +7,7 @@ interface UiState {
   taskId: string | null;
   panel: Panel;
   sidebarOpen: boolean;
+  sidebarCollapsed: boolean;
   searchOpen: boolean;
   captureOpen: boolean;
   settingsOpen: boolean;
@@ -29,6 +30,7 @@ export const useUiStore = create<UiState>((set) => ({
   taskId: null,
   panel: null,
   sidebarOpen: false,
+  sidebarCollapsed: false,
   searchOpen: false,
   captureOpen: false,
   settingsOpen: false,

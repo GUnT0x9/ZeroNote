@@ -163,9 +163,7 @@ function CommentsPanel({ page }: { page: LocalPage }) {
   );
   return (
     <div className="context-content comments-panel">
-      <div className="panel-description">
-        이 Page에 의견을 남기고 함께 정리하세요.
-      </div>
+      <div className="panel-description">Page에 대한 의견과 답글입니다.</div>
       <button className="text-button" onClick={() => void load()}>
         새로고침
       </button>

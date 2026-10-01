@@ -51,3 +51,13 @@ Status: Accepted Alpha specification
 | DEC-031 | 암호화 pg_dump + age, 배포 전/주 1회, 최근 4개                         | 승인된 수동 백업 운영                    | Confirmed        |
 | DEC-032 | Alpha 코드 없는 Owner는 복구 가능; 새 생성 자격은 코드 발급            | 기존 사용자 데이터 보존과 Beta 입장 경계 | Accepted default |
 | DEC-033 | 유휴 Polling 제거, Comment는 WS 변경 이벤트/Panel 재열기/명시 새로고침 | 무료 서버/DB 사용량 제한                 | Accepted default |
+
+## 메인 UI 개편
+
+| ID      | Decision                                                                      | Reason                                                | Status                |
+| ------- | ----------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------- |
+| DEC-034 | 저장 알림바를 왼쪽 상단 회전 아이콘과 상세 Popover로 전환                     | 사용자 요청, 저장 중 문서 위치 유지                   | Confirmed             |
+| DEC-035 | 제공된 Figma After의 Sidebar·좌측 정렬·Share/즐겨찾기/Page 메뉴 반영          | 사용자 제공 1차 시안                                  | Confirmed             |
+| DEC-036 | Quick Capture·Inbox는 Workspace 전환 메뉴에 두고 Mobile Capture·Shortcut 유지 | 1차 시안의 주 메뉴 정리와 기존 Alpha 기능·데이터 보존 | Accepted default      |
+| DEC-037 | 새 Workspace 기본 Task 이름 To-Do, 시작 문서 빈 본문; 기존 문서 보존          | 기능 역할을 명확히 하고 반복 소개 문구를 줄임         | Accepted default      |
+| DEC-038 | 2차 디자인은 Share/권한 → Task 상세/Board → Comments/기록 → Mobile 우선       | 실제 Beta 협업 흐름의 미정 디자인 완성                | Proposed design scope |

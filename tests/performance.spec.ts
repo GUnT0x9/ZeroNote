@@ -30,11 +30,15 @@ test("1000 cached Pages, a 500-block document and 1000 Task Rows stay usable", a
     .click();
   await page.getByRole("button", { name: "계속하기", exact: true }).click();
   await expect(
-    page.getByText("서버 동기화 완료", { exact: true }),
+    page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "서버 동기화 완료", exact: true })
+    .click();
   await expect(
     page.getByTitle("Offline 준비됨", { exact: true }),
   ).toBeVisible();
+  await page.keyboard.press("Escape");
   const workspaceId = new URL(page.url()).searchParams.get("workspace")!,
     rows: Fixture[] = [];
   for (let index = 0; index < 1000; index++) {
@@ -86,7 +90,7 @@ test("1000 cached Pages, a 500-block document and 1000 Task Rows stay usable", a
   }
   await context.setOffline(true);
   await expect(
-    page.getByText("Offline · 이 기기에 저장됨", { exact: true }),
+    page.getByRole("button", { name: "Offline", exact: true }),
   ).toBeVisible();
   await page.evaluate(async (fixtures) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {

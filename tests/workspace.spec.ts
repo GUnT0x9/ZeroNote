@@ -21,7 +21,7 @@ async function createWorkspace(
   await page.getByRole("button", { name: "계속하기", exact: true }).click();
   await expect(page.getByLabel("Page 제목")).toHaveValue("시작하기");
   await expect(
-    page.getByText("서버 동기화 완료", { exact: true }),
+    page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
   if (ORIGIN.startsWith("https://")) {
     const session = (await page.context().cookies()).find(
@@ -35,6 +35,24 @@ async function createWorkspace(
     });
   }
   return key;
+}
+async function openPageTool(
+  page: Page,
+  name: "Comments" | "Properties" | "Backlinks" | "기록",
+): Promise<void> {
+  const action = page.getByRole("button", { name, exact: true });
+  if (!(await action.isVisible()))
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+  await action.click();
+}
+async function openWorkspaceTool(
+  page: Page,
+  name: "Quick Capture" | "Inbox",
+): Promise<void> {
+  await page
+    .getByRole("button", { name: "Workspace 전환", exact: true })
+    .click();
+  await page.getByRole("button", { name, exact: true }).click();
 }
 async function createInvite(page: Page, role = "editor"): Promise<string> {
   await page.getByRole("button", { name: "Share", exact: true }).click();
@@ -88,9 +106,7 @@ test("Markdown, Task Table/Board and mobile-safe quick capture", async ({
     editor.locator('script, img, [onclick], [onerror], a[href^="javascript:"]'),
   ).toHaveCount(0);
   expect(await page.evaluate(() => "__zeroNotePasteRan" in window)).toBe(false);
-  await page
-    .getByRole("button", { name: "나의 프로젝트", exact: true })
-    .click();
+  await page.getByRole("button", { name: "To-Do", exact: true }).click();
   await page.getByRole("button", { name: "새 Task", exact: true }).click();
   await page.getByLabel("새 Task 제목").fill("Ship Alpha");
   await page.getByRole("button", { name: "추가", exact: true }).click();
@@ -102,20 +118,179 @@ test("Markdown, Task Table/Board and mobile-safe quick capture", async ({
       .getByRole("region", { name: "In progress" })
       .getByRole("button", { name: "Ship Alpha", exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Quick Capture", exact: true })
-    .click();
+  await openWorkspaceTool(page, "Quick Capture");
   await page
     .getByLabel("빠른 메모")
     .fill("Captured thought\nKeep this offline.");
   await page.getByLabel("빠른 메모").press("Control+Enter");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: /Inbox/ }).click();
+  await openWorkspaceTool(page, "Inbox");
   await expect(
     page.getByRole("button", { name: /Captured thought/ }),
   ).toBeVisible();
   await cleanup(page, name);
 });
+
+test("Upper-left sync indicator waits for commits without moving the document and supports retry", async ({
+  page,
+}) => {
+  const name = `Sync UI ${Date.now()}`;
+  await createWorkspace(page, name);
+  const status = page.locator(".sidebar").getByTestId("sync-status");
+  const title = page.getByLabel("Page 제목");
+  const initialPosition = await title.boundingBox();
+  let releaseCommit = () => {};
+  let markCommitReceived = () => {};
+  const commitGate = new Promise<void>((resolve) => {
+    releaseCommit = resolve;
+  });
+  const commitReceived = new Promise<void>((resolve) => {
+    markCommitReceived = resolve;
+  });
+  const commitRoute = "**/v1/documents/*/commit";
+  try {
+    await page.route(commitRoute, async (route) => {
+      markCommitReceived();
+      await commitGate;
+      await route.continue();
+    });
+    await title.fill("Saving without banners");
+    await commitReceived;
+    await expect(status).toHaveAttribute("data-state", /connecting|saving/);
+    await expect(page.locator(".sync-banner")).toHaveCount(0);
+    expect((await status.boundingBox())!.x).toBeLessThan(240);
+    expect((await title.boundingBox())!.y).toBe(initialPosition!.y);
+    expect(
+      await status
+        .locator("svg")
+        .evaluate((icon) => getComputedStyle(icon).animationName),
+    ).toBe("spin");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(
+      await status
+        .locator("svg")
+        .evaluate((icon) => getComputedStyle(icon).animationName),
+    ).toBe("none");
+    releaseCommit();
+    await expect(status).toHaveAttribute("data-state", "saved");
+    await expect(status).toHaveAccessibleName("서버 동기화 완료");
+    expect((await title.boundingBox())!.y).toBe(initialPosition!.y);
+    await page.unroute(commitRoute);
+    await page.route(commitRoute, async (route) => {
+      await route.fulfill({
+        status: 507,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "서버 저장 공간을 확인해주세요." }),
+      });
+    });
+    await title.fill("Local edits stay available");
+    await expect(status).toHaveAttribute("data-state", "error");
+    await expect(title).toHaveValue("Local edits stay available");
+    await expect(page.locator(".sync-banner")).toHaveCount(0);
+    await status.click();
+    const detail = page.getByRole("region", {
+      name: "동기화 상태",
+      exact: true,
+    });
+    await expect(detail).toContainText("서버 저장 공간을 확인해주세요.");
+    await page.unroute(commitRoute);
+    await detail
+      .getByRole("button", { name: "다시 시도", exact: true })
+      .click();
+    await expect(status).toHaveAttribute("data-state", "saved");
+    await page.keyboard.press("Escape");
+    await expect(detail).toHaveCount(0);
+    await expect(status).toBeFocused();
+    await status.click();
+    await expect(detail).toBeVisible();
+    await title.click();
+    await expect(detail).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileStatus = page
+      .locator(".mobile-topbar")
+      .getByTestId("sync-status");
+    await expect(mobileStatus).toBeVisible();
+    await expect(
+      page.getByRole("complementary", { name: "Workspace 탐색" }),
+    ).toHaveCount(0);
+    const touchTarget = (await mobileStatus.boundingBox())!;
+    expect(touchTarget.width).toBeGreaterThanOrEqual(44);
+    expect(touchTarget.height).toBeGreaterThanOrEqual(44);
+    expect(touchTarget.x).toBeLessThan(110);
+  } finally {
+    releaseCommit();
+    await page.unrouteAll({ behavior: "wait" });
+    await cleanup(page, name);
+  }
+});
+
+test("Figma main navigation keeps favorites, context actions and Sidebar collapse usable", async ({
+  page,
+}) => {
+  const name = `Navigation ${Date.now()}`;
+  await createWorkspace(page, name);
+  try {
+    await expect(page.getByRole("textbox", { name: "문서 본문" })).toHaveText(
+      "",
+    );
+    await expect(
+      page.getByRole("button", { name: "Quick Capture", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Comments", exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "즐겨찾기 추가", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "즐겨찾기 해제", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("Favorites", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "즐겨찾기 해제", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page
+      .getByRole("button", { name: "즐겨찾기 해제", exact: true })
+      .click();
+    await expect(page.getByText("Favorites", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Pages", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "To-Do", exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Pages", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "To-Do", exact: true }),
+    ).toBeVisible();
+    await openPageTool(page, "Comments");
+    await expect(
+      page.getByRole("complementary", { name: "Comments", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Context Panel 닫기", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("button", { name: "Page 메뉴", exact: true }),
+    ).toHaveAttribute("aria-expanded", "false");
+    await page
+      .getByRole("button", { name: "Sidebar 닫기", exact: true })
+      .click();
+    await expect(
+      page.getByRole("complementary", { name: "Workspace 탐색" }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Sidebar 열기", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Workspace 전환", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await cleanup(page, name);
+  }
+});
+
 test("Page invitation, realtime editing, comments, viewer enforcement and recovery", async ({
   page,
   browser,
@@ -127,7 +302,7 @@ test("Page invitation, realtime editing, comments, viewer enforcement and recove
     .getByRole("textbox", { name: "문서 본문" })
     .fill("A shared starting point.");
   await expect(
-    page.getByText("서버 동기화 완료", { exact: true }),
+    page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
   const link = await createInvite(page);
   const context = await browser.newContext({
@@ -147,10 +322,10 @@ test("Page invitation, realtime editing, comments, viewer enforcement and recove
   await expect(page.getByRole("textbox", { name: "문서 본문" })).toContainText(
     "Shared edit.",
   );
-  await member.getByRole("button", { name: "Comments", exact: true }).click();
+  await openPageTool(member, "Comments");
   await member.getByLabel("Comment 내용").fill("Ready for review");
   await member.getByRole("button", { name: "보내기", exact: true }).click();
-  await page.getByRole("button", { name: "Comments", exact: true }).click();
+  await openPageTool(page, "Comments");
   await expect(
     page.getByText("Ready for review", { exact: true }),
   ).toBeVisible();
@@ -210,11 +385,15 @@ test("Offline edits survive a browser reload and sync after reconnecting", async
     .getByRole("textbox", { name: "문서 본문" })
     .fill("Before disconnect.");
   await expect(
-    page.getByText("서버 동기화 완료", { exact: true }),
+    page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "서버 동기화 완료", exact: true })
+    .click();
   await expect(
     page.getByTitle("Offline 준비됨", { exact: true }),
   ).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
@@ -226,9 +405,9 @@ test("Offline edits survive a browser reload and sync after reconnecting", async
   await page.keyboard.press("Control+End");
   await page.keyboard.type(" Offline addition.");
   await expect(
-    page.getByText("Offline · 이 기기에 저장됨", { exact: true }),
+    page.getByRole("button", { name: "Offline", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Comments", exact: true }).click();
+  await openPageTool(page, "Comments");
   await page.getByLabel("Comment 내용").fill("Offline comment");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByText("전송 대기", { exact: true })).toBeVisible();
@@ -236,6 +415,9 @@ test("Offline edits survive a browser reload and sync after reconnecting", async
   await expect(page.getByRole("textbox", { name: "문서 본문" })).toContainText(
     "Offline addition.",
   );
+  expect(
+    await page.evaluate(async () => (await fetch("/design-icons/star.svg")).ok),
+  ).toBe(true);
   await context.setOffline(false);
   const documentId = new URL(page.url()).searchParams.get("page");
   await expect
@@ -249,7 +431,7 @@ test("Offline edits survive a browser reload and sync after reconnecting", async
     })
     .toBe(true);
   await expect(
-    page.getByText("서버 동기화 완료", { exact: true }),
+    page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
   await cleanup(page, name);
 });
@@ -314,7 +496,7 @@ test("Slash Commands, stable Page Mention, Backlinks and Todo conversion", async
     .getByRole("button", { name: "Reference page", exact: true })
     .click();
   await page.getByLabel("Page 제목").fill("Renamed reference");
-  await page.getByRole("button", { name: "Backlinks", exact: true }).click();
+  await openPageTool(page, "Backlinks");
   await page
     .getByRole("complementary", { name: "Backlinks" })
     .getByRole("button", { name: "Linked notes", exact: true })
@@ -334,7 +516,7 @@ test("Slash Commands, stable Page Mention, Backlinks and Todo conversion", async
   ).toBeVisible();
   await editor.getByRole("button", { name: /Implement feature/ }).click();
   await expect(page.getByLabel("Page 제목")).toHaveValue("Implement feature");
-  await page.getByRole("button", { name: "Properties", exact: true }).click();
+  await openPageTool(page, "Properties");
   await expect(
     page
       .getByRole("complementary", { name: "Properties" })
@@ -352,9 +534,7 @@ test("Export and Import preserve document and Task data in a fresh workspace", a
   await page
     .getByRole("textbox", { name: "문서 본문" })
     .fill("My portable knowledge.");
-  await page
-    .getByRole("button", { name: "나의 프로젝트", exact: true })
-    .click();
+  await page.getByRole("button", { name: "To-Do", exact: true }).click();
   await page.getByRole("button", { name: "새 Task", exact: true }).click();
   await page.getByLabel("새 Task 제목").fill("Portable task");
   await page.getByRole("button", { name: "추가", exact: true }).click();
@@ -378,12 +558,10 @@ test("Export and Import preserve document and Task data in a fresh workspace", a
   await expect(page.getByRole("textbox", { name: "문서 본문" })).toContainText(
     "My portable knowledge.",
   );
-  await sidebar
-    .getByRole("button", { name: "나의 프로젝트", exact: true })
-    .click();
+  await sidebar.getByRole("button", { name: "To-Do", exact: true }).click();
   await expect(page.getByLabel("Task 이름")).toHaveValue("Portable task");
   await expect(
-    page.getByText("서버 동기화 완료", { exact: true }),
+    page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
   await cleanup(page, `${name} (가져옴)`);
 });
@@ -397,9 +575,9 @@ test("Snapshot preview is read-only and restores a new Page while retaining the 
   const sourceUrl = page.url();
   await page.getByLabel("Page 제목").fill("Stable note");
   await expect(
-    page.getByText("서버 동기화 완료", { exact: true }),
+    page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "기록", exact: true }).click();
+  await openPageTool(page, "기록");
   const panel = page.getByRole("complementary", { name: "기록", exact: true });
   await panel.getByLabel("기록 이름").fill("Before edit");
   await panel.getByRole("button", { name: "현재 상태 기록하기" }).click();
@@ -408,7 +586,7 @@ test("Snapshot preview is read-only and restores a new Page while retaining the 
   ).toBeVisible();
   await page.getByLabel("Page 제목").fill("Changed note");
   await expect(
-    page.getByText("서버 동기화 완료", { exact: true }),
+    page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
   await panel.getByRole("button", { name: /Before edit/ }).click();
   await expect(panel.getByText("Stable note", { exact: true })).toBeVisible();

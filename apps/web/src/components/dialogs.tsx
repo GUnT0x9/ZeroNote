@@ -381,7 +381,7 @@ export function CaptureDialog({
       <textarea
         className="capture-input"
         aria-label="빠른 메모"
-        placeholder="지금 떠오른 생각을 남겨주세요…"
+        placeholder="메모를 입력하세요"
         value={text}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {

@@ -102,7 +102,16 @@ describe("Local-first data", () => {
     expect(
       await database.pages.where("workspaceId").equals(ws.id).count(),
     ).toBe(3);
-    expect((await database.documents.get(page.id))?.text).toContain("ZeroNote");
+    expect(
+      (await openDocument(page)).document.getXmlFragment("content").length,
+    ).toBe(0);
+    expect(
+      await database.pages
+        .where("workspaceId")
+        .equals(ws.id)
+        .filter((item) => item.kind === "database")
+        .first(),
+    ).toMatchObject({ title: "To-Do" });
   });
   it("captures multiline notes in Inbox without requiring the server", async () => {
     const { workspace: ws } = await workspace(),

@@ -4,16 +4,14 @@ import {
   Menu,
   Plus,
   FileText,
-  ArrowRight,
   KeyRound,
   Loader2,
   Trash2,
   RotateCcw,
   X,
-  CloudOff,
 } from "lucide-react";
 import { clientBetaRequired } from "@/lib/beta";
-import { useWorkspaceData } from "@/lib/hooks";
+import { useWorkspaceData, useMobile } from "@/lib/hooks";
 import { prepareOfflineShell } from "@/lib/offline-shell";
 import { availablePages } from "@/lib/search";
 import { useUiStore } from "@/lib/ui-store";
@@ -28,7 +26,8 @@ import {
 import { createLocalPage, changePageStructure } from "@/lib/workspace";
 import { DocumentView } from "./document-view";
 import { ContextPanel } from "./context-panel";
-import { Sidebar, Logo } from "./sidebar";
+import { Sidebar } from "./sidebar";
+import { SyncStatus } from "./sync-status";
 import { EmptyState } from "./primitives";
 import {
   CreateWorkspaceDialog,
@@ -41,6 +40,7 @@ import {
 
 export default function WorkspaceApp() {
   const data = useWorkspaceData(),
+    mobile = useMobile(),
     ui = useUiStore(),
     [createOpen, setCreateOpen] = useState(false),
     [recoverOpen, setRecoverOpen] = useState(false),
@@ -183,7 +183,7 @@ export default function WorkspaceApp() {
       }
       const created = await createLocalPage(
         selection.workspaceId,
-        kind === "database" ? "새 프로젝트" : "제목 없음",
+        kind === "database" ? "새 To-Do" : "제목 없음",
         kind,
         parentId,
       );
@@ -218,15 +218,22 @@ export default function WorkspaceApp() {
         }}
         trashOpen={trashOpen}
       />
-      <div className="workspace-main">
+      <div
+        className={`workspace-main ${ui.sidebarCollapsed ? "sidebar-hidden" : ""}`}
+      >
         <div className="mobile-topbar">
           <button
             className="icon-button"
             aria-label="Sidebar 열기"
-            onClick={() => ui.patch({ sidebarOpen: true })}
+            onClick={() =>
+              ui.patch(
+                mobile ? { sidebarOpen: true } : { sidebarCollapsed: false },
+              )
+            }
           >
             <Menu size={20} />
           </button>
+          <SyncStatus data={data} />
           <span>{workspace?.name ?? "ZeroNote"}</span>
           <button
             className="icon-button"
@@ -236,12 +243,6 @@ export default function WorkspaceApp() {
             <Plus size={19} />
           </button>
         </div>
-        {ui.syncState === "connecting" && (
-          <div className="sync-banner" role="status">
-            <Loader2 className="spin" size={14} />
-            <span>서버 연결 준비 중 · 로컬 문서에서 작업할 수 있습니다.</span>
-          </div>
-        )}
         {ui.storageWarning && (
           <div className="sync-banner warning" role="status">
             서버 저장 공간이 부족해지고 있습니다. Workspace Export를
@@ -251,13 +252,6 @@ export default function WorkspaceApp() {
         {workspace?.creationError && (
           <div className="sync-banner warning" role="status">
             {workspace.creationError} · Settings에서 Export할 수 있습니다.
-          </div>
-        )}
-        {ui.syncError && (
-          <div className="sync-banner">
-            <CloudOff size={14} />
-            <span>{ui.syncError} · 작업은 이 기기에 보관됩니다.</span>
-            <button onClick={() => requestSync()}>다시 시도</button>
           </div>
         )}
         {conflicts.length > 0 && (
@@ -286,24 +280,18 @@ export default function WorkspaceApp() {
             </div>
           ) : !data.workspaces.length ? (
             <div className="onboarding">
-              <div className="onboarding-logo">
-                <Logo />
-              </div>
-              <p className="eyebrow">NO ACCOUNT. YOUR WORKSPACE.</p>
-              <h1>당신의 Workspace를 시작하세요.</h1>
+              <h1>새 Workspace</h1>
               <p>
-                문서를 쓰고, 생각을 연결하고, 함께 작업하세요.
-                <br />
                 {clientBetaRequired
-                  ? "Beta 초대코드로 참여할 수 있습니다. 회원가입은 필요하지 않습니다."
-                  : "회원가입 없이 바로 시작할 수 있습니다."}
+                  ? "초대코드를 입력해 문서와 Task를 관리할 공간을 만드세요."
+                  : "문서와 Task를 관리할 공간을 만드세요. 회원가입은 필요하지 않습니다."}
               </p>
               <button
                 className="button button-primary button-large"
                 onClick={() => setCreateOpen(true)}
               >
+                <Plus size={16} />
                 Workspace 만들기
-                <ArrowRight size={16} />
               </button>
               <button
                 className="text-button"
@@ -312,11 +300,6 @@ export default function WorkspaceApp() {
                 <KeyRound size={14} />
                 기존 Workspace 복구
               </button>
-              <div className="onboarding-note">
-                <span>이 기기에 먼저 저장</span>
-                <span>Offline에서도 작업</span>
-                <span>필요한 Page만 공유</span>
-              </div>
             </div>
           ) : trashOpen ? (
             <div className="trash-view">

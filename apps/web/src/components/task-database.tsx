@@ -17,14 +17,11 @@ import {
   KeyboardSensor,
 } from "@dnd-kit/core";
 import {
-  Table2,
-  Columns3,
   Plus,
   GripVertical,
   ChevronLeft,
   ChevronRight,
   Calendar,
-  Search,
 } from "lucide-react";
 import * as Y from "yjs";
 import {
@@ -41,6 +38,7 @@ import type { DocumentSession } from "@/lib/documents";
 import type { LocalPage } from "@/lib/database";
 import { useDocumentRevision } from "@/lib/hooks";
 import { useUiStore } from "@/lib/ui-store";
+import { DesignIcon } from "./design-icon";
 export const STATUS_LABELS = {
   todo: "Todo",
   in_progress: "In progress",
@@ -74,11 +72,9 @@ export function TaskDatabase({
     try {
       updateTaskField(session.document, id, field, value);
     } catch (error) {
-      useUiStore
-        .getState()
-        .patch({
-          notice: error instanceof Error ? error.message : "Task 변경 실패",
-        });
+      useUiStore.getState().patch({
+        notice: error instanceof Error ? error.message : "Task 변경 실패",
+      });
     }
   };
   const add = () => {
@@ -93,22 +89,24 @@ export function TaskDatabase({
         <div className="view-tabs">
           <button
             className={view === "table" ? "active" : ""}
+            aria-pressed={view === "table"}
             onClick={() => setView("table")}
           >
-            <Table2 size={15} />
+            <DesignIcon name="table" />
             Table
           </button>
           <button
             className={view === "board" ? "active" : ""}
+            aria-pressed={view === "board"}
             onClick={() => setView("board")}
           >
-            <Columns3 size={15} />
+            <DesignIcon name="board" />
             Board
           </button>
         </div>
         <div className="database-actions">
           <label className="compact-search">
-            <Search size={14} />
+            <DesignIcon name="task-search" />
             <input
               aria-label="Task 검색"
               placeholder="Task 검색"
@@ -137,7 +135,7 @@ export function TaskDatabase({
           <input
             autoFocus
             aria-label="새 Task 제목"
-            placeholder="어떤 작업을 할까요?"
+            placeholder="Task 제목"
             value={newTitle}
             onChange={(event) => setNewTitle(event.target.value)}
           />
@@ -214,7 +212,7 @@ function TaskTable({
                   .select(page.workspaceId, page.id, row.original.id)
               }
             >
-              <ChevronRight size={15} />
+              <DesignIcon name="task-open" />
             </button>
             <input
               aria-label="Task 이름"

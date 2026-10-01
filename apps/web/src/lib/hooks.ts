@@ -9,6 +9,7 @@ import {
   type LocalPage,
   type LocalDocument,
   type PendingOperation,
+  type PendingComment,
 } from "./database";
 import { useUiStore } from "./ui-store";
 import { retainEqualItems } from "./search";
@@ -19,6 +20,7 @@ export interface WorkspaceData {
   pages: LocalPage[];
   documents: LocalDocument[];
   operations: PendingOperation[];
+  pendingComments: PendingComment[];
   identities: (Identity & { workspaceId: string })[];
 }
 const EMPTY: WorkspaceData = {
@@ -27,20 +29,28 @@ const EMPTY: WorkspaceData = {
   pages: [],
   documents: [],
   operations: [],
+  pendingComments: [],
   identities: [],
 };
 export function useWorkspaceData(): WorkspaceData {
   const [data, setData] = useState<WorkspaceData>(EMPTY);
   useEffect(() => {
     const subscription = liveQuery(async () => {
-      const [workspaces, pages, documents, operations, identities] =
-        await Promise.all([
-          database.workspaces.toArray(),
-          database.pages.toArray(),
-          database.documents.toArray(),
-          database.operations.toArray(),
-          database.preferences.get("identities"),
-        ]);
+      const [
+        workspaces,
+        pages,
+        documents,
+        operations,
+        pendingComments,
+        identities,
+      ] = await Promise.all([
+        database.workspaces.toArray(),
+        database.pages.toArray(),
+        database.documents.toArray(),
+        database.operations.toArray(),
+        database.pendingComments.toArray(),
+        database.preferences.get("identities"),
+      ]);
       let parsed: WorkspaceData["identities"] = [];
       if (identities) {
         try {
@@ -55,6 +65,7 @@ export function useWorkspaceData(): WorkspaceData {
         pages,
         documents,
         operations,
+        pendingComments,
         identities: parsed,
       };
     }).subscribe({

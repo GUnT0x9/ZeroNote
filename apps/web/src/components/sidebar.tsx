@@ -1,48 +1,27 @@
 "use client";
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, useId, memo } from "react";
 import {
-  ChevronsUpDown,
-  Search,
   Inbox,
   Plus,
   FileText,
   Columns3,
   ChevronRight,
   Star,
-  Settings,
-  Trash2,
-  Cloud,
   CloudOff,
   Check,
   PenLine,
   Users,
 } from "lucide-react";
 import type { LocalPage } from "@/lib/database";
-import type { WorkspaceData } from "@/lib/hooks";
+import { useMobile, type WorkspaceData } from "@/lib/hooks";
 import { availablePages } from "@/lib/search";
 import { useUiStore } from "@/lib/ui-store";
-import { publicEnvironment } from "@/lib/env";
+import { DesignIcon } from "./design-icon";
+import { SyncStatus } from "./sync-status";
 export function Logo() {
   return (
-    <span className="brand-mark" aria-hidden="true">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <rect
-          x="3"
-          y="2.5"
-          width="18"
-          height="19"
-          rx="4"
-          stroke="currentColor"
-          strokeWidth="1.6"
-        />
-        <path
-          d="M8 8h8l-8 8h8"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+    <span className="brand-mark">
+      <DesignIcon name="logo" />
     </span>
   );
 }
@@ -60,7 +39,10 @@ export function Sidebar({
   trashOpen: boolean;
 }) {
   const ui = useUiStore(),
+    mobile = useMobile(),
     [switcher, setSwitcher] = useState(false),
+    [pagesExpanded, setPagesExpanded] = useState(true),
+    pagesId = useId(),
     [newMenu, setNewMenu] = useState(false),
     workspace = data.workspaces.find((item) => item.id === ui.workspaceId),
     pages = useMemo(
@@ -98,29 +80,53 @@ export function Sidebar({
         onClick={() => ui.patch({ sidebarOpen: false })}
       />
       <aside
-        className={`sidebar ${ui.sidebarOpen ? "mobile-open" : ""}`}
+        className={`sidebar ${ui.sidebarOpen ? "mobile-open" : ""} ${ui.sidebarCollapsed ? "desktop-collapsed" : ""}`}
         aria-label="Workspace 탐색"
+        aria-hidden={mobile ? !ui.sidebarOpen : ui.sidebarCollapsed}
+        inert={mobile ? !ui.sidebarOpen : ui.sidebarCollapsed}
       >
         <div className="brand">
           <Logo />
           <strong>ZeroNote</strong>
-          <span
-            className="alpha-badge"
-            aria-label={publicEnvironment.betaRequired ? "Beta" : "Alpha"}
+          <SyncStatus data={data} />
+          <button
+            className="icon-button sidebar-toggle"
+            aria-label="Sidebar 닫기"
+            onClick={() => {
+              ui.patch(
+                mobile ? { sidebarOpen: false } : { sidebarCollapsed: true },
+              );
+              requestAnimationFrame(() =>
+                document
+                  .querySelector<HTMLButtonElement>(
+                    '[aria-label="Sidebar 열기"]',
+                  )
+                  ?.focus(),
+              );
+            }}
           >
-            {publicEnvironment.betaRequired ? "β" : "α"}
-          </span>
+            <DesignIcon name="sidebar-toggle" />
+          </button>
         </div>
+        <nav className="sidebar-primary" aria-label="검색">
+          <button onClick={() => ui.patch({ searchOpen: true })}>
+            <DesignIcon name="search" />
+            <span>Search</span>
+            <kbd>⌘ K</kbd>
+          </button>
+        </nav>
         <div className="workspace-switcher">
           <button
             className="workspace-switcher-button"
+            aria-label="Workspace 전환"
+            aria-expanded={switcher}
             onClick={() => setSwitcher(!switcher)}
           >
             <span className="workspace-avatar">
               {workspace?.name.slice(0, 1) ?? "Z"}
             </span>
             <span>{workspace?.name ?? "나의 Workspace"}</span>
-            <ChevronsUpDown size={14} />
+            <DesignIcon name="chevron-down" />
           </button>
           {switcher && (
             <div className="workspace-menu">
@@ -147,6 +153,27 @@ export function Sidebar({
                   {item.id === ui.workspaceId && <Check size={13} />}
                 </button>
               ))}
+              <hr />
+              <button
+                onClick={() => {
+                  setSwitcher(false);
+                  ui.patch({ captureOpen: true });
+                }}
+              >
+                <PenLine size={15} />
+                Quick Capture
+              </button>
+              {inbox && (
+                <button
+                  onClick={() => {
+                    setSwitcher(false);
+                    ui.select(inbox.workspaceId, inbox.id);
+                  }}
+                >
+                  <Inbox size={15} />
+                  Inbox
+                </button>
+              )}
               <button
                 onClick={() => {
                   setSwitcher(false);
@@ -159,30 +186,6 @@ export function Sidebar({
             </div>
           )}
         </div>
-        <nav className="sidebar-primary">
-          <button onClick={() => ui.patch({ searchOpen: true })}>
-            <Search size={17} />
-            <span>Search</span>
-            <kbd>⌘ K</kbd>
-          </button>
-          <button onClick={() => ui.patch({ captureOpen: true })}>
-            <PenLine size={17} />
-            <span>Quick Capture</span>
-          </button>
-          {inbox && (
-            <button
-              className={ui.pageId === inbox.id ? "active" : ""}
-              onClick={() => ui.select(inbox.workspaceId, inbox.id)}
-            >
-              <Inbox size={17} />
-              <span>Inbox</span>
-              <span className="nav-count">
-                {pages.filter((page) => page.parentId === inbox.id).length ||
-                  ""}
-              </span>
-            </button>
-          )}
-        </nav>
         <div className="sidebar-scroll">
           {pages.some((page) => page.favorite) && (
             <section className="sidebar-section">
@@ -204,16 +207,51 @@ export function Sidebar({
             </section>
           )}
           <section className="sidebar-section">
-            <div className="section-heading">
+            <button
+              className="section-heading section-toggle"
+              aria-expanded={pagesExpanded}
+              aria-controls={pagesId}
+              onClick={() => setPagesExpanded(!pagesExpanded)}
+            >
               <span>Pages</span>
+              <span className={pagesExpanded ? "" : "rotate-closed"}>
+                <DesignIcon name="pages-chevron" />
+              </span>
+            </button>
+            <div id={pagesId} hidden={!pagesExpanded}>
+              {pages
+                .filter(
+                  (page) =>
+                    (!page.parentId ||
+                      !pages.some((parent) => parent.id === page.parentId)) &&
+                    !page.isInbox &&
+                    !page.accessLost,
+                )
+                .map((page) => (
+                  <PageTree
+                    key={page.id}
+                    page={page}
+                    pages={pages}
+                    onNew={onNew}
+                    level={0}
+                  />
+                ))}
+              {!pages.length && (
+                <div className="sidebar-empty">
+                  Workspace를 만들고
+                  <br />첫 문서를 시작하세요.
+                </div>
+              )}
               {owner && (
                 <div className="relative">
                   <button
-                    className="icon-button"
+                    className="tree-row sidebar-new-page"
                     aria-label="새 Page 만들기"
+                    aria-expanded={newMenu}
                     onClick={() => setNewMenu(!newMenu)}
                   >
-                    <Plus size={14} />
+                    <DesignIcon name="plus" />
+                    <span>새 페이지</span>
                   </button>
                   {newMenu && (
                     <div className="dropdown-menu sidebar-new-menu">
@@ -231,36 +269,13 @@ export function Sidebar({
                           setNewMenu(false);
                         }}
                       >
-                        <Columns3 size={14} />새 프로젝트
+                        <Columns3 size={14} />새 To-Do
                       </button>
                     </div>
                   )}
                 </div>
               )}
             </div>
-            {pages
-              .filter(
-                (page) =>
-                  (!page.parentId ||
-                    !pages.some((parent) => parent.id === page.parentId)) &&
-                  !page.isInbox &&
-                  !page.accessLost,
-              )
-              .map((page) => (
-                <PageTree
-                  key={page.id}
-                  page={page}
-                  pages={pages}
-                  onNew={onNew}
-                  level={0}
-                />
-              ))}
-            {!pages.length && (
-              <div className="sidebar-empty">
-                Workspace를 만들고
-                <br />첫 문서를 시작하세요.
-              </div>
-            )}
           </section>
           {preservedPages.length > 0 && (
             <section className="sidebar-section">
@@ -288,32 +303,13 @@ export function Sidebar({
         </div>
         <div className="sidebar-bottom">
           <button className={trashOpen ? "active" : ""} onClick={onTrash}>
-            <Trash2 size={16} />
+            <DesignIcon name="trash" />
             Trash
           </button>
           <button onClick={() => ui.patch({ settingsOpen: true })}>
-            <Settings size={16} />
+            <DesignIcon name="settings" />
             Settings
           </button>
-          <div className="connection-state">
-            {ui.syncState === "offline" ? (
-              <CloudOff size={13} />
-            ) : (
-              <Cloud size={13} />
-            )}
-            <span
-              title={
-                ui.offlineReady ? "Offline 준비됨" : "Offline 화면 준비 중"
-              }
-            >
-              {ui.syncState === "online"
-                ? "연결됨"
-                : ui.syncState === "offline"
-                  ? "Offline"
-                  : "연결 확인 중"}
-            </span>
-            <span className={`connection-dot ${ui.syncState}`} />
-          </div>
         </div>
       </aside>
     </>
@@ -335,27 +331,28 @@ const PageTree = memo(function PageTree({
     [expanded, setExpanded] = useState(false),
     children = pages.filter(
       (item) => item.parentId === page.id && !item.accessLost,
-    ),
-    Icon = page.kind === "database" ? Columns3 : FileText;
+    );
   if (level > 30) return null;
   return (
     <div>
       <div
         className={`tree-row ${active ? "active" : ""}`}
-        style={{ paddingLeft: 10 + level * 14 }}
+        style={{ paddingLeft: 20 + level * 14 }}
       >
-        <button
-          className={`tree-chevron ${expanded ? "expanded" : ""}`}
-          aria-label={`${page.title} 하위 Page ${expanded ? "접기" : "펼치기"}`}
-          onClick={() => setExpanded(!expanded)}
-        >
-          {children.length ? <ChevronRight size={13} /> : <span />}
-        </button>
+        {children.length > 0 && (
+          <button
+            className={`tree-chevron ${expanded ? "expanded" : ""}`}
+            aria-label={`${page.title} 하위 Page ${expanded ? "접기" : "펼치기"}`}
+            onClick={() => setExpanded(!expanded)}
+          >
+            <ChevronRight size={13} />
+          </button>
+        )}
         <button
           className="tree-page"
           onClick={() => select(page.workspaceId, page.id)}
         >
-          <Icon size={15} />
+          <DesignIcon name={page.kind === "database" ? "project" : "page"} />
           <span>{page.title || "제목 없음"}</span>
         </button>
         {page.role === "owner" && (

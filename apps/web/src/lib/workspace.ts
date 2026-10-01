@@ -75,12 +75,7 @@ export async function createLocalWorkspace(
   await database.workspaces.put(workspace);
   await createLocalPage(workspace.id, "받은 메모", "document", null, true);
   const page = await createLocalPage(workspace.id, "시작하기");
-  const session = await openDocument(page);
-  insertParagraphs(
-    session.document,
-    "ZeroNote에 오신 것을 환영합니다.\n\n이곳은 당신의 작업 공간입니다. 로그인 없이 기록하고, 연결하고, 함께 작업하세요.\n\n/ 를 입력해 Block을 추가하세요. [[ 로 다른 Page를 연결할 수 있습니다.\n\n왼쪽 + 버튼으로 문서나 프로젝트를 만들고, Share에서 Page에 사람을 초대하세요.\n\nRecovery Key를 보관하면 다른 기기에서 이 Workspace를 다시 열 수 있습니다.",
-  );
-  await createLocalPage(workspace.id, "나의 프로젝트", "database");
+  await createLocalPage(workspace.id, "To-Do", "database");
   await flushDocuments();
   useUiStore.getState().select(workspace.id, page.id);
   return { workspace, key, page };
