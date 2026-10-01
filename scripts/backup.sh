@@ -15,7 +15,7 @@ umask 077
 mkdir -p "$BACKUP_DIRECTORY"
 backup_file=$(mktemp "$BACKUP_DIRECTORY/zeronote-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX.partial")
 trap 'rm -f "$backup_file"' ERR
-PGDATABASE="$DATABASE_URL" pg_dump --format=custom --no-owner --no-acl | age -r "$AGE_RECIPIENT" -o "$backup_file"
+node "$repository_root/scripts/postgres-client.mjs" pg_dump --format=custom --no-owner --no-acl | age -r "$AGE_RECIPIENT" -o "$backup_file"
 mv -- "$backup_file" "${backup_file%.partial}.age"
 trap - ERR
 # Keep four successfully completed encrypted dumps; never touch unrelated files.

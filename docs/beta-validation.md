@@ -8,7 +8,7 @@
 | ---------------------------------------------------------- | --------------------------------------------------------------------- |
 | `pnpm lint`                                                | 통과                                                                  |
 | `pnpm type-check`                                          | Web/Server/Shared/Browser 테스트 통과                                 |
-| `pnpm test`                                                | 9개 파일, 79개 테스트 통과                                            |
+| `pnpm test`                                                | 10개 파일, 89개 테스트 통과                                           |
 | `pnpm test:e2e`                                            | Production Build와 필수 Beta 코드 환경에서 Chromium 8개 시나리오 통과 |
 | `pnpm build`                                               | Web Production Build와 Server TypeScript 통과                         |
 | PostgreSQL 17, 서버 Docker Build, 암호화 백업/별도 DB 복원 | GitHub CI 실행 후 기록                                                |
@@ -118,6 +118,9 @@ Page/Document 중첩 탐색을 Set으로 바꾸고 변경 없는 캐시 문서�
 | `scripts/e2e.mjs`                                   | Browser Build에서 Beta 진입 필수 활성화                    |
 | `scripts/restore.sh`                                | 저장소 밖 Key로 빈 별도 DB에 Transaction 복원              |
 | `scripts/start.mjs`                                 | Web PORT와 Render Server PORT 분리                         |
+| `scripts/postgres-client.mjs`                       | 비밀번호 없는 접속 URL과 임시 0600 Password File로 운영 명령 실행 |
+| `scripts/postgres-client.test.mjs`                  | TLS/IPv6/특수 문자와 잘못된 URL/Secret 옵션 검증            |
+| `vitest.config.ts`                                 | 운영용 PostgreSQL Client 회귀 테스트 포함                  |
 | `tests/beta-helpers.ts`                             | Node로 운영 CLI를 직접 실행해 코드 발급/파일 정리          |
 | `tests/performance.spec.ts`                         | 실제 Beta 승인 후 기존 성능 목표 검증                      |
 | `tests/workspace.spec.ts`                           | 필수 코드와 Snapshot 미리보기/새 Page 복구 시나리오        |

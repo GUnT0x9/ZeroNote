@@ -39,7 +39,12 @@ jobs:
           for command in pg_dump pg_restore psql; do
             cat > "$RUNNER_TEMP/pg-client/$command" <<'CLIENT'
           #!/usr/bin/env bash
-          exec docker run --rm -i --network host -e PGDATABASE postgres:17 "$(basename "$0")" "$@"
+          set -euo pipefail
+          client_args=()
+          if [[ -n "${PGPASSFILE:-}" ]]; then
+            client_args+=(--env PGPASSFILE --volume "$PGPASSFILE:$PGPASSFILE:ro")
+          fi
+          exec docker run --rm -i --network host "${client_args[@]}" postgres:17 "$(basename "$0")" "$@"
           CLIENT
             chmod +x "$RUNNER_TEMP/pg-client/$command"
           done
@@ -53,12 +58,12 @@ jobs:
             echo 'Backup unexpectedly allowed a repository path.' >&2
             exit 1
           fi
-          PGDATABASE="$DATABASE_URL" psql -c 'CREATE DATABASE zeronote_restore'
+          node scripts/postgres-client.mjs psql -c 'CREATE DATABASE zeronote_restore'
           export RESTORE_DATABASE_URL='postgresql://zeronote:integration-only-password@localhost:5432/zeronote_restore'
           export AGE_IDENTITY_FILE="$RUNNER_TEMP/backup.agekey"
           export BACKUP_FILE="$(find "$BACKUP_DIRECTORY" -name 'zeronote-*.age' -print -quit)"
           bash scripts/restore.sh
-          PGDATABASE="$RESTORE_DATABASE_URL" psql -Atc 'SELECT count(*) FROM schema_migrations' | grep -Ex '2'
+          DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atc 'SELECT count(*) FROM schema_migrations' | grep -Ex '2'
           if bash scripts/restore.sh; then
             echo 'Restore unexpectedly allowed a non-empty database.' >&2
             exit 1

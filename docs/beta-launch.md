@@ -49,7 +49,7 @@ DB 200MiB부터 경고, 300MiB부터 새 문서·Page·Workspace·Comment·Invit
 
 ## 암호화 백업과 복원
 
-Linux/WSL 운영 환경에 PostgreSQL 17 client와 `age`를 준비한다. Private Key와 백업은 저장소 밖에 둔다. Script는 저장소 내부의 백업/복호화 Key 경로를 거절한다. 백업은 배포 전과 주 1회 운영자가 실행한다. 최근 정상 백업 4개를 유지한다. Snapshot은 재해 복구 백업을 대신하지 않는다.
+Linux/WSL 운영 환경에 Node.js 24, PostgreSQL 17 client와 `age`를 준비한다. Private Key와 백업은 저장소 밖에 둔다. Script는 저장소 내부의 백업/복호화 Key 경로를 거절한다. PostgreSQL Client에는 비밀번호를 제거한 URL을 전달하고 임시 0600 Password File을 사용한다. TLS 연결 옵션을 유지하며 종료 후 임시 파일을 정리한다. 백업은 배포 전과 주 1회 운영자가 실행한다. 최근 정상 백업 4개를 유지한다. Snapshot은 재해 복구 백업을 대신하지 않는다.
 
 ```bash
 age-keygen -o /absolute/private/path/backup.agekey
