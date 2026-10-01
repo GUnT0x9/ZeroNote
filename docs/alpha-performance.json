@@ -1,0 +1,9 @@
+{
+  "pages": 1000,
+  "blocks": 500,
+  "tasks": 1000,
+  "cachedPageOpenMs": 800,
+  "automationOpenMs": 992.4603650000008,
+  "localSearchMs": 28,
+  "automationSearchMs": 304.84645400000045
+}

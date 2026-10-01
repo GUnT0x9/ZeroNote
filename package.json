@@ -1,0 +1,33 @@
+{
+  "name": "zeronote",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "db:start": "node scripts/postgres.mjs",
+    "db:migrate": "pnpm --filter @zeronote/server db:migrate",
+    "lint": "eslint apps packages tests scripts",
+    "type-check": "pnpm -r type-check && tsc --project tsconfig.tests.json",
+    "test": "vitest run",
+    "test:e2e": "node scripts/e2e.mjs",
+    "build": "pnpm --filter @zeronote/web build && pnpm --filter @zeronote/server build",
+    "start": "node scripts/start.mjs",
+    "format": "prettier --write apps packages tests scripts docs *.ts *.mjs *.json *.yaml"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.39.0",
+    "fake-indexeddb": "^6.2.0",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.50.0",
+    "vitest": "^4.0.0",
+    "yjs": "13.6.33"
+  }
+}

@@ -1,0 +1,57 @@
+packages:
+  - apps/*
+  - packages/*
+networkConcurrency: 16
+overrides:
+  vite: 7.3.1
+  lightningcss: 1.32.0
+allowBuilds:
+  esbuild: true
+  sharp: true
+minimumReleaseAgeExclude:
+  - "@next/env@16.3.8"
+  - "@next/swc-darwin-arm64@16.3.8"
+  - "@next/swc-darwin-x64@16.3.8"
+  - "@next/swc-linux-arm64-gnu@16.3.8"
+  - "@next/swc-linux-arm64-musl@16.3.8"
+  - "@next/swc-linux-x64-gnu@16.3.8"
+  - "@next/swc-linux-x64-musl@16.3.8"
+  - "@next/swc-win32-arm64-msvc@16.3.8"
+  - "@next/swc-win32-x64-msvc@16.3.8"
+  - "@tiptap/core@3.31.4"
+  - "@tiptap/extension-blockquote@3.31.4"
+  - "@tiptap/extension-bold@3.31.4"
+  - "@tiptap/extension-bubble-menu@3.31.4"
+  - "@tiptap/extension-bullet-list@3.31.4"
+  - "@tiptap/extension-code-block-lowlight@3.31.4"
+  - "@tiptap/extension-code-block@3.31.4"
+  - "@tiptap/extension-code@3.31.4"
+  - "@tiptap/extension-collaboration-caret@3.31.4"
+  - "@tiptap/extension-collaboration@3.31.4"
+  - "@tiptap/extension-details@3.31.4"
+  - "@tiptap/extension-document@3.31.4"
+  - "@tiptap/extension-dropcursor@3.31.4"
+  - "@tiptap/extension-floating-menu@3.31.4"
+  - "@tiptap/extension-gapcursor@3.31.4"
+  - "@tiptap/extension-hard-break@3.31.4"
+  - "@tiptap/extension-heading@3.31.4"
+  - "@tiptap/extension-horizontal-rule@3.31.4"
+  - "@tiptap/extension-italic@3.31.4"
+  - "@tiptap/extension-link@3.31.4"
+  - "@tiptap/extension-list-item@3.31.4"
+  - "@tiptap/extension-list-keymap@3.31.4"
+  - "@tiptap/extension-list@3.31.4"
+  - "@tiptap/extension-ordered-list@3.31.4"
+  - "@tiptap/extension-paragraph@3.31.4"
+  - "@tiptap/extension-strike@3.31.4"
+  - "@tiptap/extension-task-item@3.31.4"
+  - "@tiptap/extension-task-list@3.31.4"
+  - "@tiptap/extension-text-style@3.31.4"
+  - "@tiptap/extension-text@3.31.4"
+  - "@tiptap/extension-underline@3.31.4"
+  - "@tiptap/extension-unique-id@3.31.4"
+  - "@tiptap/extensions@3.31.4"
+  - "@tiptap/pm@3.31.4"
+  - "@tiptap/react@3.31.4"
+  - "@tiptap/starter-kit@3.31.4"
+  - next@16.3.8

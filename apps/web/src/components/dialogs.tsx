@@ -1,0 +1,678 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Search,
+  FileText,
+  Columns3,
+  ArrowUpRight,
+  Copy,
+  Check,
+  Download,
+  KeyRound,
+  Monitor,
+  Sun,
+  Moon,
+  Laptop,
+  Upload,
+  Trash2,
+  Plus,
+} from "lucide-react";
+import { createRecoveryKey } from "@zeronote/shared";
+import { Dialog } from "./primitives";
+import { useUiStore } from "@/lib/ui-store";
+import type { WorkspaceData } from "@/lib/hooks";
+import { database, errorMessage, type LocalWorkspace } from "@/lib/database";
+import {
+  createLocalWorkspace,
+  captureNote,
+  exportWorkspace,
+  importWorkspace,
+  downloadJson,
+} from "@/lib/workspace";
+import { searchLocalPages } from "@/lib/search";
+import { deleteLocalWorkspace } from "@/lib/workspace";
+import { api, authenticate, getDevice } from "@/lib/api";
+import { requestSync, synchronize } from "@/lib/sync";
+
+export function CreateWorkspaceDialog({
+  onClose,
+  onKey,
+}: {
+  onClose: () => void;
+  onKey: (key: string) => void;
+}) {
+  const [name, setName] = useState("내 Workspace"),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState<string | null>(null);
+  return (
+    <Dialog title="Workspace 만들기" onClose={onClose}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!name.trim()) return;
+          setBusy(true);
+          void createLocalWorkspace(name.trim())
+            .then(({ key }) => {
+              requestSync();
+              onClose();
+              onKey(key);
+            })
+            .catch((problem) => setError(errorMessage(problem)))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <p className="dialog-description">
+          문서와 프로젝트를 담을 공간의 이름을 정해주세요.
+        </p>
+        <label className="field-label">
+          Workspace 이름
+          <input
+            aria-label="Workspace 이름"
+            value={name}
+            maxLength={160}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        {error && <div className="inline-warning">{error}</div>}
+        <div className="dialog-footer">
+          <button type="button" className="button" onClick={onClose}>
+            취소
+          </button>
+          <button
+            className="button button-primary"
+            type="submit"
+            disabled={busy || !name.trim()}
+          >
+            {busy ? "만드는 중…" : "Workspace 만들기"}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+export function RecoveryKeyDialog({
+  value,
+  onClose,
+}: {
+  value: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false),
+    [error, setError] = useState<string | null>(null);
+  return (
+    <Dialog title="Recovery Key를 보관해주세요" onClose={onClose}>
+      <div className="key-intro">
+        <KeyRound size={24} />
+        <p>
+          다른 기기에서 이 Workspace를 다시 열 때 사용합니다. 이 키를 가진
+          사람은 Workspace 전체의 소유권을 복구할 수 있습니다.
+        </p>
+      </div>
+      <div className="recovery-key" data-testid="recovery-key">
+        {value}
+      </div>
+      <p className="field-help">
+        안전한 곳에 보관하고, 다른 사람에게는 Page 초대 링크를 보내세요.
+      </p>
+      <div className="button-row">
+        <button
+          className="button"
+          onClick={() => {
+            void navigator.clipboard
+              .writeText(value)
+              .then(() => setCopied(true))
+              .catch((problem) => setError(errorMessage(problem)));
+          }}
+        >
+          {copied ? <Check size={15} /> : <Copy size={15} />}{" "}
+          {copied ? "복사됨" : "키 복사"}
+        </button>
+        <button
+          className="button"
+          onClick={() => {
+            const url = URL.createObjectURL(
+              new Blob([value], { type: "text/plain" }),
+            );
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "zeronote-recovery-key.txt";
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }}
+        >
+          <Download size={15} />
+          다운로드
+        </button>
+      </div>
+      {error && <div className="inline-warning">{error}</div>}
+      <div className="dialog-footer">
+        <button className="button button-primary" onClick={onClose}>
+          계속하기
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+export function RecoverWorkspaceDialog({ onClose }: { onClose: () => void }) {
+  const [key, setKey] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState<string | null>(null);
+  return (
+    <Dialog title="Workspace 복구" onClose={onClose}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          setBusy(true);
+          void (async () => {
+            await authenticate();
+            const workspace = await api<{ id: string }>(
+              "/workspaces/recover",
+              "POST",
+              { key },
+            );
+            await synchronize();
+            const pages = await database.pages
+              .where("workspaceId")
+              .equals(workspace.id)
+              .toArray();
+            useUiStore
+              .getState()
+              .select(
+                workspace.id,
+                pages
+                  .filter(
+                    (page) =>
+                      !page.isInbox &&
+                      page.kind === "document" &&
+                      !page.deletedAt,
+                  )
+                  .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+                  ?.id ?? null,
+              );
+            onClose();
+          })()
+            .catch((problem) => setError(errorMessage(problem)))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <p className="dialog-description">
+          보관한 Recovery Key로 서버에 동기화된 문서와 프로젝트를 가져옵니다.
+        </p>
+        <label className="field-label">
+          Recovery Key
+          <textarea
+            aria-label="Recovery Key"
+            placeholder="ZN1-…"
+            value={key}
+            spellCheck={false}
+            onChange={(event) => setKey(event.target.value)}
+          />
+        </label>
+        {error && <div className="inline-warning">{error}</div>}
+        <div className="dialog-footer">
+          <button
+            className="button button-primary"
+            disabled={busy || !key.trim()}
+          >
+            {busy ? "복구 중…" : "Workspace 복구"}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
+export function SearchDialog({
+  data,
+  onClose,
+}: {
+  data: WorkspaceData;
+  onClose: () => void;
+}) {
+  const ui = useUiStore(),
+    [query, setQuery] = useState(""),
+    [active, setActive] = useState(0);
+  const results = useMemo(
+    () => searchLocalPages(data.pages, data.documents, query),
+    [query, data.pages, data.documents],
+  );
+  const select = (index: number) => {
+    const result = results[index];
+    if (result) {
+      ui.select(result.page.workspaceId, result.page.id);
+      onClose();
+    }
+  };
+  return (
+    <Dialog title="Search" onClose={onClose} wide>
+      <div className="search-input">
+        <Search size={20} />
+        <input
+          aria-label="Workspace 검색"
+          placeholder="Page 제목과 내용을 검색하세요…"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setActive(0);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setActive((index) => Math.min(index + 1, results.length - 1));
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setActive((index) => Math.max(index - 1, 0));
+            }
+            if (event.key === "Enter") {
+              event.preventDefault();
+              select(active);
+            }
+          }}
+        />
+      </div>
+      <div className="search-results">
+        <div className="menu-caption">{query ? "검색 결과" : "최근 Page"}</div>
+        {results.map(({ page, record }, index) => (
+          <button
+            className={active === index ? "selected" : ""}
+            key={page.id}
+            onClick={() => select(index)}
+          >
+            {page.kind === "database" ? (
+              <Columns3 size={17} />
+            ) : (
+              <FileText size={17} />
+            )}
+            <span>
+              <strong>{page.title}</strong>
+              <small>
+                {record?.text.replace(page.title, "").trim().slice(0, 100) ||
+                  data.workspaces.find(
+                    (workspace) => workspace.id === page.workspaceId,
+                  )?.name}
+              </small>
+            </span>
+            <ArrowUpRight size={15} />
+          </button>
+        ))}
+        {!results.length && (
+          <div className="panel-empty">
+            <p>검색 결과가 없습니다.</p>
+          </div>
+        )}
+      </div>
+      <div className="search-footer">
+        <span>↑ ↓ 선택</span>
+        <span>Enter 열기</span>
+        <span>Esc 닫기</span>
+      </div>
+    </Dialog>
+  );
+}
+export function CaptureDialog({
+  data,
+  onClose,
+}: {
+  data: WorkspaceData;
+  onClose: () => void;
+}) {
+  const ui = useUiStore(),
+    workspaceId = data.pages.some(
+      (page) =>
+        page.workspaceId === ui.workspaceId &&
+        page.isInbox &&
+        page.role === "owner",
+    )
+      ? ui.workspaceId
+      : data.pages.find((page) => page.isInbox && page.role === "owner")
+          ?.workspaceId;
+  const pages = data.pages.filter(
+    (page) =>
+      page.workspaceId === workspaceId &&
+      page.kind === "document" &&
+      !page.deletedAt &&
+      !page.accessLost &&
+      page.role === "owner",
+  );
+  const [destination, setDestination] = useState(
+      pages.find((page) => page.isInbox)?.id ?? pages[0]?.id ?? "",
+    ),
+    [text, setText] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState<string | null>(null);
+  const submit = async () => {
+    if (!workspaceId || !destination || !text.trim()) return;
+    setBusy(true);
+    try {
+      await captureNote(workspaceId, text, destination);
+      requestSync();
+      onClose();
+    } catch (problem) {
+      setError(errorMessage(problem));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog title="Quick Capture" onClose={onClose}>
+      <textarea
+        className="capture-input"
+        aria-label="빠른 메모"
+        placeholder="지금 떠오른 생각을 남겨주세요…"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      {!workspaceId && (
+        <div className="inline-warning">
+          개인 Workspace를 만든 뒤 빠른 메모를 남길 수 있습니다.
+        </div>
+      )}
+      {error && <div className="inline-warning">{error}</div>}
+      <div className="capture-footer">
+        <label>
+          <span>저장 위치</span>
+          <select
+            aria-label="Capture 저장 위치"
+            value={destination}
+            onChange={(event) => setDestination(event.target.value)}
+          >
+            {pages.map((page) => (
+              <option key={page.id} value={page.id}>
+                {page.isInbox ? "Inbox" : page.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="button button-primary"
+          disabled={busy || !text.trim() || !workspaceId}
+          onClick={() => {
+            void submit();
+          }}
+        >
+          저장 <kbd>⌘ ↵</kbd>
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+interface WorkspaceDevice {
+  id: string;
+  name: string;
+  identityId: string;
+  revoked: boolean;
+}
+export function SettingsDialog({
+  workspace,
+  data,
+  onClose,
+  onKey,
+  onCreate,
+  onRecover,
+}: {
+  workspace: LocalWorkspace | null;
+  data: WorkspaceData;
+  onClose: () => void;
+  onKey: (key: string) => void;
+  onCreate: () => void;
+  onRecover: () => void;
+}) {
+  const ui = useUiStore(),
+    [devices, setDevices] = useState<WorkspaceDevice[]>([]),
+    [deviceId, setDeviceId] = useState(""),
+    [error, setError] = useState<string | null>(null),
+    [busy, setBusy] = useState(false),
+    [confirmDelete, setConfirmDelete] = useState(false),
+    [deleteName, setDeleteName] = useState("");
+  const owner =
+    !!workspace &&
+    data.pages.some(
+      (page) => page.workspaceId === workspace.id && page.role === "owner",
+    );
+  const loadDevices = async () => {
+    try {
+      const device = await getDevice();
+      setDeviceId(device.id);
+      if (owner && workspace && !workspace.pendingCreation && navigator.onLine)
+        setDevices(
+          await api<WorkspaceDevice[]>(`/workspaces/${workspace.id}/devices`),
+        );
+    } catch (problem) {
+      setError(errorMessage(problem));
+    }
+  };
+  useEffect(() => {
+    void loadDevices();
+  }, [workspace?.id]);
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (problem) {
+      setError(errorMessage(problem));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    if (!workspace) return;
+    await api(`/workspaces/${workspace.id}`, "DELETE", { name: deleteName });
+    await deleteLocalWorkspace(workspace.id);
+    const next = data.workspaces.find((item) => item.id !== workspace.id);
+    ui.patch({
+      workspaceId: next?.id ?? null,
+      pageId: null,
+      settingsOpen: false,
+    });
+  };
+  return (
+    <Dialog title="Settings" onClose={onClose} wide>
+      <div className="settings-content">
+        <section>
+          <h3>화면</h3>
+          <div className="theme-options">
+            {(
+              [
+                { value: "light", label: "Light", icon: Sun },
+                { value: "dark", label: "Dark", icon: Moon },
+                { value: "system", label: "System", icon: Laptop },
+              ] as const
+            ).map((theme) => (
+              <button
+                className={ui.theme === theme.value ? "active" : ""}
+                key={theme.value}
+                onClick={() => {
+                  ui.patch({ theme: theme.value });
+                  void database.preferences
+                    .put({ id: "theme", value: theme.value })
+                    .catch((problem) => setError(errorMessage(problem)));
+                }}
+              >
+                <theme.icon size={18} />
+                {theme.label}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section>
+          <h3>Workspace</h3>
+          <div className="settings-row">
+            <span>{workspace?.name ?? "Workspace 없음"}</span>
+            <div className="button-row">
+              <button className="button button-small" onClick={onCreate}>
+                <Plus size={14} />새 Workspace
+              </button>
+              <button className="button button-small" onClick={onRecover}>
+                <KeyRound size={14} />
+                복구
+              </button>
+            </div>
+          </div>
+          {owner && workspace && (
+            <div className="settings-row">
+              <div>
+                <strong>Recovery Key 재발급</strong>
+                <p>새 키를 만들면 이전 키는 사용할 수 없습니다.</p>
+              </div>
+              <button
+                className="button button-small"
+                disabled={
+                  busy || ui.syncState !== "online" || workspace.pendingCreation
+                }
+                onClick={() => {
+                  void run(async () => {
+                    const key = createRecoveryKey();
+                    await api(`/workspaces/${workspace.id}/recovery`, "POST", {
+                      key,
+                    });
+                    onKey(key);
+                  });
+                }}
+              >
+                재발급
+              </button>
+            </div>
+          )}
+        </section>
+        {workspace && (
+          <section>
+            <h3>데이터</h3>
+            <div className="settings-row">
+              <div>
+                <strong>Workspace Export</strong>
+                <p>
+                  문서와 Task를 파일로 보관합니다. 인증 정보는 포함하지
+                  않습니다.
+                </p>
+              </div>
+              <button
+                className="button button-small"
+                disabled={busy}
+                onClick={() => {
+                  void run(async () => {
+                    downloadJson(
+                      await exportWorkspace(workspace.id),
+                      `${workspace.name}-zeronote.json`,
+                    );
+                  });
+                }}
+              >
+                <Download size={14} />
+                Export
+              </button>
+            </div>
+            <div className="settings-row">
+              <div>
+                <strong>Import</strong>
+                <p>Export 파일을 새 Workspace로 가져옵니다.</p>
+              </div>
+              <label className="button button-small import-label">
+                <Upload size={14} />
+                Import
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  disabled={busy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      void run(async () => {
+                        if (file.size > 50 * 1024 * 1024)
+                          throw new Error("50MB 이하 파일을 가져와주세요.");
+                        const input: unknown = JSON.parse(await file.text());
+                        const result = await importWorkspace(input);
+                        requestSync();
+                        onKey(result.key);
+                      });
+                    }
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </section>
+        )}
+        {owner && workspace && (
+          <section>
+            <h3>연결된 기기</h3>
+            {devices
+              .filter((device) => !device.revoked)
+              .map((device) => (
+                <div className="settings-row" key={device.id}>
+                  <span className="device-name">
+                    <Monitor size={16} />
+                    {device.name}
+                    {device.id === deviceId && <small>현재 기기</small>}
+                  </span>
+                  {device.id !== deviceId && (
+                    <button
+                      className="text-button danger-text"
+                      disabled={busy}
+                      onClick={() => {
+                        void run(async () => {
+                          await api(
+                            `/workspaces/${workspace.id}/devices/${device.id}`,
+                            "DELETE",
+                          );
+                          await loadDevices();
+                        });
+                      }}
+                    >
+                      철회
+                    </button>
+                  )}
+                </div>
+              ))}
+          </section>
+        )}
+        {owner && workspace && (
+          <section className="danger-section">
+            <h3>Workspace 삭제</h3>
+            {!confirmDelete ? (
+              <button
+                className="button danger-text"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 size={14} />
+                Workspace 삭제
+              </button>
+            ) : (
+              <>
+                <p>
+                  서버의 Workspace와 이 기기의 작업 데이터를 삭제합니다.
+                  계속하려면 <strong>{workspace.name}</strong>을 입력해주세요.
+                </p>
+                <input
+                  aria-label="삭제할 Workspace 이름"
+                  value={deleteName}
+                  onChange={(event) => setDeleteName(event.target.value)}
+                />
+                <button
+                  className="button button-danger"
+                  disabled={
+                    busy ||
+                    deleteName !== workspace.name ||
+                    ui.syncState !== "online"
+                  }
+                  onClick={() => {
+                    void run(remove);
+                  }}
+                >
+                  삭제 확인
+                </button>
+              </>
+            )}
+          </section>
+        )}
+        {error && <div className="inline-warning">{error}</div>}
+      </div>
+    </Dialog>
+  );
+}

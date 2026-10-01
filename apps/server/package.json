@@ -1,0 +1,33 @@
+{
+  "name": "@zeronote/server",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc --noEmit",
+    "type-check": "tsc --noEmit",
+    "db:migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@hocuspocus/server": "4.7.0",
+    "@zeronote/shared": "workspace:*",
+    "dotenv": "^17.2.0",
+    "drizzle-orm": "^0.45.0",
+    "fastify": "^5.7.0",
+    "jose": "^6.1.0",
+    "pg": "^8.16.0",
+    "tsx": "^4.21.0",
+    "ws": "^8.18.0",
+    "yjs": "^13.6.27",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "4.7.0",
+    "@types/pg": "^8.15.0",
+    "@types/ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,304 @@
+import * as Y from "yjs";
+import { Awareness } from "y-protocols/awareness";
+import { IndexeddbPersistence, storeState } from "y-indexeddb";
+import { HocuspocusProvider } from "@hocuspocus/provider";
+import {
+  base64ToBytes,
+  bytesToBase64,
+  getDocumentProjection,
+  replaceSharedText,
+} from "@zeronote/shared";
+import { database, errorMessage, type LocalPage } from "./database";
+import { api, ApiError } from "./api";
+import { useUiStore } from "./ui-store";
+
+export interface DocumentSession {
+  id: string;
+  document: Y.Doc;
+  awareness: Awareness;
+  persistence: IndexeddbPersistence;
+  provider?: HocuspocusProvider;
+  generation: number;
+  localSaveError?: string;
+  connecting?: Promise<HocuspocusProvider | undefined>;
+  ready: Promise<void>;
+  saveTimer?: ReturnType<typeof setTimeout>;
+  saving?: Promise<void>;
+}
+const sessions = new Map<string, DocumentSession>();
+let requestSync = () => {};
+export function setDocumentSyncRequest(callback: () => void): void {
+  requestSync = callback;
+}
+export function getDocumentSession(id: string): DocumentSession | undefined {
+  return sessions.get(id);
+}
+export async function openDocument(page: LocalPage): Promise<DocumentSession> {
+  const existing = sessions.get(page.id);
+  if (existing) {
+    await existing.ready;
+    return existing;
+  }
+  const document = new Y.Doc({ gc: false }),
+    persistence = new IndexeddbPersistence(`zeronote:${page.id}`, document);
+  const session: DocumentSession = {
+    id: page.id,
+    document,
+    awareness: new Awareness(document),
+    persistence,
+    generation: 0,
+    ready: Promise.resolve(),
+  };
+  sessions.set(page.id, session);
+  session.ready = hydrate(session, page);
+  try {
+    await session.ready;
+    return session;
+  } catch (error) {
+    sessions.delete(page.id);
+    await persistence.destroy();
+    document.destroy();
+    throw error;
+  }
+}
+async function hydrate(
+  session: DocumentSession,
+  page: LocalPage,
+): Promise<void> {
+  await session.persistence.whenSynced;
+  const cached = await database.documents.get(page.id);
+  if (cached) {
+    Y.applyUpdate(session.document, cached.update, "local-cache");
+    session.generation = cached.generation;
+  }
+  const locallyCreated = await database.operations
+    .filter(
+      (operation) =>
+        operation.payload.pageId === page.id &&
+        operation.payload.action === "create",
+    )
+    .first();
+  if (!cached && !locallyCreated && !page.accessLost) {
+    try {
+      const remote = await api<{ update: string }>(`/documents/${page.id}`);
+      Y.applyUpdate(
+        session.document,
+        base64ToBytes(remote.update),
+        "remote-fetch",
+      );
+    } catch (error) {
+      if (!navigator.onLine)
+        throw new Error(
+          "이 기기에 아직 저장되지 않은 Page입니다. Online에서 한 번 열어주세요.",
+        );
+      throw error;
+    }
+  }
+  session.document.on(
+    "update",
+    (
+      _update: Uint8Array,
+      _origin: unknown,
+      _doc: Y.Doc,
+      _transaction: Y.Transaction,
+    ) => {
+      session.generation++;
+      session.localSaveError = undefined;
+      if (session.saveTimer) clearTimeout(session.saveTimer);
+      session.saveTimer = setTimeout(() => {
+        session.saving = saveLocal(session, page);
+        void session.saving.catch((error) =>
+          useUiStore.getState().patch({ notice: errorMessage(error) }),
+        );
+      }, 80);
+    },
+  );
+  if (!session.document.getText("title").length && locallyCreated)
+    replaceSharedText(session.document.getText("title"), page.title);
+  await saveLocal(session, page);
+}
+async function saveLocal(
+  session: DocumentSession,
+  page: LocalPage,
+): Promise<void> {
+  const projection = getDocumentProjection(session.document),
+    previous = await database.documents.get(page.id),
+    generation = session.generation;
+  try {
+    await storeState(session.persistence, true);
+    await database.transaction(
+      "rw",
+      database.documents,
+      database.pages,
+      async () => {
+        await database.documents.put({
+          id: page.id,
+          workspaceId: page.workspaceId,
+          update: Y.encodeStateAsUpdate(session.document),
+          ...projection,
+          generation,
+          committedGeneration: previous?.committedGeneration ?? 0,
+          state: previous?.state === "preserved" ? "preserved" : "saved",
+          updatedAt: Date.now(),
+        });
+        await database.pages.update(page.id, {
+          title: projection.title || page.title,
+        });
+      },
+    );
+    session.localSaveError = undefined;
+    requestSync();
+  } catch (error) {
+    session.localSaveError = errorMessage(error);
+    useUiStore.getState().patch({
+      notice: "저장 공간을 확인해주세요. 내용을 저장하지 못했습니다.",
+    });
+    throw error;
+  }
+}
+export async function flushDocuments(): Promise<void> {
+  for (const session of sessions.values()) {
+    await session.ready;
+    if (session.saveTimer || session.localSaveError) {
+      if (session.saveTimer) clearTimeout(session.saveTimer);
+      session.saveTimer = undefined;
+      const page = await database.pages.get(session.id);
+      if (page) session.saving = saveLocal(session, page);
+    }
+    if (session.saving) await session.saving;
+  }
+}
+export async function cacheRemoteDocument(page: LocalPage): Promise<void> {
+  if (page.accessLost || page.deletedAt) return;
+  const existing = await database.documents.get(page.id),
+    session = sessions.get(page.id),
+    remote = await api<{ update: string }>(`/documents/${page.id}`),
+    update = base64ToBytes(remote.update);
+  if (session) {
+    Y.applyUpdate(session.document, update, "remote-fetch");
+    return;
+  }
+  const document = new Y.Doc({ gc: false });
+  try {
+    if (existing) Y.applyUpdate(document, existing.update);
+    Y.applyUpdate(document, update);
+    const projection = getDocumentProjection(document);
+    await database.documents.put({
+      id: page.id,
+      workspaceId: page.workspaceId,
+      update: Y.encodeStateAsUpdate(document),
+      ...projection,
+      generation: existing?.generation ?? 0,
+      committedGeneration: existing?.committedGeneration ?? 0,
+      state: existing?.state ?? "saved",
+      updatedAt: Date.now(),
+    });
+    await database.pages.update(page.id, {
+      title: projection.title || page.title,
+    });
+  } finally {
+    document.destroy();
+  }
+}
+export async function connectDocument(
+  session: DocumentSession,
+  page: LocalPage,
+): Promise<HocuspocusProvider | undefined> {
+  if (page.accessLost || page.deletedAt || !navigator.onLine) return undefined;
+  if (session.provider) return session.provider;
+  if (session.connecting) return session.connecting;
+  session.connecting = createProvider(session, page);
+  try {
+    return await session.connecting;
+  } finally {
+    session.connecting = undefined;
+  }
+}
+async function createProvider(
+  session: DocumentSession,
+  page: LocalPage,
+): Promise<HocuspocusProvider | undefined> {
+  if (
+    await database.operations
+      .filter(
+        (operation) =>
+          operation.payload.pageId === page.id &&
+          operation.payload.action === "create",
+      )
+      .count()
+  ) {
+    try {
+      const sync = await import("./sync");
+      await sync.synchronize();
+    } catch {
+      return undefined;
+    }
+  }
+  try {
+    await api(`/documents/${page.id}/realtime-token`, "POST");
+  } catch (error) {
+    useUiStore.getState().patch({ syncError: errorMessage(error) });
+    return undefined;
+  }
+  const provider = new HocuspocusProvider({
+    url: `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/collaboration`,
+    name: page.id,
+    document: session.document,
+    awareness: session.awareness,
+    token: async () => {
+      const response = await api<{ token: string }>(
+        `/documents/${page.id}/realtime-token`,
+        "POST",
+      );
+      return response.token;
+    },
+    onAuthenticationFailed: () => {
+      void markAccessFailure(page.id).catch((error) =>
+        useUiStore.getState().patch({ notice: errorMessage(error) }),
+      );
+    },
+  });
+  session.provider = provider;
+  return provider;
+}
+async function markAccessFailure(pageId: string): Promise<void> {
+  try {
+    await api(`/documents/${pageId}`);
+  } catch (error) {
+    if (error instanceof ApiError && [403, 410].includes(error.status)) {
+      const current = await database.documents.get(pageId);
+      if (current && current.generation > current.committedGeneration)
+        await database.documents.update(pageId, {
+          state: "preserved",
+          error: error.message,
+        });
+    }
+  }
+}
+export function disconnectDocument(session: DocumentSession): void {
+  session.provider?.disconnect();
+  session.awareness.setLocalState(null);
+}
+export function snapshotBase64(session: DocumentSession): string {
+  return bytesToBase64(Y.encodeStateAsUpdate(session.document));
+}
+export async function removeLocalDocument(pageId: string): Promise<void> {
+  const session = sessions.get(pageId);
+  if (session) {
+    if (session.saveTimer) clearTimeout(session.saveTimer);
+    session.provider?.destroy();
+    session.awareness.destroy();
+    if (session.saving) await session.saving;
+    await session.persistence.clearData();
+    session.document.destroy();
+    sessions.delete(pageId);
+  } else {
+    const persistence = new IndexeddbPersistence(
+      `zeronote:${pageId}`,
+      new Y.Doc(),
+    );
+    await persistence.whenSynced;
+    await persistence.clearData();
+    persistence.doc.destroy();
+  }
+}
