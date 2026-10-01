@@ -6,6 +6,7 @@ import {
   getDocumentProjection,
 } from "../packages/shared/src/index";
 import type { LocalPage, LocalDocument } from "../apps/web/src/lib/database";
+import { createBrowserBetaCode } from "./beta-helpers";
 interface Fixture {
   page: LocalPage;
   document: Omit<LocalDocument, "update"> & { update: number[] };
@@ -22,6 +23,7 @@ test("1000 cached Pages, a 500-block document and 1000 Task Rows stay usable", a
     .first()
     .click();
   await page.getByLabel("Workspace 이름").fill(name);
+  await page.getByLabel("Beta 초대코드").fill(await createBrowserBetaCode());
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Workspace 만들기", exact: true })
@@ -260,7 +262,12 @@ test("1000 cached Pages, a 500-block document and 1000 Task Rows stay usable", a
   });
   await context.setOffline(false);
   await page.request.delete(
-    "http://localhost:3002/v1/workspaces/" + workspaceId,
-    { headers: { origin: "http://localhost:3002" }, data: { name } },
+    `${process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002"}/v1/workspaces/${workspaceId}`,
+    {
+      headers: {
+        origin: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002",
+      },
+      data: { name },
+    },
   );
 });

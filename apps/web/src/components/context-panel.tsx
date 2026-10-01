@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import {
+  History,
   X,
   MessageSquare,
   Link2,
@@ -38,7 +39,10 @@ import { requestSync } from "@/lib/sync";
 import { changePageStructure } from "@/lib/workspace";
 import { STATUS_LABELS, PRIORITY_LABELS } from "./task-database";
 
+import { HistoryPanel } from "./history-panel";
+
 const PANEL_NAMES = {
+  history: "기록",
   comments: "Comments",
   properties: "Properties",
   backlinks: "Backlinks",
@@ -54,13 +58,15 @@ export function ContextPanel({
   const ui = useUiStore();
   if (!ui.panel) return null;
   const Icon =
-    ui.panel === "comments"
-      ? MessageSquare
-      : ui.panel === "backlinks"
-        ? Link2
-        : ui.panel === "share"
-          ? Share2
-          : SlidersHorizontal;
+    ui.panel === "history"
+      ? History
+      : ui.panel === "comments"
+        ? MessageSquare
+        : ui.panel === "backlinks"
+          ? Link2
+          : ui.panel === "share"
+            ? Share2
+            : SlidersHorizontal;
   return (
     <aside className="context-panel" aria-label={PANEL_NAMES[ui.panel]}>
       <div className="context-heading">
@@ -76,7 +82,9 @@ export function ContextPanel({
           <X size={17} />
         </button>
       </div>
-      {ui.panel === "comments" ? (
+      {ui.panel === "history" ? (
+        <HistoryPanel key={page.id} page={page} />
+      ) : ui.panel === "comments" ? (
         <CommentsPanel key={page.id} page={page} />
       ) : ui.panel === "share" ? (
         <SharePanel key={page.id} page={page} />
@@ -121,10 +129,12 @@ function CommentsPanel({ page }: { page: LocalPage }) {
   };
   useEffect(() => {
     void load();
-    const timer = setInterval(() => {
-      void load();
-    }, 10000);
-    return () => clearInterval(timer);
+    const changed = (event: Event) => {
+      if (event instanceof CustomEvent && event.detail === page.id) void load();
+    };
+    window.addEventListener("zeronote:comments-changed", changed);
+    return () =>
+      window.removeEventListener("zeronote:comments-changed", changed);
   }, [page.id, ui.syncState]);
   const submit = async () => {
     if (!body.trim()) return;
@@ -156,6 +166,9 @@ function CommentsPanel({ page }: { page: LocalPage }) {
       <div className="panel-description">
         이 Page에 의견을 남기고 함께 정리하세요.
       </div>
+      <button className="text-button" onClick={() => void load()}>
+        새로고침
+      </button>
       <label className="check-label">
         <input
           type="checkbox"

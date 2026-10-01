@@ -8,7 +8,7 @@ import { AccessService, DocumentService, DomainError } from "./services";
 import { createRealtime } from "./realtime";
 import { registerRoutes } from "./routes";
 import { env } from "./env";
-import { MAX_DOCUMENT_BYTES } from "@zeronote/shared";
+import { MAX_TRANSPORT_BYTES } from "@zeronote/shared";
 
 export async function createApp(
   repository = new Repository(env.DATABASE_URL),
@@ -22,11 +22,12 @@ export async function createApp(
           redact: ["req.headers.cookie", "req.headers.authorization"],
         }
       : false,
-    bodyLimit: MAX_DOCUMENT_BYTES * 2,
+    bodyLimit: MAX_TRANSPORT_BYTES,
   });
   await app.register(cookie);
   await app.register(rateLimit, { max: 1200, timeWindow: "1 minute" });
-  app.addHook("onRequest", async (request) => {
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
     if (
       ["POST", "PATCH", "PUT", "DELETE"].includes(request.method) &&
       request.headers.origin !== env.WEB_ORIGIN
@@ -60,10 +61,10 @@ export async function createApp(
   const access = new AccessService(repository),
     documents = new DocumentService(repository, access),
     realtime = createRealtime(access, documents, app.log);
-  registerRoutes(app, repository, realtime);
+  registerRoutes(app, repository, realtime, documents);
   const websocketServer = new WebSocketServer({
     noServer: true,
-    maxPayload: MAX_DOCUMENT_BYTES,
+    maxPayload: MAX_TRANSPORT_BYTES,
   });
   app.server.on("upgrade", (request, socket, head) => {
     if (

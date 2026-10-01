@@ -10,7 +10,6 @@ import {
   wouldCreateCycle,
   base64ToBytes,
   bytesToBase64,
-  getDocumentProjection,
   type Role,
   type Page,
   type PageOperation,
@@ -23,14 +22,8 @@ import {
   type GrantRecord,
 } from "./database/repository";
 
-export class DomainError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { DomainError } from "./errors";
+export { DomainError } from "./errors";
 export class AccessService {
   constructor(readonly repository: Repository) {}
   async workspaceOwner(deviceId: string, workspaceId: string): Promise<void> {
@@ -411,28 +404,7 @@ export class DocumentService {
     }
     if (update.byteLength > MAX_DOCUMENT_BYTES)
       throw new DomainError(413, "문서 크기 제한을 초과했습니다.");
-    const document = await this.load(pageId);
-    try {
-      Y.applyUpdate(document, update);
-    } catch {
-      document.destroy();
-      throw new DomainError(400, "문서를 처리할 수 없습니다.");
-    }
-    try {
-      if (
-        Y.encodeStateAsUpdate(document).byteLength > MAX_DOCUMENT_BYTES ||
-        document.getText("title").length > 500
-      )
-        throw new DomainError(413, "문서 크기 제한을 초과했습니다.");
-      await this.repository.appendUpdate(pageId, operationId, update);
-      await this.repository.checkpoint(
-        pageId,
-        Y.encodeStateAsUpdate(document),
-        getDocumentProjection(document).title,
-      );
-    } finally {
-      document.destroy();
-    }
+    await this.repository.appendUpdate(pageId, operationId, update);
     return update;
   }
 }

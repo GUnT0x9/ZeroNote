@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
-const ORIGIN = "http://localhost:3002";
+import { createBrowserBetaCode } from "./beta-helpers";
+const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
 async function createWorkspace(
   page: Page,
   name = "Browser workspace",
@@ -10,6 +11,7 @@ async function createWorkspace(
     .first()
     .click();
   await page.getByLabel("Workspace 이름").fill(name);
+  await page.getByLabel("Beta 초대코드").fill(await createBrowserBetaCode());
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Workspace 만들기", exact: true })
@@ -21,6 +23,17 @@ async function createWorkspace(
   await expect(
     page.getByText("서버 동기화 완료", { exact: true }),
   ).toBeVisible();
+  if (ORIGIN.startsWith("https://")) {
+    const session = (await page.context().cookies()).find(
+      (cookie) => cookie.name === "zn_session",
+    );
+    expect(session).toMatchObject({
+      domain: new URL(ORIGIN).hostname,
+      httpOnly: true,
+      secure: true,
+      sameSite: "Strict",
+    });
+  }
   return key;
 }
 async function createInvite(page: Page, role = "editor"): Promise<string> {
@@ -313,7 +326,7 @@ test("Slash Commands, stable Page Mention, Backlinks and Todo conversion", async
   await editor.fill("");
   await editor.pressSequentially("/todo");
   await page.getByRole("option", { name: /^Todo/ }).click();
-  await editor.pressSequentially("Implement feature");
+  await editor.pressSequentially("  Implement feature  ");
   await page.getByRole("button", { name: "Block 메뉴", exact: true }).click();
   await page.getByRole("button", { name: "Task로 변환", exact: true }).click();
   await expect(
@@ -373,4 +386,49 @@ test("Export and Import preserve document and Task data in a fresh workspace", a
     page.getByText("서버 동기화 완료", { exact: true }),
   ).toBeVisible();
   await cleanup(page, `${name} (가져옴)`);
+});
+
+test("Snapshot preview is read-only and restores a new Page while retaining the source", async ({
+  page,
+  context,
+}) => {
+  const name = `History ${Date.now()}`;
+  await createWorkspace(page, name);
+  const sourceUrl = page.url();
+  await page.getByLabel("Page 제목").fill("Stable note");
+  await expect(
+    page.getByText("서버 동기화 완료", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "기록", exact: true }).click();
+  const panel = page.getByRole("complementary", { name: "기록", exact: true });
+  await panel.getByLabel("기록 이름").fill("Before edit");
+  await panel.getByRole("button", { name: "현재 상태 기록하기" }).click();
+  await expect(
+    panel.getByRole("button", { name: /Before edit/ }),
+  ).toBeVisible();
+  await page.getByLabel("Page 제목").fill("Changed note");
+  await expect(
+    page.getByText("서버 동기화 완료", { exact: true }),
+  ).toBeVisible();
+  await panel.getByRole("button", { name: /Before edit/ }).click();
+  await expect(panel.getByText("Stable note", { exact: true })).toBeVisible();
+  await expect(
+    panel.getByRole("textbox", { name: "문서 본문" }),
+  ).toHaveAttribute("contenteditable", "false");
+  await context.setOffline(true);
+  await expect(
+    panel.getByRole("button", { name: "새 Page로 복구" }),
+  ).toBeDisabled();
+  await context.setOffline(false);
+  await expect(
+    panel.getByRole("button", { name: "새 Page로 복구" }),
+  ).toBeEnabled();
+  await panel.getByRole("button", { name: "새 Page로 복구" }).click();
+  await expect(page.getByLabel("Page 제목")).toHaveValue(/^Stable note \(복구/);
+  expect(new URL(page.url()).searchParams.get("page")).not.toBe(
+    new URL(sourceUrl).searchParams.get("page"),
+  );
+  await page.goto(sourceUrl);
+  await expect(page.getByLabel("Page 제목")).toHaveValue("Changed note");
+  await cleanup(page, name);
 });

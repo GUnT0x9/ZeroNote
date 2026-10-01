@@ -11,6 +11,10 @@ function stop(code = 0) {
 function launch(name) {
   const child = spawn("pnpm", ["--filter", name, "start"], {
     stdio: "inherit",
+    env:
+      name === "@zeronote/server"
+        ? { ...process.env, PORT: process.env.SERVER_PORT ?? "3001" }
+        : process.env,
   });
   children.push(child);
   child.on("error", () => stop(1));

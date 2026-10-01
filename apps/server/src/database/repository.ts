@@ -1,7 +1,11 @@
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { sql, type SQL } from "drizzle-orm";
-import { readFile } from "node:fs/promises";
+import { DomainError } from "../errors";
+import { migrateDatabase } from "./migrations";
+import { DocumentStore } from "./document-store";
+import { BetaStore } from "./beta-store";
+import { SnapshotStore } from "./snapshot-store";
 import type { Page, Workspace, Role, PageComment } from "@zeronote/shared";
 
 export interface DeviceRecord {
@@ -37,14 +41,25 @@ export interface InviteRecord {
   redeemedIdentityId: string | null;
   revokedAt: string | null;
 }
-type Executor = Pick<ReturnType<typeof drizzle>, "execute">;
+export type Executor = Pick<ReturnType<typeof drizzle>, "execute">;
 
 export class Repository {
   readonly pool: Pool;
   readonly database: ReturnType<typeof drizzle>;
+  readonly documents: DocumentStore;
+  readonly beta: BetaStore;
+  readonly snapshots: SnapshotStore;
   constructor(url: string) {
-    this.pool = new Pool({ connectionString: url, max: 10 });
+    this.pool = new Pool({
+      connectionString: url,
+      max: 5,
+      idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 10_000,
+    });
     this.database = drizzle(this.pool);
+    this.documents = new DocumentStore(this);
+    this.beta = new BetaStore(this);
+    this.snapshots = new SnapshotStore(this);
   }
   async query<T>(
     statement: SQL,
@@ -54,11 +69,7 @@ export class Repository {
     return result.rows as T[];
   }
   async migrate(): Promise<void> {
-    const ddl = await readFile(
-      new URL("./schema.sql", import.meta.url),
-      "utf8",
-    );
-    await this.database.execute(sql.raw(ddl));
+    await migrateDatabase(this.pool);
   }
   async close(): Promise<void> {
     await this.pool.end();
@@ -151,7 +162,25 @@ export class Repository {
   ): Promise<void> {
     await this.database.transaction(async (transaction) => {
       await transaction.execute(
-        sql`INSERT INTO workspaces(id,name,owner_identity_id,recovery_hash,created_at) VALUES(${workspace.id},${workspace.name},${workspace.ownerIdentityId},${workspace.recoveryHash},${workspace.createdAt})`,
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspace.id}))`,
+      );
+      const existing = await this.query(
+        sql`SELECT id FROM workspaces WHERE id=${workspace.id}`,
+        transaction,
+      );
+      if (existing.length) {
+        const owner = await this.query(
+          sql`SELECT 1 FROM memberships m JOIN workspaces w ON w.id=m.workspace_id WHERE w.id=${workspace.id} AND m.device_id=${device.id} AND m.identity_id=w.owner_identity_id AND m.revoked_at IS NULL`,
+          transaction,
+        );
+        if (!owner.length)
+          throw new DomainError(403, "Workspace Owner 권한이 필요합니다.");
+        return;
+      }
+      const codeId = await this.beta.admitWorkspace(device.id, transaction);
+      await this.documents.assertCapacity(transaction);
+      await transaction.execute(
+        sql`INSERT INTO workspaces(id,name,owner_identity_id,recovery_hash,created_at,beta_code_id) VALUES(${workspace.id},${workspace.name},${workspace.ownerIdentityId},${workspace.recoveryHash},${workspace.createdAt},${codeId})`,
       );
       await transaction.execute(
         sql`INSERT INTO identities(id,workspace_id,name) VALUES(${workspace.ownerIdentityId},${workspace.id},${device.name})`,
@@ -174,6 +203,7 @@ export class Repository {
       await this.database.execute(
         sql`INSERT INTO memberships(workspace_id,device_id,identity_id) VALUES(${workspace.id},${deviceId},${workspace.ownerIdentityId}) ON CONFLICT(workspace_id,device_id) DO UPDATE SET identity_id=excluded.identity_id,revoked_at=NULL`,
       );
+    if (workspace) await this.beta.inherit(workspace.id, deviceId);
     return workspace;
   }
   async rotateRecovery(workspaceId: string, hash: string): Promise<void> {
@@ -226,6 +256,7 @@ export class Repository {
         return existing[0].deviceId === deviceId
           ? existing[0].result
           : undefined;
+      if (create) await this.documents.assertCapacity(transaction);
       let results: Page[];
       if (create) {
         results = await this.query<Page>(
@@ -246,55 +277,26 @@ export class Repository {
     });
   }
   async loadDocument(pageId: string): Promise<Uint8Array[]> {
-    const rows = await this.query<{ data: Buffer }>(
-      sql`SELECT data FROM document_updates WHERE page_id=${pageId} ORDER BY id`,
-    );
-    return rows.map((row) => new Uint8Array(row.data));
+    return this.documents.load(pageId);
   }
   async appendUpdate(
     pageId: string,
     operationId: string,
     update: Uint8Array,
   ): Promise<void> {
-    const inserted = await this.query<{ id: string }>(
-      sql`INSERT INTO document_updates(page_id,operation_id,data) VALUES(${pageId},${operationId},${Buffer.from(update)}) ON CONFLICT(operation_id) DO NOTHING RETURNING id`,
-    );
-    if (!inserted.length) {
-      const previous = (
-        await this.query<{ pageId: string; data: Buffer }>(
-          sql`SELECT page_id AS "pageId",data FROM document_updates WHERE operation_id=${operationId}`,
-        )
-      )[0];
-      if (
-        !previous ||
-        previous.pageId !== pageId ||
-        !previous.data.equals(Buffer.from(update))
-      )
-        throw new Error("Operation identifier collision");
-    }
+    await this.documents.commit(pageId, operationId, update);
   }
   async checkpoint(
     pageId: string,
-    update: Uint8Array,
-    title: string,
+    _update: Uint8Array,
+    _title: string,
   ): Promise<void> {
-    await this.database.transaction(async (transaction) => {
-      const pages = await this.query<{ id: string }>(
-        sql`SELECT id FROM pages WHERE id=${pageId} FOR KEY SHARE`,
-        transaction,
-      );
-      if (!pages.length) return;
-      await transaction.execute(
-        sql`INSERT INTO document_checkpoints(page_id,data) VALUES(${pageId},${Buffer.from(update)}) ON CONFLICT(page_id) DO UPDATE SET data=excluded.data,updated_at=now()`,
-      );
-      await transaction.execute(
-        sql`UPDATE pages SET title=${title.slice(0, 500)} WHERE id=${pageId}`,
-      );
-    });
+    await this.documents.compact(pageId);
   }
   async createInvite(
     invite: Omit<InviteRecord, "redeemedIdentityId" | "revokedAt">,
   ): Promise<void> {
+    await this.documents.assertCapacity();
     await this.database.execute(
       sql`INSERT INTO invites(id,workspace_id,page_id,role,include_descendants,secret_hash,expires_at) VALUES(${invite.id},${invite.workspaceId},${invite.pageId},${invite.role},${invite.includeDescendants},${invite.secretHash},${invite.expiresAt})`,
     );
@@ -411,6 +413,7 @@ export class Repository {
     body: string;
     identityId: string;
   }): Promise<void> {
+    await this.documents.assertCapacity();
     await this.database.execute(
       sql`INSERT INTO comments(id,page_id,parent_id,body,identity_id) VALUES(${comment.id},${comment.pageId},${comment.parentId},${comment.body},${comment.identityId}) ON CONFLICT(id) DO NOTHING`,
     );

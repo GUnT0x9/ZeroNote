@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Menu,
   Plus,
@@ -12,12 +12,13 @@ import {
   X,
   CloudOff,
 } from "lucide-react";
+import { clientBetaRequired } from "@/lib/beta";
 import { useWorkspaceData } from "@/lib/hooks";
 import { prepareOfflineShell } from "@/lib/offline-shell";
 import { availablePages } from "@/lib/search";
 import { useUiStore } from "@/lib/ui-store";
 import { getDevice, authenticate, api } from "@/lib/api";
-import { database, errorMessage } from "@/lib/database";
+import { database, errorMessage, type LocalPage } from "@/lib/database";
 import {
   startSync,
   synchronize,
@@ -45,21 +46,30 @@ export default function WorkspaceApp() {
     [recoverOpen, setRecoverOpen] = useState(false),
     [recoveryKey, setRecoveryKey] = useState<string | null>(null),
     [trashOpen, setTrashOpen] = useState(false),
+    [historyPage, setHistoryPage] = useState<LocalPage | null>(null),
     [openingInvite, setOpeningInvite] = useState(false);
+  const preservedPageIds = useMemo(
+    () =>
+      new Set(
+        data.documents
+          .filter((record) => record.state === "preserved")
+          .map((record) => record.id),
+      ),
+    [data.documents],
+  );
+  const visiblePages = useMemo(
+    () => [
+      ...availablePages(data.pages),
+      ...data.pages.filter(
+        (item) =>
+          (item.accessLost && !item.deletedAt) || preservedPageIds.has(item.id),
+      ),
+    ],
+    [data.pages, preservedPageIds],
+  );
   const workspace =
       data.workspaces.find((item) => item.id === ui.workspaceId) ?? null,
-    page =
-      [
-        ...availablePages(data.pages),
-        ...data.pages.filter(
-          (item) =>
-            (item.accessLost && !item.deletedAt) ||
-            data.documents.some(
-              (document) =>
-                document.id === item.id && document.state === "preserved",
-            ),
-        ),
-      ].find((item) => item.id === ui.pageId) ?? null;
+    page = visiblePages.find((item) => item.id === ui.pageId) ?? null;
   useEffect(() => {
     const stop = startSync(),
       params = new URLSearchParams(window.location.search);
@@ -159,7 +169,10 @@ export default function WorkspaceApp() {
     return () => clearTimeout(timeout);
   }, [ui.notice]);
   useEffect(() => {
-    if (ui.pageId) setTrashOpen(false);
+    if (ui.pageId) {
+      setTrashOpen(false);
+      setHistoryPage(null);
+    }
   }, [ui.pageId]);
   const newPage = useCallback(
     async (kind: "document" | "database", parentId: string | null = null) => {
@@ -223,6 +236,23 @@ export default function WorkspaceApp() {
             <Plus size={19} />
           </button>
         </div>
+        {ui.syncState === "connecting" && (
+          <div className="sync-banner" role="status">
+            <Loader2 className="spin" size={14} />
+            <span>서버 연결 준비 중 · 로컬 문서에서 작업할 수 있습니다.</span>
+          </div>
+        )}
+        {ui.storageWarning && (
+          <div className="sync-banner warning" role="status">
+            서버 저장 공간이 부족해지고 있습니다. Workspace Export를
+            보관해주세요.
+          </div>
+        )}
+        {workspace?.creationError && (
+          <div className="sync-banner warning" role="status">
+            {workspace.creationError} · Settings에서 Export할 수 있습니다.
+          </div>
+        )}
         {ui.syncError && (
           <div className="sync-banner">
             <CloudOff size={14} />
@@ -264,7 +294,9 @@ export default function WorkspaceApp() {
               <p>
                 문서를 쓰고, 생각을 연결하고, 함께 작업하세요.
                 <br />
-                회원가입 없이 바로 시작할 수 있습니다.
+                {clientBetaRequired
+                  ? "Beta 초대코드로 참여할 수 있습니다. 회원가입은 필요하지 않습니다."
+                  : "회원가입 없이 바로 시작할 수 있습니다."}
               </p>
               <button
                 className="button button-primary button-large"
@@ -304,6 +336,17 @@ export default function WorkspaceApp() {
                   <div className="trash-row" key={item.id}>
                     <FileText size={17} />
                     <span>{item.title}</span>
+                    {item.role === "owner" && (
+                      <button
+                        className="button button-small"
+                        onClick={() => {
+                          setHistoryPage(item);
+                          ui.patch({ panel: "history" });
+                        }}
+                      >
+                        기록
+                      </button>
+                    )}
                     <button
                       className="button button-small"
                       onClick={() => {
@@ -341,8 +384,11 @@ export default function WorkspaceApp() {
               </button>
             </EmptyState>
           )}
-          {page && ui.panel && !trashOpen && (
-            <ContextPanel page={page} data={data} />
+          {ui.panel && (trashOpen ? historyPage : page) && (
+            <ContextPanel
+              page={(trashOpen ? historyPage : page)!}
+              data={data}
+            />
           )}
         </div>
       </div>

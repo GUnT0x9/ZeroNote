@@ -1,3 +1,4 @@
+process.env.BETA_REQUIRED = "true";
 process.env.ZERONOTE_BUILD_DIR = ".next-e2e";
 process.env.API_INTERNAL_ORIGIN = "http://127.0.0.1:3003";
 process.env.PORT = "3002";

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
-const apiOrigin = process.env.API_INTERNAL_ORIGIN ?? "http://127.0.0.1:3001";
+import { parseWebServerEnvironment } from "./env.config";
+const apiOrigin = parseWebServerEnvironment(process.env).API_INTERNAL_ORIGIN;
 const config: NextConfig = {
   transpilePackages: ["@zeronote/shared"],
   distDir: process.env.ZERONOTE_BUILD_DIR ?? ".next",

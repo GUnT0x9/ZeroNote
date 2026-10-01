@@ -34,6 +34,12 @@ import { deleteLocalWorkspace } from "@/lib/workspace";
 import { api, authenticate, getDevice } from "@/lib/api";
 import { requestSync, synchronize } from "@/lib/sync";
 
+import {
+  clientBetaRequired,
+  redeemBetaCode,
+  refreshBetaStatus,
+} from "@/lib/beta";
+
 export function CreateWorkspaceDialog({
   onClose,
   onKey,
@@ -41,7 +47,8 @@ export function CreateWorkspaceDialog({
   onClose: () => void;
   onKey: (key: string) => void;
 }) {
-  const [name, setName] = useState("내 Workspace"),
+  const [code, setCode] = useState(""),
+    [name, setName] = useState("내 Workspace"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
   return (
@@ -51,7 +58,10 @@ export function CreateWorkspaceDialog({
           event.preventDefault();
           if (!name.trim()) return;
           setBusy(true);
-          void createLocalWorkspace(name.trim())
+          void (async () => {
+            if (code.trim()) await redeemBetaCode(code.trim());
+            return createLocalWorkspace(name.trim());
+          })()
             .then(({ key }) => {
               requestSync();
               onClose();
@@ -64,6 +74,18 @@ export function CreateWorkspaceDialog({
         <p className="dialog-description">
           문서와 프로젝트를 담을 공간의 이름을 정해주세요.
         </p>
+        {clientBetaRequired && (
+          <label className="field-label">
+            Beta 초대코드
+            <input
+              aria-label="Beta 초대코드"
+              autoComplete="off"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="ZNB1-… · 기존 참여자는 생략"
+            />
+          </label>
+        )}
         <label className="field-label">
           Workspace 이름
           <input
@@ -170,6 +192,7 @@ export function RecoverWorkspaceDialog({ onClose }: { onClose: () => void }) {
               "POST",
               { key },
             );
+            await refreshBetaStatus();
             await synchronize();
             const pages = await database.pages
               .where("workspaceId")

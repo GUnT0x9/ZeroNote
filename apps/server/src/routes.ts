@@ -2,6 +2,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import {
+  BetaRedeemSchema,
+  SnapshotInputSchema,
+  RestoreSnapshotSchema,
   CreateWorkspaceSchema,
   RegisterDeviceSchema,
   PageOperationSchema,
@@ -24,6 +27,7 @@ import {
 } from "./services";
 import { createRealtimeToken } from "./realtime";
 import type { createRealtime } from "./realtime";
+import { SnapshotService } from "./snapshot-service";
 import { env } from "./env";
 import * as Y from "yjs";
 
@@ -41,11 +45,12 @@ export function registerRoutes(
   app: FastifyInstance,
   repository: Repository,
   realtime: ReturnType<typeof createRealtime>,
+  documents: DocumentService,
 ): void {
   const auth = new AuthService(repository),
     access = new AccessService(repository),
     workspaces = new WorkspaceService(repository, access),
-    documents = new DocumentService(repository, access);
+    snapshots = new SnapshotService(repository, access);
   const authenticated =
     (handler: Handler) =>
     async (request: FastifyRequest, reply: FastifyReply) =>
@@ -55,6 +60,67 @@ export function registerRoutes(
         await auth.deviceForToken(request.cookies.zn_session),
       );
   app.get("/v1/health", async () => ({ status: "ok" }));
+  app.get(
+    "/v1/beta/status",
+    authenticated(async (_request, _reply, deviceId) =>
+      repository.beta.status(deviceId),
+    ),
+  );
+  app.post(
+    "/v1/beta/redeem",
+    { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } },
+    authenticated(async (request, _reply, deviceId) => {
+      const { code } = BetaRedeemSchema.parse(request.body);
+      await repository.beta.redeem(deviceId, await sha256Hex(code));
+      return repository.beta.status(deviceId);
+    }),
+  );
+  app.get(
+    "/v1/storage",
+    authenticated(async () => repository.documents.capacity()),
+  );
+  app.get(
+    "/v1/pages/:id/snapshots",
+    authenticated(async (request, _reply, deviceId) =>
+      snapshots.list(deviceId, parameter(request, "id")),
+    ),
+  );
+  app.post(
+    "/v1/pages/:id/snapshots",
+    authenticated(async (request, _reply, deviceId) => {
+      const input = SnapshotInputSchema.parse(request.body);
+      return snapshots.create(
+        deviceId,
+        parameter(request, "id"),
+        input.operationId,
+        input.name,
+      );
+    }),
+  );
+  app.get(
+    "/v1/snapshots/:id",
+    authenticated(async (request, _reply, deviceId) =>
+      snapshots.read(deviceId, parameter(request, "id")),
+    ),
+  );
+  app.delete(
+    "/v1/snapshots/:id",
+    authenticated(async (request, _reply, deviceId) => {
+      await snapshots.remove(deviceId, parameter(request, "id"));
+      return { deleted: true };
+    }),
+  );
+  app.post(
+    "/v1/snapshots/:id/restore-copy",
+    authenticated(async (request, _reply, deviceId) => {
+      const input = RestoreSnapshotSchema.parse(request.body);
+      return snapshots.restore(
+        deviceId,
+        parameter(request, "id"),
+        input.operationId,
+      );
+    }),
+  );
   app.post(
     "/v1/devices",
     { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
@@ -313,6 +379,11 @@ export function registerRoutes(
     authenticated(async (request, _reply, deviceId) => {
       const input = CommentInputSchema.parse(request.body);
       await workspaces.comment(deviceId, input);
+      realtime.documents
+        .get(input.pageId)
+        ?.broadcastStateless(
+          JSON.stringify({ type: "comments-changed", pageId: input.pageId }),
+        );
       return { id: input.id };
     }),
   );
@@ -329,6 +400,11 @@ export function registerRoutes(
         z.object({ resolved: z.boolean() }).strict().parse(request.body)
           .resolved,
       );
+      realtime.documents
+        .get(id)
+        ?.broadcastStateless(
+          JSON.stringify({ type: "comments-changed", pageId: id }),
+        );
       return { updated: true };
     }),
   );

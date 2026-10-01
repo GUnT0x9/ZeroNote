@@ -14,6 +14,7 @@ import {
 import { createApp } from "./app";
 import { Repository } from "./database/repository";
 import { env } from "./env";
+import { AccessService } from "./services";
 let application: Awaited<ReturnType<typeof createApp>>, origin: string;
 const workspaces: string[] = [],
   providers: HocuspocusProvider[] = [],
@@ -190,9 +191,39 @@ beforeAll(async () => {
   origin = await application.app.listen({ port: 0, host: "127.0.0.1" });
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const provider of providers.splice(0)) provider.destroy();
   for (const socket of sockets.splice(0)) socket.destroy();
   for (const doc of documents.splice(0)) doc.destroy();
+});
+it("keeps presence heartbeat traffic in memory without periodic permission queries", async () => {
+  const { owner, pageId } = await setup();
+  const member = await collaborator(owner, pageId);
+  const writer = await connect(owner.cookie, pageId);
+  const reader = await connect(member.cookie, pageId);
+  await vi.waitFor(() => {
+    expect(writer.provider.hasUnsyncedChanges).toBe(false);
+    expect(reader.provider.hasUnsyncedChanges).toBe(false);
+  });
+  const permission = vi.spyOn(AccessService.prototype, "page");
+  reader.provider.awareness?.setLocalStateField("cursor", { position: 42 });
+  await vi.waitFor(() => {
+    const states = Array.from(
+      writer.provider.awareness?.getStates().values() ?? [],
+    );
+    expect(
+      states.some(
+        (state: { cursor?: { position?: number } }) =>
+          state.cursor?.position === 42,
+      ),
+    ).toBe(true);
+  });
+  expect(permission).not.toHaveBeenCalled();
+  reader.document.getText("title").insert(0, "Real edit");
+  await vi.waitFor(() =>
+    expect(writer.document.getText("title").toString()).toBe("Real edit"),
+  );
+  expect(permission).toHaveBeenCalled();
 });
 afterAll(async () => {
   for (const id of workspaces) await application.repository.deleteWorkspace(id);

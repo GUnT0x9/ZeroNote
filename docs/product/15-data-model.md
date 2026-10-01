@@ -32,3 +32,9 @@ Ownership: Workspace Owner Identity 관리; Device는 Membership으로 연결; G
 | SyncOperation                | UUID·기기·결과/Revision                | PG 승인 기록 + Dexie Queue          | 승인 결과 재전송에 사용                         |
 
 현재 TaskDatabase/TaskRow는 Page Kind와 CRDT Entity로 구현하고 별도 관계형 편집 원본을 만들지 않는다. 공유 Type은 DTO 경계를 정의하고 PostgreSQL 제약·Repository Transaction이 소유권과 Cascade를 집행한다. Due Date는 시간 없는 문자열이고 수신 DateTime Metadata는 화면 표시에서만 변환한다.
+
+## Beta Entities
+
+`schema_migrations`는 적용된 SQL Version을 기록한다. `beta_codes`는 Secret Hash·만료·최초 수락 Device를 기록하고 `beta_devices`는 Device의 생성 자격을 연결한다. `workspaces.beta_code_id`로 자격당 생성 수를 계산한다. Owner Recovery가 같은 자격을 새 Device로 이어준다. 기존 Alpha Workspace의 자격 FK는 NULL이며 데이터는 유지한다.
+
+`document_checkpoints.through_update_id`는 포함된 Commit 위치다. `document_operations`는 정리된 Update의 Operation ID·Page ID·Payload Hash를 보존한다. Page 삭제 시 둘 다 Cascade한다. `document_snapshots`는 별도 immutable Yjs State, Version, 종류, 이름, UTC 자동 생성 날짜, 생성 Device를 기록한다. Page/Workspace hard delete 시 Snapshot도 Cascade한다. `snapshot_operations`는 생성/복구 재시도의 Device·대상·동작·결과를 기록한다. 이 결과에는 본문이나 인증 Secret을 저장하지 않는다.

@@ -21,6 +21,7 @@ import type { LocalPage } from "@/lib/database";
 import type { WorkspaceData } from "@/lib/hooks";
 import { availablePages } from "@/lib/search";
 import { useUiStore } from "@/lib/ui-store";
+import { publicEnvironment } from "@/lib/env";
 export function Logo() {
   return (
     <span className="brand-mark" aria-hidden="true">
@@ -78,6 +79,18 @@ export function Sidebar({
     ),
     inbox = pages.find((page) => page.isInbox),
     owner = pages.some((page) => page.role === "owner" && !page.accessLost);
+  const preservedPages = useMemo(() => {
+    const ids = new Set(
+      data.documents
+        .filter((record) => record.state === "preserved")
+        .map((record) => record.id),
+    );
+    return data.pages.filter(
+      (page) =>
+        page.workspaceId === ui.workspaceId &&
+        (page.accessLost || ids.has(page.id)),
+    );
+  }, [data.documents, data.pages, ui.workspaceId]);
   return (
     <>
       <div
@@ -91,7 +104,12 @@ export function Sidebar({
         <div className="brand">
           <Logo />
           <strong>ZeroNote</strong>
-          <span className="alpha-badge">α</span>
+          <span
+            className="alpha-badge"
+            aria-label={publicEnvironment.betaRequired ? "Beta" : "Alpha"}
+          >
+            {publicEnvironment.betaRequired ? "β" : "α"}
+          </span>
         </div>
         <div className="workspace-switcher">
           <button
@@ -244,40 +262,21 @@ export function Sidebar({
               </div>
             )}
           </section>
-          {data.pages.some(
-            (page) =>
-              page.workspaceId === ui.workspaceId &&
-              (page.accessLost ||
-                data.documents.some(
-                  (document) =>
-                    document.id === page.id && document.state === "preserved",
-                )),
-          ) && (
+          {preservedPages.length > 0 && (
             <section className="sidebar-section">
               <div className="section-heading">
                 <span>로컬 보존본</span>
               </div>
-              {data.pages
-                .filter(
-                  (page) =>
-                    page.workspaceId === ui.workspaceId &&
-                    (page.accessLost ||
-                      data.documents.some(
-                        (document) =>
-                          document.id === page.id &&
-                          document.state === "preserved",
-                      )),
-                )
-                .map((page) => (
-                  <button
-                    className="tree-row"
-                    key={page.id}
-                    onClick={() => ui.select(page.workspaceId, page.id)}
-                  >
-                    <CloudOff size={14} />
-                    <span>{page.title}</span>
-                  </button>
-                ))}
+              {preservedPages.map((page) => (
+                <button
+                  className="tree-row"
+                  key={page.id}
+                  onClick={() => ui.select(page.workspaceId, page.id)}
+                >
+                  <CloudOff size={14} />
+                  <span>{page.title}</span>
+                </button>
+              ))}
             </section>
           )}
           {!owner && pages.length > 0 && (

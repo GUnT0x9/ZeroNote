@@ -16,10 +16,12 @@ import {
   setDocumentSyncRequest,
   getDocumentSession,
   disconnectDocument,
+  disconnectAllDocuments,
 } from "./documents";
 
 let running: Promise<void> | undefined,
   timer: ReturnType<typeof setTimeout> | undefined,
+  requested = false,
   started = false;
 export function requestSync(): void {
   if (timer) clearTimeout(timer);
@@ -41,11 +43,17 @@ export function startSync(): () => void {
       useUiStore.getState().patch({ syncState: "offline", syncError: null });
   window.addEventListener("online", online);
   window.addEventListener("offline", offline);
-  const interval = setInterval(requestSync, 15000);
+  const visible = () => {
+    if (document.visibilityState === "visible") requestSync();
+    else disconnectAllDocuments();
+  };
+  window.addEventListener("focus", online);
+  document.addEventListener("visibilitychange", visible);
   requestSync();
   return () => {
     started = false;
-    clearInterval(interval);
+    window.removeEventListener("focus", online);
+    document.removeEventListener("visibilitychange", visible);
     if (timer) clearTimeout(timer);
     window.removeEventListener("online", online);
     window.removeEventListener("offline", offline);
@@ -53,28 +61,45 @@ export function startSync(): () => void {
   };
 }
 export async function synchronize(): Promise<void> {
-  if (running) return running;
+  if (running) {
+    requested = true;
+    return running;
+  }
   if (!navigator.onLine) {
     useUiStore.getState().patch({ syncState: "offline" });
     return;
   }
-  running = runSync();
+  running = drainSyncRequests();
   try {
     await running;
   } finally {
     running = undefined;
   }
 }
+async function drainSyncRequests(): Promise<void> {
+  do {
+    requested = false;
+    if (!navigator.onLine) {
+      useUiStore.getState().patch({ syncState: "offline" });
+      return;
+    }
+    await runSync();
+  } while (requested);
+}
 async function runSync(): Promise<void> {
   try {
+    useUiStore.getState().patch({ syncState: "connecting", syncError: null });
     await authenticate();
-    useUiStore.getState().patch({ syncError: null });
     await syncWorkspaces();
     await syncMetadataOperations();
     await syncDocuments();
     await syncComments();
     const metadata = MetadataSchema.parse(await api<unknown>("/metadata"));
     await mergeMetadata(metadata);
+    const capacity = z
+      .object({ warning: z.boolean() })
+      .parse(await api("/storage"));
+    useUiStore.getState().patch({ storageWarning: capacity.warning });
     useUiStore.getState().patch({ syncState: "online" });
     const pages = await database.pages
       .filter((page) => !page.accessLost && !page.deletedAt)
@@ -102,14 +127,26 @@ async function syncWorkspaces(): Promise<void> {
     .filter((value) => value.pendingCreation)
     .toArray()) {
     const { id, name, ownerIdentityId, createdAt, recoveryHash } = workspace;
-    await api("/workspaces", "POST", {
-      id,
-      name,
-      ownerIdentityId,
-      createdAt,
-      recoveryHash,
-    });
-    await database.workspaces.update(id, { pendingCreation: false });
+    try {
+      await api("/workspaces", "POST", {
+        id,
+        name,
+        ownerIdentityId,
+        createdAt,
+        recoveryHash,
+      });
+      await database.workspaces.update(id, {
+        pendingCreation: false,
+        creationError: undefined,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && [403, 409].includes(error.status)) {
+        await database.workspaces.update(id, { creationError: error.message });
+        useUiStore.getState().patch({ notice: error.message });
+        continue;
+      }
+      throw error;
+    }
   }
 }
 async function syncMetadataOperations(): Promise<void> {
@@ -117,6 +154,11 @@ async function syncMetadataOperations(): Promise<void> {
     .orderBy("sequence")
     .toArray()) {
     if (operation.status !== "pending") continue;
+    if (
+      (await database.workspaces.get(operation.payload.workspaceId))
+        ?.pendingCreation
+    )
+      continue;
     try {
       const result = await api<LocalPage>(
         "/sync/page",
@@ -157,6 +199,8 @@ async function syncDocuments(): Promise<void> {
     .toArray()) {
     const page = await database.pages.get(document.id);
     if (!page || page.deletedAt || page.accessLost) continue;
+    if ((await database.workspaces.get(page.workspaceId))?.pendingCreation)
+      continue;
     if (
       await database.operations
         .filter((value) => value.payload.pageId === page.id)

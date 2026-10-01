@@ -16,7 +16,10 @@
     "test:e2e": "node scripts/e2e.mjs",
     "build": "pnpm --filter @zeronote/web build && pnpm --filter @zeronote/server build",
     "start": "node scripts/start.mjs",
-    "format": "prettier --write apps packages tests scripts docs *.ts *.mjs *.json *.yaml"
+    "format": "prettier --write apps packages tests scripts docs *.ts *.mjs *.json *.yaml",
+    "beta:issue": "pnpm --filter @zeronote/server beta:issue",
+    "backup": "bash scripts/backup.sh",
+    "restore": "bash scripts/restore.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

@@ -10,6 +10,7 @@ import type {
 export interface LocalWorkspace extends Workspace {
   pendingCreation: boolean;
   recoveryHash?: string;
+  creationError?: string;
   accessLost?: boolean;
 }
 export interface LocalPage extends Page {
