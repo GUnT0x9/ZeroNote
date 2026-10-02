@@ -36,3 +36,5 @@ Migration `003-attachments.sql`과 `004-editor-protocol.sql`은 기존 데이터
 - Storage 관리 UI/영구 정리, Table/Column/Math/Embed, Public Share/Export 추가 형식 등 나머지 항목은 계속 구현한다.
 
 최종 호환성 검증에서 기본 `hardBreak`와 Yjs의 Hash가 붙은 기존 Link Mark도 Protocol 1로 인식하도록 보강했다. 이전 CI의 Offline 상태 회귀도 확인해, 연결이 끊긴 후 늦은 정상 응답이 상태를 Online으로 바꾸지 않게 수정했다. Unit/Server 총 163개, 최종 lint/type-check와 앱 Build가 통과했다.
+
+`36f2411`의 CI `36958355714`에서 163 Tests/15 E2E/Build/Docker 512MiB/첨부 bytes 백업 복원을 통과하고 Render `dep-davhvqegekts73e4pt4g` → Vercel `dpl_Bi9b5jt6Zf3b31sB6kCjimvbNcdT` 순서로 배포했다. 실제 HTTPS 14개 Browser 시나리오와 기존 Recovery/문서/Task/Comments/Snapshot/Viewer 권한 유지도 통과했다. 수동 최대 파일 검증에서 4MiB Base64 반복 Group의 RegExp Stack Overflow를 발견했고, Padding/Pad Bits/Decoded Size를 검사하는 검증으로 수정한다. 최대 파일 저장·다운로드·재시도와 초과 크기 거절 회귀를 추가해 재배포 후 최대 크기 HTTPS 검증을 마무리한다.

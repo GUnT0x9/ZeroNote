@@ -12,6 +12,7 @@ import {
   WORKSPACE_ATTACHMENT_BYTES,
   EDITOR_PROTOCOL,
   EDITOR_PROTOCOL_HEADER,
+  MAX_ATTACHMENT_BYTES,
 } from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
@@ -245,6 +246,42 @@ it("protects new blocks from legacy reads, offline deletions, retries and Snapsh
 });
 
 describe("permission-bound durable attachments", () => {
+  it("commits and reads a byte-identical attachment at the maximum file size", async () => {
+    const owner = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id),
+      bytes = Buffer.alloc(MAX_ATTACHMENT_BYTES, 65),
+      payload = {
+        id: crypto.randomUUID(),
+        operationId: crypto.randomUUID(),
+        name: "boundary.txt",
+        data: bytes.toString("base64"),
+      };
+    const uploaded = await request(
+      "POST",
+      `/v1/pages/${target.id}/attachments`,
+      payload,
+      owner.cookie,
+    );
+    expect(uploaded.statusCode).toBe(200);
+    expect(uploaded.json()).toMatchObject({ size: bytes.length });
+    const downloaded = await request(
+      "GET",
+      `/v1/attachments/${payload.id}`,
+      undefined,
+      owner.cookie,
+    );
+    expect(downloaded.statusCode).toBe(200);
+    expect(downloaded.json<{ data: string }>().data).toBe(payload.data);
+    const retried = await request(
+      "POST",
+      `/v1/pages/${target.id}/attachments`,
+      payload,
+      owner.cookie,
+    );
+    expect(retried.statusCode).toBe(200);
+    expect((await repository.attachments.usage(space.id)).count).toBe(1);
+  });
   it("persists byte-identical files, deduplicates retries and rejects ID collisions", async () => {
     const owner = await actor(),
       space = await workspace(owner),

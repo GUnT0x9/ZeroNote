@@ -4,6 +4,25 @@ import * as Y from "yjs";
 export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 export const WORKSPACE_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 export const MAX_WORKSPACE_ATTACHMENTS = 200;
+export function isCanonicalBase64(value: string): boolean {
+  if (!value.length || value.length % 4 || /[^A-Za-z0-9+/=]/.test(value))
+    return false;
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  const content = value.slice(0, value.length - padding);
+  if (content.includes("=")) return false;
+  const last =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".indexOf(
+      content.at(-1) ?? "",
+    );
+  return (
+    last >= 0 &&
+    (padding === 2
+      ? (last & 15) === 0
+      : padding === 1
+        ? (last & 3) === 0
+        : true)
+  );
+}
 export const AttachmentMetadataSchema = z.object({
   id: z.uuid(),
   pageId: z.uuid(),
@@ -23,8 +42,13 @@ export const AttachmentUploadSchema = z
       .string()
       .min(4)
       .max(Math.ceil(MAX_ATTACHMENT_BYTES / 3) * 4)
-      .regex(
-        /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
+      .refine(isCanonicalBase64, "파일의 base64 형식이 올바르지 않습니다.")
+      .refine(
+        (value) =>
+          (value.length / 4) * 3 -
+            (value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0) <=
+          MAX_ATTACHMENT_BYTES,
+        "파일 크기 제한을 초과했습니다.",
       ),
   })
   .strict();

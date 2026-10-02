@@ -7,9 +7,43 @@ import {
   parseAttachmentRange,
   getAttachmentIds,
   remapAttachmentIds,
+  MAX_ATTACHMENT_BYTES,
+  isCanonicalBase64,
 } from "./attachments";
 
 describe("attachment transport and rendering safety", () => {
+  it("validates the full 4MiB boundary without a RegExp stack overflow", () => {
+    const data = Buffer.alloc(MAX_ATTACHMENT_BYTES, 65).toString("base64"),
+      input = {
+        id: crypto.randomUUID(),
+        operationId: crypto.randomUUID(),
+        name: "boundary.txt",
+        data,
+      };
+    expect(isCanonicalBase64(data)).toBe(true);
+    expect(AttachmentUploadSchema.safeParse(input).success).toBe(true);
+    expect(
+      AttachmentUploadSchema.safeParse({
+        ...input,
+        data: Buffer.alloc(MAX_ATTACHMENT_BYTES + 1).toString("base64"),
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects wrong padding, misplaced padding, incomplete groups and nonzero pad bits", () => {
+    for (const value of [
+      "",
+      "A",
+      "A===",
+      "AA=A",
+      "AB==",
+      "AAB=",
+      "a?==",
+      "AAAA\n",
+    ])
+      expect(isCanonicalBase64(value)).toBe(false);
+    for (const value of ["AA==", "AAA=", "AAAA", "aGk="])
+      expect(isCanonicalBase64(value)).toBe(true);
+  });
   it("validates operation IDs and canonical base64 with bounded payloads", () => {
     const input = {
       id: crypto.randomUUID(),
