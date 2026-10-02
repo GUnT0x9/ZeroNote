@@ -851,7 +851,8 @@ test("Custom database properties enforce Viewer access and survive server Snapsh
       panel.getByLabel("Shared Task Estimate", { exact: true }),
     ).toHaveValue("8");
     await panel.getByRole("button", { name: "새 Page로 복구" }).click();
-    await expect(page.getByLabel("Page 제목")).toHaveValue(/To-Do/);
+    await expect(panel).toHaveCount(0);
+    await expect(page.getByLabel("Page 제목")).toHaveValue(/^To-Do \(복구/);
     await expect(
       page.getByLabel("Shared Task Estimate", { exact: true }),
     ).toHaveValue("8");

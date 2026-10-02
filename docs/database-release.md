@@ -37,7 +37,29 @@ Export/Import는 기존 version 1 Yjs 문서에 추가 필드를 포함한다. S
 최종 검증 및 Production 배포 결과는 아래에 기록한다. 배포는 CI 통과 Commit으로 Render → Vercel 순서다. DB Schema를 되감지 않는다.
 
 - 로컬 `lint`, `type-check`, `test`, `build`: 통과. Unit/Server 128개.
-- 기존 브라우저 흐름 11개와 일반 Database Offline/View 시나리오를 각각 통과했다. 동일 Commit의 전체 12개 Browser 검증과 Docker/암호화 백업·복원은 CI에서 다시 검증한다.
-- 성능 Fixture(1,000 Pages/500 Blocks/1,000 Tasks): 캐시 문서 열기 137ms, Local Search 19ms.
+- 기존 브라우저 흐름 11개와 일반 Database Offline/View 시나리오를 포함한 전체 12개를 로컬과 동일 Commit의 CI에서 통과했다. CI의 Docker/암호화 백업·복원도 통과했다.
+- 성능 Fixture(1,000 Pages/500 Blocks/1,000 Tasks): 최종 로컬 전체 검증에서 캐시 문서 열기 283ms, Local Search 22ms.
 - 배포 전 Production DB의 PostgreSQL 17 + age 암호화 백업 완료. Key/백업은 Git 밖에 보관한다.
 - 실제 Android Chrome/iOS Safari 기기 검증은 미실행이며 Chromium Touch Viewport로 기존 Mobile 흐름을 확인했다.
+
+## Production 배포 결과
+
+| 항목           | 검증 결과                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 앱 Commit      | `4b07123f6558ec078f3173815b1e82ee7034e4be`                                                                                                 |
+| CI             | [36948621839](https://github.com/GUnT0x9/ZeroNote/actions/runs/36948621839) success. 128 Tests/12 E2E/Build/Docker 512MiB/암호화 백업·복원 |
+| 로컬 전체 E2E  | 최종 12개 통과. Calendar/Timeline에 적용되지 않는 Group 도구가 표시되지 않는 것도 확인                                                     |
+| Render         | `dep-davg5gtg1s2s73acvs20` live. 같은 Commit, Health 정상                                                                                  |
+| Render 설정    | `codex/database-views`, `autoDeploy=no`, `autoDeployTrigger=off`                                                                           |
+| Vercel         | `dpl_ANsVUuXFkgjcgq9Phb99gYh8Eggd`, Production READY. Metadata의 Commit/Branch 일치                                                        |
+| Web            | https://zeronote-kohl.vercel.app · 고정 Production Alias 유지                                                                              |
+| 배포 순서/소스 | Render → Vercel. Git archive의 추적 파일 164개/약 3MiB만 업로드. 로컬/인증/테스트 결과 제외                                                |
+| 실제 HTTPS     | 11개 동작 흐름 확인. 10개 최초 통과 + Snapshot 완료 대기 조건 보강 후 해당 시나리오 통과                                                   |
+| 기존 데이터    | 새 브라우저 Recovery, 문서/Task/Comments/Snapshot 유지, 기존 Viewer 쓰기·기록 조회 차단 확인                                               |
+| Origin         | 잘못된 Origin의 POST는 403, 직접 WebSocket 연결은 거절                                                                                     |
+
+Production QA는 운영자 CLI로 별도 테스트 코드를 발급해 새 테스트 Workspace에서 실행했고 종료 시 해당 Workspace를 삭제했다. 기존 검증용 샘플은 유지했다. 다른 사용자 Workspace는 수정하지 않았다.
+
+운영 환경의 지연으로 Snapshot 복구 요청 직후 원본과 미리보기의 동일 필드를 잡은 테스트를 보강했다. 기록 Panel이 닫히고 복구 Page의 고유 제목이 표시된 뒤 결과를 검증한다. 외부 환경의 운영용 Beta CLI 설정 대기는 90초로 하고 로컬은 기존 15초를 유지한다. 이 후속 변경은 Test/문서만이며 배포된 앱 소스는 위 Commit과 같다.
+
+실제 Android/iOS 기기와 무료 서비스의 장시간 Sleep 이후 수동 사용은 별도 확인 항목으로 유지한다.

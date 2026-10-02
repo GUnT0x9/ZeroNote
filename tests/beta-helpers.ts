@@ -21,7 +21,7 @@ export async function createBrowserBetaCode(): Promise<string> {
         output,
       ],
       {
-        timeout: 15_000,
+        timeout: process.env.PLAYWRIGHT_BASE_URL ? 90_000 : 15_000,
       },
     );
     const codes = (await readFile(output, "utf8")).trim().split("\n");
