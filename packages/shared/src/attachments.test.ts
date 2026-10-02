@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as Y from "yjs";
+import { base64ToBytes, bytesToBase64 } from "./index";
 import {
   AttachmentUploadSchema,
   detectAttachmentMime,
@@ -22,6 +23,8 @@ describe("attachment transport and rendering safety", () => {
       };
     expect(isCanonicalBase64(data)).toBe(true);
     expect(AttachmentUploadSchema.safeParse(input).success).toBe(true);
+    expect(bytesToBase64(base64ToBytes(data))).toBe(data);
+    expect(base64ToBytes("")).toEqual(new Uint8Array());
     expect(
       AttachmentUploadSchema.safeParse({
         ...input,
@@ -43,6 +46,8 @@ describe("attachment transport and rendering safety", () => {
       expect(isCanonicalBase64(value)).toBe(false);
     for (const value of ["AA==", "AAA=", "AAAA", "aGk="])
       expect(isCanonicalBase64(value)).toBe(true);
+    for (const value of ["AB==", "AAB=", "A===", "AA=A"])
+      expect(() => base64ToBytes(value)).toThrow("Invalid Base64");
   });
   it("validates operation IDs and canonical base64 with bounded payloads", () => {
     const input = {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import * as Y from "yjs";
+import { isCanonicalBase64 } from "./attachments";
 import { ExportAttachmentSchema } from "./attachments";
 import { setXmlAttribute } from "./xml";
 
@@ -172,11 +173,8 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(value);
 }
 export function base64ToBytes(value: string): Uint8Array {
-  if (
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-      value,
-    )
-  )
+  // Empty Base64 represents empty bytes; file schemas separately require data.
+  if (value !== "" && !isCanonicalBase64(value))
     throw new Error("Invalid Base64");
   return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
 }
