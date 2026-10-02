@@ -61,3 +61,9 @@ Status: Accepted Alpha specification
 | DEC-036 | Quick Capture·Inbox는 Workspace 전환 메뉴에 두고 Mobile Capture·Shortcut 유지 | 1차 시안의 주 메뉴 정리와 기존 Alpha 기능·데이터 보존 | Accepted default      |
 | DEC-037 | 새 Workspace 기본 Task 이름 To-Do, 시작 문서 빈 본문; 기존 문서 보존          | 기능 역할을 명확히 하고 반복 소개 문구를 줄임         | Accepted default      |
 | DEC-038 | 2차 디자인은 Share/권한 → Task 상세/Board → Comments/기록 → Mobile 우선       | 실제 Beta 협업 흐름의 미정 디자인 완성                | Proposed design scope |
+
+### DEC-039 — 기능 체크리스트 P0와 기존 데이터 호환
+
+Confirmed: 미구현 항목 확인 후 구현과 Production 배포까지 진행한다. Accepted: 체크리스트 P0의 남은 일반 Database 속성·Filter/Sort/Group·Calendar/Timeline/Gallery부터 구현한다. 기존 즐겨찾기·Quote/Divider·Snapshot 기록은 구현 증거에 따라 완료 상태를 바로잡는다.
+
+Accepted: 기존 Task Row와 문서 API를 재사용하고 일반 Database 모드/속성/View를 Yjs에 추가한다. 기존 문서 자동 변환과 DB Migration은 하지 않는다. Snapshot은 확장 데이터를 새 문서에 복제한다. Gallery는 실제 속성 카드이며 Media 업로드는 후속이다. 날짜 계산은 날짜 전용 값이며 날짜 없는 Row를 숨기지 않는다.

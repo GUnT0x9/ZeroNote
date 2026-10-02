@@ -25,3 +25,19 @@ Todo 변환 시 첫 번째 접근 가능한 편집 가능 프로젝트에 Row를
 | Task 삭제  | deleted=true                            | Local Soft Delete     | Row Field 병합            | 권한 없는 변경 차단          | Table·Board에서 함께 숨김        |
 
 Table은 25 Rows 단위 Pagination과 로컬 검색을 사용한다. Board에는 Pointer Drag/Drop와 Status 선택을 제공한다. 프로젝트 초대는 Row와 본문을 포함하며 Row별 권한을 만들지 않는다. 프로젝트 Page Comments는 Database 단위 Thread다. Row별 Comment Scope와 Row 이동 정책은 후속 확장이다.
+
+## P0 일반 Database 확장 (2026-10-02)
+
+Accepted. 기존 `tasks` Y.Map Row 저장 형식을 재사용한다. 일반 Database는 `databaseConfig.mode=generic`으로 구분하며 Task 고정 속성은 노출하지 않는다. 사용자 정의는 `databaseProperties`의 속성별 Y.Map, 사용자 값은 Row의 `property:<UUID>`, Saved View는 `databaseViews`의 View별 Y.Map이다. 제목 Y.Text와 본문 `task:<rowId>`를 유지한다.
+
+| Trigger              | Behavior                              | Offline        | Sync                      | Error                            | Acceptance Criteria            |
+| -------------------- | ------------------------------------- | -------------- | ------------------------- | -------------------------------- | ------------------------------ |
+| 속성 추가/변경/삭제  | 13종, 64개, 이름 변경/Soft delete     | Local 작성     | 속성 필드별 Y.Map         | 잘못된 정의/개수 제한 거절       | 기존 셀 값 보존                |
+| Cell/상세 입력       | 타입 검증, 자동 시간 readonly         | Local 작성     | Row 필드별                | 값 오류를 해당 Cell에 표시       | Table/상세/Board 데이터 일치   |
+| Filter/Sort/Group    | AND Filter 20개, Sort 5개, 선택 Group | Local Query    | Saved View 필드별         | 삭제 속성은 적용 해제            | 일치 Row를 중복/누락 없이 표시 |
+| Calendar/Timeline    | 날짜 전용 월 탐색/기간                | Cache된 문서   | 같은 Row 값               | Date 속성 미선택 안내            | 날짜 없는 Row 별도 노출        |
+| Gallery/List         | 제목/실제 속성 표시와 Row 열기        | Cache된 문서   | 같은 Row                  | 삭제된 Row 제외                  | 같은 상세 화면으로 이동        |
+| 보기 저장            | 이름·종류·조건·날짜·표시 속성, 20개   | Local 작성     | View 필드별               | Viewer 쓰기 금지, 개수/정의 검증 | Reload 후 설정 유지            |
+| Export/Snapshot 복구 | Schema/View/값/Row 본문 복사          | Export는 Local | Snapshot은 Commit 완료 후 | 기존 실패 보존 정책              | 새 비공유 문서와 원본 독립     |
+
+File Property, 선택 옵션 편집, 타입 변환, Formula/Relation/Rollup은 Deferred다. 전체 계약과 검증은 `docs/database-release.md`를 따른다.

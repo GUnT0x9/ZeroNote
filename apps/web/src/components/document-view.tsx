@@ -13,6 +13,7 @@ import {
 import * as Y from "yjs";
 import {
   canEdit,
+  writeDatabaseValue,
   createTaskRow,
   replaceSharedText,
   getTaskRows,
@@ -35,6 +36,7 @@ import { requestSync } from "@/lib/sync";
 import { useUiStore } from "@/lib/ui-store";
 import { BlockEditor } from "./block-editor";
 import { TaskDatabase } from "./task-database";
+import { DatabaseRowProperties } from "./database-property";
 import { downloadJson } from "@/lib/workspace";
 import { bytesToBase64 } from "@zeronote/shared";
 import { EmptyState } from "./primitives";
@@ -405,7 +407,14 @@ export function DocumentView({
             disabled={!session}
             readOnly={!editable}
             onChange={(event) => {
-              if (titleText instanceof Y.Text)
+              if (row && session)
+                writeDatabaseValue(
+                  session.document,
+                  row.id,
+                  "title",
+                  event.target.value,
+                );
+              else if (titleText instanceof Y.Text)
                 replaceSharedText(titleText, event.target.value);
             }}
           />
@@ -463,6 +472,16 @@ export function DocumentView({
           )}
           {session ? (
             <>
+              {row && (
+                <DatabaseRowProperties
+                  document={session.document}
+                  row={row}
+                  editable={editable}
+                  identities={data.identities.filter(
+                    (identity) => identity.workspaceId === page.workspaceId,
+                  )}
+                />
+              )}
               {page.kind === "database" && !row ? (
                 <TaskDatabase
                   session={session}

@@ -2419,3 +2419,319 @@ small,
 .design-icon-trash {
   mask-image: url("/design-icons/trash.svg");
 }
+
+/* Database extensions reuse the main screen's spacing, borders and theme tokens. */
+.database-toolbar {
+  flex-wrap: wrap;
+}
+.view-tabs {
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.database-settings-toolbar {
+  padding: 12px 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.database-view-controls {
+  flex: 1;
+  min-width: 0;
+}
+.database-save-controls {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.database-save-controls select {
+  max-width: 150px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.database-control-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-top: 10px;
+}
+.database-filter-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.database-filter-row input,
+.database-filter-row select {
+  min-width: 90px;
+  max-width: 200px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+}
+.database-date-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.database-date-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.database-date-controls select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.database-property-list {
+  max-height: 240px;
+  overflow: auto;
+  margin-bottom: 16px;
+}
+.database-property-definition {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.database-property-definition > span {
+  width: 86px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.database-property-definition input {
+  min-width: 0;
+  flex: 1;
+  padding: 5px 8px;
+}
+.database-property-cell {
+  min-width: 100px;
+}
+.database-property-cell > input,
+.database-property-cell > select {
+  width: 100%;
+}
+.task-name-cell .database-property-cell {
+  flex: 1;
+  min-width: 180px;
+}
+.database-property-cell input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+.database-property-cell select[multiple] {
+  min-height: 65px;
+}
+.database-table-group th {
+  background: var(--surface);
+  color: var(--text);
+}
+.database-row-properties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0 20px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.context-content .database-row-properties {
+  display: block;
+  border: 0;
+  padding: 0;
+}
+.kanban-board {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(190px, 1fr);
+}
+.calendar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+}
+.calendar-scroll,
+.timeline-scroll {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.database-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(80px, 1fr));
+  min-width: 560px;
+}
+.calendar-weekday {
+  padding: 8px;
+  text-align: center;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.calendar-day {
+  min-height: 110px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+}
+.calendar-day:nth-child(7n) {
+  border-right: 0;
+}
+.calendar-day time {
+  font-size: 12px;
+  color: var(--muted);
+}
+.calendar-day.outside-month {
+  background: var(--surface);
+}
+.calendar-item {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  padding: 4px 6px;
+  background: var(--accent-soft);
+  color: var(--text);
+  border-radius: var(--radius);
+  text-align: left;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.database-timeline {
+  display: grid;
+  min-width: 960px;
+  grid-auto-rows: minmax(36px, auto);
+}
+.database-timeline > time {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.timeline-title {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.timeline-row {
+  display: contents;
+}
+.timeline-row-name {
+  grid-column: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.timeline-bar {
+  margin: 6px 1px;
+  padding: 2px 6px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.timeline-empty {
+  grid-column: 1 / -1;
+  padding: 24px;
+  color: var(--muted);
+}
+.database-undated {
+  padding-top: 20px;
+}
+.database-undated h3,
+.database-card-group h3 {
+  font-size: 13px;
+  font-weight: 550;
+  margin: 12px 0;
+}
+.database-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  padding: 8px 0;
+}
+.database-preview-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: left;
+  min-width: 0;
+}
+.database-preview-card:hover {
+  background: var(--surface);
+}
+.database-preview-card strong {
+  display: block;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.database-preview-card dl {
+  margin: 14px 0 0;
+  font-size: 12px;
+}
+.database-preview-card dl div {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+}
+.database-preview-card dt {
+  color: var(--muted);
+  min-width: 70px;
+}
+.database-preview-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.database-list .database-preview-card {
+  width: 100%;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  padding: 12px 4px;
+}
+.database-list .database-preview-card dl {
+  margin: 0;
+}
+@media (max-width: 767px) {
+  .database-settings-toolbar {
+    flex-direction: column;
+  }
+  .database-view-controls,
+  .database-save-controls {
+    width: 100%;
+  }
+  .database-view-controls .button,
+  .database-save-controls .button,
+  .calendar-item {
+    min-height: 44px;
+  }
+  .view-tabs button {
+    min-height: 44px;
+  }
+  .database-row-properties {
+    display: block;
+  }
+  .database-filter-row input,
+  .database-filter-row select {
+    max-width: none;
+    flex: 1;
+  }
+  .database-date-controls label {
+    width: 100%;
+  }
+}

@@ -17,6 +17,7 @@ import { database, errorMessage, type LocalPage } from "@/lib/database";
 import { flushDocuments } from "@/lib/documents";
 import { synchronize } from "@/lib/sync";
 import { BlockEditor } from "./block-editor";
+import { DatabaseRowProperties } from "./database-property";
 export function HistoryPanel({ page }: { page: LocalPage }) {
   const ui = useUiStore();
   const [records, setRecords] = useState<DocumentSnapshot[]>([]),
@@ -241,10 +242,12 @@ function SnapshotPreview({
           </label>
           {taskId && (
             <>
-              <p className="small">
-                Assignee:{" "}
-                {rows.find((row) => row.id === taskId)?.assigneeId ?? "미지정"}
-              </p>
+              <DatabaseRowProperties
+                document={session.document}
+                row={rows.find((row) => row.id === taskId)!}
+                editable={false}
+                identities={[]}
+              />
               <BlockEditor
                 key={taskId}
                 session={session}

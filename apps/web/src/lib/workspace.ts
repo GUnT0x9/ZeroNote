@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import {
   createRecoveryKey,
+  initializeGenericDatabase,
   sha256Hex,
   replaceSharedText,
   ExportSchema,
@@ -32,6 +33,7 @@ export async function createLocalPage(
   kind: "document" | "database" = "document",
   parentId: string | null = null,
   isInbox = false,
+  databaseMode: "task" | "generic" = "task",
 ): Promise<LocalPage> {
   const page: LocalPage = {
     id: crypto.randomUUID(),
@@ -56,6 +58,8 @@ export async function createLocalPage(
   });
   const session = await openDocument(page);
   replaceSharedText(session.document.getText("title"), title);
+  if (kind === "database" && databaseMode === "generic")
+    initializeGenericDatabase(session.document);
   await flushDocuments();
   return page;
 }

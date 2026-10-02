@@ -175,7 +175,10 @@ export default function WorkspaceApp() {
     }
   }, [ui.pageId]);
   const newPage = useCallback(
-    async (kind: "document" | "database", parentId: string | null = null) => {
+    async (
+      kind: "document" | "database" | "generic_database",
+      parentId: string | null = null,
+    ) => {
       const selection = useUiStore.getState();
       if (!selection.workspaceId) {
         setCreateOpen(true);
@@ -183,9 +186,15 @@ export default function WorkspaceApp() {
       }
       const created = await createLocalPage(
         selection.workspaceId,
-        kind === "database" ? "새 To-Do" : "제목 없음",
-        kind,
+        kind === "database"
+          ? "새 To-Do"
+          : kind === "generic_database"
+            ? "새 Database"
+            : "제목 없음",
+        kind === "generic_database" ? "database" : kind,
         parentId,
+        false,
+        kind === "generic_database" ? "generic" : "task",
       );
       ui.select(created.workspaceId, created.id);
       requestSync();
@@ -193,7 +202,10 @@ export default function WorkspaceApp() {
     [],
   );
   const handleNewPage = useCallback(
-    (kind: "document" | "database", parent?: string | null) => {
+    (
+      kind: "document" | "database" | "generic_database",
+      parent?: string | null,
+    ) => {
       void newPage(kind, parent ?? null).catch((error) =>
         useUiStore.getState().patch({ notice: errorMessage(error) }),
       );

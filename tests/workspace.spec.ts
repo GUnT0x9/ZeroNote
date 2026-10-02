@@ -610,3 +610,259 @@ test("Snapshot preview is read-only and restores a new Page while retaining the 
   await expect(page.getByLabel("Page 제목")).toHaveValue("Changed note");
   await cleanup(page, name);
 });
+
+test("Generic properties, saved filters and date/card views survive Offline reload", async ({
+  page,
+  context,
+}) => {
+  const name = `Database ${Date.now()}`;
+  await createWorkspace(page, name);
+  await page
+    .getByRole("button", { name: "새 Page 만들기", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "일반 Database", exact: true })
+    .click();
+  await expect(page.getByLabel("Page 제목")).toHaveValue("새 Database");
+  await page.getByLabel("Page 제목").fill("제품 목록");
+  await expect(page.getByLabel("Page 제목")).toHaveValue("제품 목록");
+  const addProperty = async (
+    propertyName: string,
+    type: string,
+    options?: string,
+  ) => {
+    await page.getByRole("button", { name: "속성", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Database 속성" });
+    await dialog.getByLabel("새 속성 이름").fill(propertyName);
+    await dialog.getByLabel("새 속성 종류").selectOption(type);
+    if (options) await dialog.getByLabel("속성 선택 항목").fill(options);
+    await dialog
+      .getByRole("button", { name: "속성 추가", exact: true })
+      .click();
+    await expect(dialog.getByLabel(`${propertyName} 속성 이름`)).toHaveValue(
+      propertyName,
+    );
+    await dialog
+      .getByRole("button", { name: "닫기", exact: true })
+      .last()
+      .click();
+  };
+  await addProperty("Points", "number");
+  await addProperty("단계", "select", "기획, 개발");
+  await addProperty("출시일", "date");
+  await addProperty("확인", "checkbox");
+  for (const title of ["Alpha", "Beta", "Undated"]) {
+    await page.getByRole("button", { name: "새 항목", exact: true }).click();
+    await page.getByLabel("새 항목 제목").fill(title);
+    await page.getByRole("button", { name: "추가", exact: true }).click();
+  }
+  await page.getByLabel("Alpha Points", { exact: true }).fill("2");
+  await page.getByLabel("Alpha Points", { exact: true }).press("Tab");
+  await page.getByLabel("Beta Points", { exact: true }).fill("10");
+  await page.getByLabel("Beta Points", { exact: true }).press("Tab");
+  await page
+    .getByLabel("Alpha 단계", { exact: true })
+    .selectOption({ label: "기획" });
+  await page
+    .getByLabel("Beta 단계", { exact: true })
+    .selectOption({ label: "개발" });
+  await page.getByLabel("Beta 확인", { exact: true }).check();
+  const today = await page.evaluate(() =>
+    new Date().toLocaleDateString("en-CA"),
+  );
+  await page.getByLabel("Alpha 출시일", { exact: true }).fill(today);
+  await page.getByLabel("Beta 출시일", { exact: true }).fill(today);
+  await page.screenshot({
+    path: ".local/database-release/table.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
+  await page.getByRole("button", { name: "필터 추가", exact: true }).click();
+  await page.getByLabel("필터 1 속성").selectOption({ label: "Points" });
+  await page.getByLabel("필터 1 조건").selectOption("gte");
+  await page.getByLabel("필터 1 값").fill("5");
+  await expect(page.getByLabel("항목 이름")).toHaveCount(1);
+  await expect(page.getByLabel("항목 이름")).toHaveValue("Beta");
+  await page.getByRole("button", { name: "보기 저장", exact: true }).click();
+  await page.getByLabel("보기 이름").fill("큰 작업");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "저장", exact: true })
+    .click();
+  await expect(page.getByLabel("저장된 보기")).toContainText("큰 작업");
+  await expect(
+    page.locator(".sidebar").getByTestId("sync-status"),
+  ).toHaveAttribute("data-state", "saved");
+  await page.reload();
+  await expect(page.getByLabel("Page 제목")).toHaveValue("제품 목록");
+  await page.getByLabel("저장된 보기").selectOption({ label: "큰 작업" });
+  await expect(page.getByLabel("항목 이름")).toHaveValue("Beta");
+  await page.getByRole("button", { name: "Board", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "개발", exact: true })
+      .getByRole("button", { name: "Beta", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "미지정", exact: true })
+      .getByRole("button", { name: "Undated", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Group", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Calendar 날짜" })
+      .getByRole("button", { name: "Alpha", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "날짜 없음 (1)" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: ".local/database-release/calendar.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Timeline", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Group", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Timeline 날짜" })
+      .getByRole("button", { name: /^Beta .*부터/ }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: ".local/database-release/timeline.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Gallery", exact: true }).click();
+  await expect(
+    page.locator(".database-gallery").getByRole("button"),
+  ).toHaveCount(3);
+  await page.screenshot({
+    path: ".local/database-release/gallery.png",
+    fullPage: true,
+  });
+  await page
+    .locator(".database-gallery")
+    .getByRole("button")
+    .filter({ hasText: "Beta" })
+    .click();
+  await expect(page.getByLabel("Page 제목")).toHaveValue("Beta");
+  await expect(page.getByLabel("Beta Points")).toHaveValue("10");
+  await expect(page.getByLabel("Beta 확인")).toBeChecked();
+  await page.getByRole("button", { name: "프로젝트로 돌아가기" }).click();
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await expect(
+    page.locator(".sidebar").getByTestId("sync-status"),
+  ).toHaveAttribute("data-state", "saved");
+  await context.setOffline(true);
+  await page.getByLabel("Beta Points", { exact: true }).fill("25");
+  await page.getByLabel("Beta Points", { exact: true }).press("Tab");
+  await expect(
+    page.locator(".sidebar").getByTestId("sync-status"),
+  ).toHaveAttribute("data-state", "offline");
+  await page.waitForTimeout(500);
+  await page.reload();
+  await expect(page.getByLabel("Beta Points", { exact: true })).toHaveValue(
+    "25",
+  );
+  await context.setOffline(false);
+  await expect(
+    page.locator(".sidebar").getByTestId("sync-status"),
+  ).toHaveAttribute("data-state", "saved");
+  await cleanup(page, name);
+});
+
+test("Custom database properties enforce Viewer access and survive server Snapshot recovery", async ({
+  page,
+  browser,
+}) => {
+  const name = `Database recovery ${Date.now()}`;
+  await createWorkspace(page, name);
+  await page.getByRole("button", { name: "To-Do", exact: true }).click();
+  await page.getByRole("button", { name: "속성", exact: true }).click();
+  await page.getByLabel("새 속성 이름").fill("Estimate");
+  await page.getByLabel("새 속성 종류").selectOption("number");
+  await page.getByRole("button", { name: "속성 추가", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "닫기", exact: true })
+    .last()
+    .click();
+  await page.getByRole("button", { name: "새 Task", exact: true }).click();
+  await page.getByLabel("새 Task 제목").fill("Shared Task");
+  await page.getByRole("button", { name: "추가", exact: true }).click();
+  await page.getByLabel("Shared Task Estimate", { exact: true }).fill("8");
+  await page.getByLabel("Shared Task Estimate", { exact: true }).press("Tab");
+  await page.getByRole("button", { name: "Sort", exact: true }).click();
+  await page.getByRole("button", { name: "정렬 추가", exact: true }).click();
+  await page.getByLabel("정렬 1 속성").selectOption({ label: "Estimate" });
+  await page.getByRole("button", { name: "보기 저장", exact: true }).click();
+  await page.getByLabel("보기 이름").fill("By estimate");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "저장", exact: true })
+    .click();
+  await expect(
+    page.locator(".sidebar").getByTestId("sync-status"),
+  ).toHaveAttribute("data-state", "saved");
+  const viewerContext = await browser.newContext(),
+    viewer = await viewerContext.newPage();
+  try {
+    const invite = await createInvite(page, "viewer");
+    await viewer.goto(invite);
+    await expect(viewer.getByLabel("Task 이름")).toHaveValue("Shared Task");
+    await expect(
+      viewer.getByLabel("Shared Task Estimate", { exact: true }),
+    ).toHaveAttribute("readonly", "");
+    await expect(
+      viewer.getByRole("button", { name: "속성", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      viewer.getByRole("button", { name: "보기 저장", exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Context Panel 닫기" }).click();
+    await openPageTool(page, "기록");
+    const panel = page.getByRole("complementary", { name: "기록" });
+    await panel.getByLabel("기록 이름").fill("Before estimate change");
+    await panel.getByRole("button", { name: "현재 상태 기록하기" }).click();
+    await expect(
+      panel.getByRole("button", { name: /Before estimate change/ }),
+    ).toBeVisible();
+    await page.getByLabel("Shared Task Estimate", { exact: true }).fill("13");
+    await page.getByLabel("Shared Task Estimate", { exact: true }).press("Tab");
+    await expect(
+      viewer.getByLabel("Shared Task Estimate", { exact: true }),
+    ).toHaveValue("13");
+    await panel.getByRole("button", { name: /Before estimate change/ }).click();
+    await panel
+      .getByLabel("기록 Task")
+      .selectOption(
+        (await panel
+          .getByLabel("기록 Task")
+          .locator("option")
+          .filter({ hasText: "Shared Task" })
+          .getAttribute("value"))!,
+      );
+    await expect(
+      panel.getByLabel("Shared Task Estimate", { exact: true }),
+    ).toHaveValue("8");
+    await panel.getByRole("button", { name: "새 Page로 복구" }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue(/To-Do/);
+    await expect(
+      page.getByLabel("Shared Task Estimate", { exact: true }),
+    ).toHaveValue("8");
+    await expect(page.getByLabel("저장된 보기")).toContainText("By estimate");
+    const restoredId = new URL(page.url()).searchParams.get("page")!;
+    const denied = await viewer.request.get(
+      `${ORIGIN}/v1/documents/${restoredId}`,
+    );
+    expect(denied.status()).toBe(403);
+  } finally {
+    await viewerContext.close();
+    await cleanup(page, name);
+  }
+});

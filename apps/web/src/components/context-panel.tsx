@@ -17,9 +17,6 @@ import {
   canComment,
   canEdit,
   getTaskRows,
-  updateTaskField,
-  TaskStatuses,
-  TaskPriorities,
   wouldCreateCycle,
   type PageComment,
   type Role,
@@ -37,7 +34,7 @@ import { api, authenticate } from "@/lib/api";
 import { openDocument, type DocumentSession } from "@/lib/documents";
 import { requestSync } from "@/lib/sync";
 import { changePageStructure } from "@/lib/workspace";
-import { STATUS_LABELS, PRIORITY_LABELS } from "./task-database";
+import { DatabaseRowProperties } from "./database-property";
 
 import { HistoryPanel } from "./history-panel";
 
@@ -533,81 +530,17 @@ function PropertiesPanel({
         ? getTaskRows(session.document).find((item) => item.id === ui.taskId)
         : undefined,
     editable = canEdit(page.role) && !mobile && !page.accessLost;
-  const update = (
-    field: "status" | "assigneeId" | "dueDate" | "priority",
-    value: unknown,
-  ) => {
-    if (session && row) {
-      try {
-        updateTaskField(session.document, row.id, field, value);
-      } catch (problem) {
-        ui.patch({ notice: errorMessage(problem) });
-      }
-    }
-  };
   return (
     <div className="context-content">
-      {row ? (
-        <>
-          <label className="field-label">
-            Status
-            <select
-              value={row.status}
-              disabled={!editable}
-              onChange={(event) => update("status", event.target.value)}
-            >
-              {TaskStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {STATUS_LABELS[status]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field-label">
-            Assignee
-            <select
-              value={row.assigneeId ?? ""}
-              disabled={!editable}
-              onChange={(event) =>
-                update("assigneeId", event.target.value || null)
-              }
-            >
-              <option value="">미지정</option>
-              {data.identities
-                .filter((identity) => identity.workspaceId === page.workspaceId)
-                .map((identity) => (
-                  <option key={identity.id} value={identity.id}>
-                    {identity.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="field-label">
-            Due date
-            <input
-              type="date"
-              value={row.dueDate ?? ""}
-              disabled={!editable}
-              onChange={(event) =>
-                update("dueDate", event.target.value || null)
-              }
-            />
-          </label>
-          <label className="field-label">
-            Priority
-            <select
-              value={row.priority}
-              disabled={!editable}
-              onChange={(event) => update("priority", event.target.value)}
-            >
-              {TaskPriorities.map((priority) => (
-                <option key={priority} value={priority}>
-                  {PRIORITY_LABELS[priority]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </>
+      {row && session ? (
+        <DatabaseRowProperties
+          document={session.document}
+          row={row}
+          editable={editable}
+          identities={data.identities.filter(
+            (identity) => identity.workspaceId === page.workspaceId,
+          )}
+        />
       ) : (
         <>
           <label className="field-label">

@@ -4,6 +4,15 @@ import * as Y from "yjs";
 import { IndexeddbPersistence, storeState } from "y-indexeddb";
 import {
   createTaskRow,
+  addDatabaseProperty,
+  getDatabaseProperties,
+  getDatabaseMode,
+  getDatabaseViews,
+  getTaskRows,
+  readDatabaseValue,
+  writeDatabaseValue,
+  saveDatabaseView,
+  defaultDatabaseView,
   replaceSharedText,
   bytesToBase64,
   type WorkspaceExport,
@@ -12,6 +21,7 @@ import {
 import { database, type LocalPage, type LocalDocument } from "./database";
 import {
   createLocalWorkspace,
+  createLocalPage,
   captureNote,
   exportWorkspace,
   importWorkspace,
@@ -399,4 +409,51 @@ it("retains unchanged metadata references and updates changed rows", () => {
   expect(retainEqualItems(rows, [{ ...rows[0]! }])).toBe(rows);
   expect(retainEqualItems(rows, [{ id: "one", title: "New" }])).not.toBe(rows);
   expect(retainEqualItems(rows, [])).toEqual([]);
+});
+
+it("exports and imports generic definitions, row values and saved views without credentials", async () => {
+  const original = await workspace();
+  const page = await createLocalPage(
+    original.workspace.id,
+    "Resources",
+    "database",
+    null,
+    false,
+    "generic",
+  );
+  const session = await openDocument(page);
+  const field = addDatabaseProperty(session.document, "Points", "number");
+  const rowId = createTaskRow(session.document, "Portable entry");
+  writeDatabaseValue(session.document, rowId, field, 42);
+  saveDatabaseView(session.document, {
+    ...defaultDatabaseView("gallery", session.document),
+    name: "Resource gallery",
+  });
+  const exported = await exportWorkspace(original.workspace.id);
+  const imported = await importWorkspace(exported);
+  created.push(imported.workspace.id);
+  const restoredPage = (
+    await database.pages
+      .where("workspaceId")
+      .equals(imported.workspace.id)
+      .toArray()
+  ).find((entry) => entry.title === "Resources")!;
+  const restored = await openDocument(restoredPage);
+  expect(restoredPage.id).not.toBe(page.id);
+  expect(getDatabaseMode(restored.document)).toBe("generic");
+  expect(getDatabaseViews(restored.document)[0]?.name).toBe("Resource gallery");
+  const property = getDatabaseProperties(restored.document).find(
+    (entry) => entry.id === field,
+  )!;
+  expect(
+    readDatabaseValue(
+      restored.document,
+      getTaskRows(restored.document)[0]!,
+      property,
+    ),
+  ).toBe(42);
+  expect(JSON.stringify(exported)).not.toContain("recoveryHash");
+  expect(
+    exported.pages.find((entry) => entry.title === "Resources")?.kind,
+  ).toBe("database");
 });

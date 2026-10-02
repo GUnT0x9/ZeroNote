@@ -115,6 +115,10 @@ export const TaskRowSchema = z.object({
   status: z.enum(TaskStatuses),
   assigneeId: IdSchema.nullable(),
   dueDate: DateOnlySchema.nullable(),
+  startDate: DateOnlySchema.nullable().default(null),
+  endDate: DateOnlySchema.nullable().default(null),
+  createdAt: z.iso.datetime().nullable().default(null),
+  updatedAt: z.iso.datetime().nullable().default(null),
   priority: z.enum(TaskPriorities),
   deleted: z.boolean(),
 });
@@ -228,6 +232,10 @@ export function createTaskRow(
     row.set("status", "todo");
     row.set("assigneeId", null);
     row.set("dueDate", null);
+    row.set("startDate", null);
+    row.set("endDate", null);
+    row.set("createdAt", new Date().toISOString());
+    row.set("updatedAt", new Date().toISOString());
     row.set("priority", "medium");
     row.set("deleted", false);
   });
@@ -244,6 +252,10 @@ export function getTaskRows(document: Y.Doc): TaskRow[] {
         status: row.get("status"),
         assigneeId: row.get("assigneeId"),
         dueDate: row.get("dueDate"),
+        startDate: row.get("startDate"),
+        endDate: row.get("endDate"),
+        createdAt: row.get("createdAt"),
+        updatedAt: row.get("updatedAt"),
         priority: row.get("priority"),
         deleted: row.get("deleted"),
       });
@@ -261,7 +273,10 @@ export function updateTaskField(
   if (!row) throw new Error("Task not found");
   const candidate = getTaskRows(document).find((task) => task.id === id);
   TaskRowSchema.parse({ ...candidate, [field]: value });
-  row.set(field, value);
+  document.transact(() => {
+    row.set(field, value);
+    row.set("updatedAt", new Date().toISOString());
+  });
 }
 export function getDocumentProjection(document: Y.Doc): {
   title: string;
@@ -426,17 +441,23 @@ export function cloneDocumentContent(
   };
   target.getText("title").insert(0, source.getText("title").toString());
   copyFragment("content");
+  for (const name of ["databaseConfig", "databaseProperties", "databaseViews"])
+    for (const [key, value] of source.getMap<unknown>(name))
+      target
+        .getMap<unknown>(name)
+        .set(
+          key,
+          value instanceof Y.AbstractType
+            ? value.clone()
+            : structuredClone(value),
+        );
   for (const row of getTaskRows(source)) {
-    createTaskRow(target, row.title, row.id);
-    const map = target.getMap<Y.Map<unknown>>("tasks").get(row.id)!;
-    for (const field of [
-      "status",
-      "assigneeId",
-      "dueDate",
-      "priority",
-    ] as const)
-      map.set(field, row[field]);
+    const original = source.getMap<Y.Map<unknown>>("tasks").get(row.id);
+    if (original)
+      target.getMap<Y.Map<unknown>>("tasks").set(row.id, original.clone());
     copyFragment(`task:${row.id}`);
   }
   return target;
 }
+
+export * from "./database";

@@ -33,7 +33,10 @@ export function Sidebar({
   trashOpen,
 }: {
   data: WorkspaceData;
-  onNew: (kind: "document" | "database", parentId?: string | null) => void;
+  onNew: (
+    kind: "document" | "database" | "generic_database",
+    parentId?: string | null,
+  ) => void;
   onCreate: () => void;
   onTrash: () => void;
   trashOpen: boolean;
@@ -271,6 +274,15 @@ export function Sidebar({
                       >
                         <Columns3 size={14} />새 To-Do
                       </button>
+                      <button
+                        onClick={() => {
+                          onNew("generic_database");
+                          setNewMenu(false);
+                        }}
+                      >
+                        <Columns3 size={14} />
+                        일반 Database
+                      </button>
                     </div>
                   )}
                 </div>
@@ -323,7 +335,10 @@ const PageTree = memo(function PageTree({
 }: {
   page: LocalPage;
   pages: LocalPage[];
-  onNew: (kind: "document" | "database", parentId?: string | null) => void;
+  onNew: (
+    kind: "document" | "database" | "generic_database",
+    parentId?: string | null,
+  ) => void;
   level: number;
 }) {
   const active = useUiStore((state) => state.pageId === page.id),

@@ -15,3 +15,7 @@ Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Rec
 배포 연결(Vercel/Render/Neon Free) → 버전별 Migration·Commit/Checkpoint/압축 → Beta 코드·Quota → Snapshot/새 Page 복구 → HTTPS/Mobile/백업 검증 → 운영자 2명 → 5–10명 확대.
 
 예상 1–2주이며 실제 공개는 CI·배포·Mobile·Production 복원 검증으로 결정한다. Snapshot 복구는 원본을 유지하는 새 비공유 Page다. 계정 설정·배포 주소·운영 체크는 `docs/beta-launch.md`를 따른다. 일반 Database 확장과 Branch/Merge는 이후 단계다.
+
+## P0 Database 확장
+
+2026-10-02: 일반 Property 13종과 Saved View, Filter/Sort/Group, Calendar/Timeline/Gallery/List을 추가한다. 이전 메인 UI 개편과 함께 CI 통과 후 Render → Vercel Production에 배포한다. 파일 저장과 Public Share/전체 모바일 편집은 다음 P1, Relation/Rollup/Formula는 P2로 유지한다. 전체 기능 체크리스트는 `docs/feature-checklist.md`에서 실제 구현 증거와 후속 항목을 구분한다.
