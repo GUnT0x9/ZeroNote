@@ -85,6 +85,44 @@ it("exports and imports attachment bytes with remapped Page/file IDs and rejects
   ).rejects.toThrow("손상");
   expect(await database.workspaces.count()).toBe(before);
 });
+it("rolls back an import when local attachment storage fails without leaving a Workspace or queue", async () => {
+  const { workspace: source, page } = await workspace(),
+    session = await openDocument(page),
+    file = await stageAttachment(
+      page.id,
+      "test.txt",
+      new TextEncoder().encode("data"),
+    );
+  const node = new Y.XmlElement("attachment");
+  node.setAttribute("attachmentId", file.id);
+  session.document.getXmlFragment("content").insert(0, [node]);
+  const exported = await exportWorkspace(source.id),
+    before = {
+      workspaces: await database.workspaces.count(),
+      pages: await database.pages.count(),
+      docs: await database.documents.count(),
+      queue: await database.operations.count(),
+    };
+  const failed = vi
+    .spyOn(database.attachments, "add")
+    .mockRejectedValueOnce(
+      new DOMException("Quota exceeded", "QuotaExceededError"),
+    );
+  await expect(importWorkspace(exported)).rejects.toThrow("Quota exceeded");
+  failed.mockRestore();
+  expect(await database.workspaces.count()).toBe(before.workspaces);
+  expect(await database.pages.count()).toBe(before.pages);
+  expect(await database.documents.count()).toBe(before.docs);
+  expect(await database.operations.count()).toBe(before.queue);
+});
+it("exports only requested accessible Pages and detaches an omitted parent", async () => {
+  const { workspace: source, page } = await workspace(),
+    child = await createLocalPage(source.id, "Child", "document", page.id);
+  const exported = await exportWorkspace(source.id, [child.id]);
+  expect(exported.pages).toHaveLength(1);
+  expect(exported.pages[0]?.parentId).toBeNull();
+  expect((await exportWorkspace(source.id, ["missing"])).pages).toEqual([]);
+});
 async function workspace() {
   const result = await createLocalWorkspace("Local tests");
   created.push(result.workspace.id);

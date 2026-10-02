@@ -77,3 +77,9 @@ Confirmed: 사용자가 P4 언급을 정정하고 체크되지 않은 모든 기
 Accepted: 무료 Beta는 PostgreSQL Bytea에 파일을 저장하고 4MiB/파일, Workspace 25MiB/200개와 서버 용량 한도를 적용한다. 로컬 bytes/Hash/Operation ID를 먼저 저장한다. 파일은 Page 권한을 상속하고 Snapshot/Page 복제는 새 파일 ID로 복사한다. Export version 2에 참조 파일을 포함하고 기존 version 1 Import를 유지한다. 파일 삭제는 Snapshot 복구용 bytes를 보존한다. Storage 관리 UI/영구 정리는 별도 요구로 남는다.
 
 Accepted: 새 Block을 이해하지 못하는 구버전 Yjs Editor의 삭제를 막기 위해 Editor Protocol 2와 서버 Checkpoint 최소 버전을 사용한다. 새 기능 방송 전에 구버전 연결을 종료하고 REST/WS/Snapshot에서 426으로 앱 새로고침을 안내한다. 기존 Block 문서는 버전 1을 허용한다. 파일/PDF/Template/Command/Mobile Editor 구현과 검증은 `docs/editor-files-release.md`를 따른다.
+
+## DEC-042 · 데이터 이전 형식과 암호화 백업
+
+사용자가 Confirmed한 전체 미완료 범위에서 JSON/ZIP은 Yjs와 첨부를 보존하는 복원 형식으로 제공한다. Markdown/HTML/PDF/Notion Markdown & CSV는 공유·이전 형식으로 추가한다. Notion/Obsidian 가져오기는 ZIP의 Markdown/CSV/참조 첨부, 안정적인 새 Page ID와 Row 본문을 복원한다. HTML 구문은 실행하지 않고 원문으로, Table은 현재 Editor에서 셀 값을 텍스트 표로 보존하며 변환 내용을 가져오기 전에 표시한다. CSV에는 원본의 Formula/Relation 정의·권한 정보가 없으므로 값을 text 속성으로 복원한다.
+
+암호화 Export는 기기에서 PBKDF2-SHA-256 600,000회·32-byte Salt·AES-256-GCM·12-byte IV를 사용한다. 암호·Recovery·초대·인증 정보는 보관/전송하지 않는다. 이는 선택형 E2EE의 완료를 의미하지 않는다. E2EE와 기기 Pairing은 별도 미완료 요구다. Import는 로컬 transaction 실패 시 부분 Workspace/Queue를 남기지 않는다.

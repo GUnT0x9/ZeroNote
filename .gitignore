@@ -16,3 +16,4 @@ playwright-report/
 *.agekey
 beta-codes*.txt
 apps/web/public/pdfjs/
+apps/web/public/export-assets/

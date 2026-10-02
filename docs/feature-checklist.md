@@ -28,7 +28,7 @@
 - [x] 다른 기기 접근 철회
 - [ ] QR 기반 기기 Pairing
 - [ ] End-to-End Encryption
-- [ ] 암호화 Workspace Export
+- [x] 암호화 Workspace Export
 
 ---
 
@@ -300,13 +300,13 @@
 - [x] 인증 Secret Export 제외
 - [x] 손상 Import 검증
 - [x] 순환 Page Tree Import 거절
-- [ ] Markdown Export
-- [ ] HTML Export
-- [ ] PDF Export
-- [ ] ZIP Export
-- [ ] Notion Import
-- [ ] Obsidian Import
-- [ ] Notion Export 호환
+- [x] Markdown Export
+- [x] HTML Export
+- [x] PDF Export
+- [x] ZIP Export
+- [x] Notion Import
+- [x] Obsidian Import
+- [x] Notion Export 호환
 
 ---
 
@@ -460,3 +460,5 @@
 - [ ] Integrations
 - [ ] Canvas
 - [ ] Desktop App
+
+데이터 이전의 구현/호환 범위와 검증은 [Export·Import 기록](transfer-release.md)을 따른다. 이 묶음에서도 전체 미구현 완료 목표는 유지한다.

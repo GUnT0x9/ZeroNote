@@ -19,6 +19,18 @@ export async function attachmentDigest(data: Uint8Array): Promise<string> {
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 }
+export async function stageAttachmentFile(
+  pageId: string,
+  file: Pick<File, "size" | "name" | "arrayBuffer">,
+): Promise<LocalAttachment> {
+  if (!file.size || file.size > MAX_ATTACHMENT_BYTES)
+    throw new Error("파일은 비어 있지 않은 4MiB 이하 파일을 선택해주세요.");
+  return stageAttachment(
+    pageId,
+    file.name,
+    new Uint8Array(await file.arrayBuffer()),
+  );
+}
 export async function stageAttachment(
   pageId: string,
   name: string,

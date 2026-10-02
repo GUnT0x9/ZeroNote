@@ -21,3 +21,5 @@ Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Rec
 ## P0 Database 확장
 
 2026-10-02: 일반 Property 13종과 Saved View, Filter/Sort/Group, Calendar/Timeline/Gallery/List을 추가한다. 이전 메인 UI 개편과 함께 CI 통과 후 Render → Vercel Production에 배포한다. 파일 저장과 Public Share/전체 모바일 편집은 다음 P1, Relation/Rollup/Formula는 P2로 유지한다. 전체 기능 체크리스트는 `docs/feature-checklist.md`에서 실제 구현 증거와 후속 항목을 구분한다.
+
+2026-10-02 데이터 이전의 8개 기능을 구현했다. [형식과 검증](../transfer-release.md)에 범위를 기록하며 전체 148개 중 남은 116개는 계속 개발한다.

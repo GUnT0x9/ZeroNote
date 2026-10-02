@@ -1,6 +1,235 @@
 import { test, expect, type Page } from "@playwright/test";
 import { createBrowserBetaCode } from "./beta-helpers";
+import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import {
+  unzipSync,
+  strFromU8,
+  zipSync,
+  strToU8,
+} from "../apps/web/node_modules/fflate";
 const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
+test("Portable exports download Markdown, safe HTML, ZIP and a Korean PDF that renders", async ({
+  page,
+}) => {
+  const name = `Formats ${Date.now()}`;
+  const directory = await mkdtemp(join(tmpdir(), "zeronote-html-export-"));
+  try {
+    await createWorkspace(page, name);
+    await page.getByLabel("Page 제목").fill("한글 문서");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("한글 첫 줄\nSecond line");
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page.getByRole("button", { name: "Export", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Page Export" });
+    const download = async (format: string) => {
+      await dialog.getByLabel("Export 형식").selectOption(format);
+      const waiting = page.waitForEvent("download");
+      await dialog
+        .getByRole("button", { name: "내려받기", exact: true })
+        .click();
+      const file = await waiting,
+        path = await file.path();
+      if (!path) throw new Error("Missing export file");
+      await expect(
+        dialog.getByRole("button", { name: "내려받기", exact: true }),
+      ).toBeEnabled();
+      return { file, data: await readFile(path) };
+    };
+    const markdown = await download("markdown");
+    expect(markdown.file.suggestedFilename()).toMatch(/\.md$/);
+    expect(markdown.data.toString()).toContain("한글 첫 줄");
+    const html = await download("html");
+    expect(html.file.suggestedFilename()).toMatch(/\.html$/);
+    expect(html.data.toString()).toContain("<html");
+    expect(html.data.toString()).toContain("font-family:Pretendard");
+    expect(html.data.toString()).not.toContain("zn_session");
+    const htmlPath = join(directory, "export.html");
+    await writeFile(htmlPath, html.data);
+    const preview = await page.context().newPage();
+    try {
+      await preview.goto(pathToFileURL(htmlPath).href);
+      await expect(preview.getByRole("heading", { level: 1 })).toHaveText(
+        "한글 문서",
+      );
+      await preview.evaluate(() => document.fonts.ready);
+      expect(
+        await preview.evaluate(() =>
+          [...document.fonts].some(
+            (font) => font.family === "Pretendard" && font.status === "loaded",
+          ),
+        ),
+      ).toBe(true);
+    } finally {
+      await preview.close();
+    }
+    const archive = await download("zip"),
+      files = unzipSync(archive.data);
+    expect(files["zeronote.json"]).toBeDefined();
+    expect(strFromU8(files["zeronote.json"]!)).not.toContain("recoveryHash");
+    const pdf = await download("pdf");
+    expect(pdf.file.suggestedFilename()).toMatch(/\.pdf$/);
+    expect(pdf.data.subarray(0, 5).toString()).toBe("%PDF-");
+    await page.context().setOffline(true);
+    const offlinePdf = await download("pdf");
+    expect(offlinePdf.data.subarray(0, 5).toString()).toBe("%PDF-");
+    await page.context().setOffline(false);
+    await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+    await page.getByLabel("첨부 파일 선택").setInputFiles({
+      name: "exported.pdf",
+      mimeType: "application/pdf",
+      buffer: pdf.data,
+    });
+    await page.getByText("PDF 미리보기", { exact: true }).click();
+    await expect(page.locator(".pdf-pages")).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+    await expect(page.locator(".pdf-pages")).toContainText("한글 문서");
+    await expect(page.locator(".pdf-pages")).toContainText("한글 첫 줄");
+    await expect(page.locator(".pdf-pages").getByRole("alert")).toHaveCount(0);
+  } finally {
+    await page.context().setOffline(false);
+    await cleanup(page, name);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+test("Notion Markdown CSV and Obsidian links import into usable Pages and Database row bodies", async ({
+  page,
+}) => {
+  const name = `Interop ${Date.now()}`;
+  let originalId: string | null = null,
+    importedId: string | null = null;
+  try {
+    await createWorkspace(page, name);
+    originalId = new URL(page.url()).searchParams.get("workspace");
+    const archive = zipSync({
+      "Home aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.md": strToU8(
+        "# Home\n\n[[Note|Read this]]",
+      ),
+      "Note.md": strToU8("# Note\n\nBody from Obsidian"),
+      "Tasks.csv": strToU8("Name,Status\nShip,Done"),
+      "Tasks/Ship bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.md": strToU8(
+        "# Ship\n\nImported row details",
+      ),
+    });
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("button", { name: "데이터 이전", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "데이터 이전" });
+    await dialog.getByLabel("가져올 데이터 파일").setInputFiles({
+      name: `${name}.zip`,
+      mimeType: "application/zip",
+      buffer: Buffer.from(archive),
+    });
+    await dialog
+      .getByRole("button", { name: "새 Workspace로 가져오기", exact: true })
+      .click();
+    await expect(page.getByTestId("recovery-key")).toBeVisible();
+    await page.getByRole("button", { name: "계속하기", exact: true }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("Home");
+    const editor = page.getByRole("textbox", { name: "문서 본문" });
+    await editor.getByRole("button", { name: "Note", exact: true }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("Note");
+    await expect(editor).toContainText("Body from Obsidian");
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
+    await expect(page.getByLabel("항목 이름")).toHaveValue("Ship");
+    await page.getByRole("button", { name: "Ship 열기", exact: true }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("Ship");
+    await expect(editor).toContainText("Imported row details");
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    importedId = new URL(page.url()).searchParams.get("workspace");
+  } finally {
+    for (const [id, workspaceName] of [
+      [originalId, name],
+      [importedId, `${name} (가져옴)`],
+    ])
+      if (id)
+        await page.request.delete(`${ORIGIN}/v1/workspaces/${id}`, {
+          headers: { origin: ORIGIN },
+          data: { name: workspaceName },
+        });
+  }
+});
+test("Encrypted Workspace backup rejects a wrong password and restores documents with a fresh Recovery Key", async ({
+  page,
+}) => {
+  const name = `Encrypted ${Date.now()}`,
+    password = "correct horse battery staple";
+  let originalId: string | null = null,
+    importedId: string | null = null;
+  try {
+    await createWorkspace(page, name);
+    originalId = new URL(page.url()).searchParams.get("workspace");
+    await page.getByLabel("Page 제목").fill("Secret knowledge");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Keep this text through encryption.");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("button", { name: "데이터 이전", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "데이터 이전" });
+    await dialog.getByLabel("Export 형식").selectOption("encrypted");
+    await dialog.getByLabel("백업 암호", { exact: true }).fill(password);
+    await dialog.getByLabel("백업 암호 확인").fill(password);
+    await dialog.getByLabel("백업 암호 확인").fill("a different confirmation");
+    await dialog.getByRole("button", { name: "내려받기", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toContainText(
+      "확인 암호가 일치하지",
+    );
+    await dialog.getByLabel("백업 암호 확인").fill(password);
+    const waiting = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "내려받기", exact: true }).click();
+    const saved = await waiting,
+      path = await saved.path();
+    if (!path) throw new Error("Missing encrypted backup");
+    const bytes = await readFile(path);
+    expect(bytes.toString()).not.toContain("Secret knowledge");
+    expect(bytes.toString()).not.toContain(password);
+    await dialog.getByLabel("Import 백업 암호").fill("wrong password value");
+    await dialog.getByLabel("가져올 데이터 파일").setInputFiles(path);
+    await expect(dialog.getByRole("alert")).toContainText("암호가 다르거나");
+    await expect(
+      dialog.getByRole("button", {
+        name: "새 Workspace로 가져오기",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await dialog.getByLabel("Import 백업 암호").fill(password);
+    await dialog.getByLabel("가져올 데이터 파일").setInputFiles(path);
+    await dialog
+      .getByRole("button", { name: "새 Workspace로 가져오기", exact: true })
+      .click();
+    await expect(page.getByTestId("recovery-key")).toBeVisible();
+    await page.getByRole("button", { name: "계속하기", exact: true }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("Secret knowledge");
+    await expect(
+      page.getByRole("textbox", { name: "문서 본문" }),
+    ).toContainText("Keep this text through encryption.");
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    importedId = new URL(page.url()).searchParams.get("workspace");
+    expect(importedId).not.toBe(originalId);
+  } finally {
+    for (const [id, workspaceName] of [
+      [originalId, name],
+      [importedId, `${name} (가져옴)`],
+    ])
+      if (id)
+        await page.request.delete(`${ORIGIN}/v1/workspaces/${id}`, {
+          headers: { origin: ORIGIN },
+          data: { name: workspaceName },
+        });
+  }
+});
 test("Media attachments render Audio, Video and bounded PDF pages without losing bytes", async ({
   page,
 }) => {
@@ -45,13 +274,11 @@ test("Media attachments render Audio, Video and bounded PDF pages without losing
         }, 500);
       });
     });
-    await page
-      .getByLabel("첨부 파일 선택")
-      .setInputFiles({
-        name: "clip.webm",
-        mimeType: "video/webm",
-        buffer: Buffer.from(video),
-      });
+    await page.getByLabel("첨부 파일 선택").setInputFiles({
+      name: "clip.webm",
+      mimeType: "video/webm",
+      buffer: Buffer.from(video),
+    });
     const clip = page.getByLabel("clip.webm", { exact: true });
     await expect(clip).toBeVisible();
     await expect
@@ -74,13 +301,11 @@ test("Media attachments render Audio, Video and bounded PDF pages without losing
     ).toBeDisabled();
     await expect(preview.getByRole("alert")).toHaveCount(0);
     await page.getByText("PDF 미리보기", { exact: true }).click();
-    await page
-      .getByLabel("첨부 파일 선택")
-      .setInputFiles({
-        name: "corrupt.pdf",
-        mimeType: "application/pdf",
-        buffer: Buffer.from("%PDF-1.4 invalid bytes"),
-      });
+    await page.getByLabel("첨부 파일 선택").setInputFiles({
+      name: "corrupt.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4 invalid bytes"),
+    });
     await page.getByText("PDF 미리보기", { exact: true }).last().click();
     await expect(page.locator(".pdf-pages").getByRole("alert")).toBeVisible();
     await expect(

@@ -16,3 +16,20 @@ for (const name of ["cmaps", "wasm", "standard_fonts", "iccs", "LICENSE"])
   await cp(join(dirname(packagePath), name), join(destination, name), {
     recursive: true,
   });
+const exportAssets = fileURLToPath(
+  new URL("../public/export-assets/v1/", import.meta.url),
+);
+const pretendardPath = dirname(
+  fileURLToPath(import.meta.resolve("pretendard/package.json")),
+);
+await mkdir(exportAssets, { recursive: true });
+await cp(
+  join(pretendardPath, "dist/public/static/alternative/Pretendard-Regular.ttf"),
+  join(exportAssets, "Pretendard-Regular.ttf"),
+);
+await cp(
+  fileURLToPath(
+    new URL("../src/fonts/Pretendard-LICENSE.txt", import.meta.url),
+  ),
+  join(exportAssets, "Pretendard-LICENSE.txt"),
+);

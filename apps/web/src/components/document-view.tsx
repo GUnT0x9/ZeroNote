@@ -9,6 +9,7 @@ import {
   CloudOff,
   History,
   Trash2,
+  Download,
 } from "lucide-react";
 import * as Y from "yjs";
 import {
@@ -48,6 +49,7 @@ import { bytesToBase64 } from "@zeronote/shared";
 import { EmptyState } from "./primitives";
 import { DesignIcon } from "./design-icon";
 import { TemplatesDialog } from "./templates-dialog";
+import { TransferDialog } from "./transfer-dialog";
 export function DocumentView({
   page,
   data,
@@ -61,6 +63,7 @@ export function DocumentView({
     [error, setError] = useState<string | null>(null),
     [menu, setMenu] = useState(false),
     [templatesOpen, setTemplatesOpen] = useState(false),
+    [exportOpen, setExportOpen] = useState(false),
     menuRef = useRef<HTMLDivElement>(null),
     menuButton = useRef<HTMLButtonElement>(null),
     [providerRevision, setProviderRevision] = useState(0),
@@ -388,6 +391,17 @@ export function DocumentView({
                     Trash로 이동
                   </button>
                 )}
+                {!page.accessLost && !row && (
+                  <button
+                    onClick={() => {
+                      setExportOpen(true);
+                      setMenu(false);
+                    }}
+                  >
+                    <Download size={14} />
+                    Export
+                  </button>
+                )}
                 {editable && page.role === "owner" && !row && session && (
                   <>
                     <button
@@ -435,6 +449,14 @@ export function DocumentView({
         </div>
       </header>
       <div className="document-scroll">
+        {exportOpen && (
+          <TransferDialog
+            workspaceId={page.workspaceId}
+            pageId={page.id}
+            onClose={() => setExportOpen(false)}
+            onKey={() => {}}
+          />
+        )}
         {templatesOpen && (
           <TemplatesDialog
             data={data}

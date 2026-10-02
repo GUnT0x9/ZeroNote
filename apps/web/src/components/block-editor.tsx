@@ -47,7 +47,7 @@ import {
 import type { DocumentSession } from "@/lib/documents";
 import type { LocalPage } from "@/lib/database";
 import { errorMessage } from "@/lib/database";
-import { stageAttachment } from "@/lib/attachments";
+import { stageAttachmentFile } from "@/lib/attachments";
 import { requestSync } from "@/lib/sync";
 import { AttachmentNode } from "./attachment-node";
 import { useMobile } from "@/lib/hooks";
@@ -357,11 +357,7 @@ export function BlockEditor({
     void (async () => {
       if (!editor?.isEditable) return;
       for (const file of files) {
-        const record = await stageAttachment(
-          session.id,
-          file.name,
-          new Uint8Array(await file.arrayBuffer()),
-        );
+        const record = await stageAttachmentFile(session.id, file);
         if (!editor.isEditable || editor.isDestroyed) return;
         editor
           .chain()

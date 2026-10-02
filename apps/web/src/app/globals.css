@@ -2877,3 +2877,17 @@ small,
   gap: 12px;
   padding: 8px 0;
 }
+.transfer-import {
+  border-top: 1px solid var(--border);
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.transfer-import h3 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.muted-text {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 12px 0;
+}

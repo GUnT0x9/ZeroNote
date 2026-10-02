@@ -6,6 +6,7 @@ import {
   loadAttachment,
   syncAttachments,
   attachmentDigest,
+  stageAttachmentFile,
 } from "./attachments";
 import { api } from "./api";
 import {
@@ -48,6 +49,32 @@ afterEach(async () => {
     await database.pages.delete(id);
     await database.attachments.where("pageId").equals(id).delete();
   }
+});
+it("checks a selected File size before allocating bytes and stages a valid file", async () => {
+  const target = await page(),
+    read = vi.fn(async () => Uint8Array.from([65]).buffer);
+  await expect(
+    stageAttachmentFile(target.id, {
+      size: MAX_ATTACHMENT_BYTES + 1,
+      name: "large",
+      arrayBuffer: read,
+    }),
+  ).rejects.toThrow("4MiB");
+  await expect(
+    stageAttachmentFile(target.id, {
+      size: 0,
+      name: "empty",
+      arrayBuffer: read,
+    }),
+  ).rejects.toThrow("4MiB");
+  expect(read).not.toHaveBeenCalled();
+  const saved = await stageAttachmentFile(target.id, {
+    size: 1,
+    name: "a.txt",
+    arrayBuffer: read,
+  });
+  expect(saved.data).toEqual(Uint8Array.from([65]));
+  expect(read).toHaveBeenCalledOnce();
 });
 it("saves bytes locally before upload and keeps pending bytes after a failed upload", async () => {
   const target = await page(),

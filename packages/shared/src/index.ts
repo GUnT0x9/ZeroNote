@@ -3,6 +3,7 @@ import * as Y from "yjs";
 import { isCanonicalBase64 } from "./attachments";
 import { ExportAttachmentSchema } from "./attachments";
 import { setXmlAttribute } from "./xml";
+export * from "./portable-document";
 
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 // Allow JSON/base64 and WebSocket framing; decoded documents still use 5 MiB.

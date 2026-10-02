@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { createRecoveryKey } from "@zeronote/shared";
 import { Dialog } from "./primitives";
+import { TransferDialog } from "./transfer-dialog";
 import { useUiStore } from "@/lib/ui-store";
 import type { WorkspaceData } from "@/lib/hooks";
 import { database, errorMessage, type LocalWorkspace } from "@/lib/database";
@@ -619,6 +620,7 @@ export function SettingsDialog({
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [confirmDelete, setConfirmDelete] = useState(false),
+    [transferOpen, setTransferOpen] = useState(false),
     [deleteName, setDeleteName] = useState("");
   const owner =
     !!workspace &&
@@ -662,6 +664,14 @@ export function SettingsDialog({
       settingsOpen: false,
     });
   };
+  if (transferOpen && workspace)
+    return (
+      <TransferDialog
+        workspaceId={workspace.id}
+        onClose={() => setTransferOpen(false)}
+        onKey={onKey}
+      />
+    );
   return (
     <Dialog title="Settings" onClose={onClose} wide>
       <div className="settings-content">
@@ -734,6 +744,18 @@ export function SettingsDialog({
         {workspace && (
           <section>
             <h3>데이터</h3>
+            <div className="settings-row">
+              <div>
+                <strong>다른 형식으로 이전</strong>
+                <p>Markdown·HTML·ZIP·암호화 백업과 Notion·Obsidian 가져오기</p>
+              </div>
+              <button
+                className="button button-small"
+                onClick={() => setTransferOpen(true)}
+              >
+                데이터 이전
+              </button>
+            </div>
             <div className="settings-row">
               <div>
                 <strong>Workspace Export</strong>

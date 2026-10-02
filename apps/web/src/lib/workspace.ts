@@ -239,13 +239,15 @@ export async function captureNote(
 }
 export async function exportWorkspace(
   workspaceId: string,
+  requestedPageIds?: readonly string[],
 ): Promise<WorkspaceExport> {
   await flushDocuments();
   const workspace = await database.workspaces.get(workspaceId);
   if (!workspace) throw new Error("Workspace를 찾을 수 없습니다.");
   const pages = availablePages(
     await database.pages.where("workspaceId").equals(workspaceId).toArray(),
-  );
+  ).filter((page) => !requestedPageIds || requestedPageIds.includes(page.id));
+  const pageIds = new Set(pages.map((page) => page.id));
   const exported: WorkspaceExport["pages"] = [];
   const attachments: NonNullable<WorkspaceExport["attachments"]> = [];
   for (const page of pages) {
@@ -264,7 +266,8 @@ export async function exportWorkspace(
     }
     exported.push({
       id: page.id,
-      parentId: page.parentId,
+      parentId:
+        page.parentId && pageIds.has(page.parentId) ? page.parentId : null,
       kind: page.kind,
       title: session.document.getText("title").toString() || page.title,
       isInbox: page.isInbox,
@@ -320,68 +323,112 @@ export async function importWorkspace(
     importedFiles.map((file) => [file.id, crypto.randomUUID()]),
   );
   try {
-    await database.workspaces.put(workspace);
     const ordered = [...parsed.pages].sort(
       (a, b) => importDepth(a, parsed) - importDepth(b, parsed),
     );
-    for (const source of ordered) {
-      const index = parsed.pages.indexOf(source);
-      const id = ids.get(source.id);
-      if (!id) continue;
-      const page: LocalPage = {
-        id,
-        workspaceId: workspace.id,
-        parentId: source.parentId ? (ids.get(source.parentId) ?? null) : null,
-        kind: source.kind,
-        title: source.title,
-        revision: 0,
-        deletedAt: null,
-        createdAt: new Date().toISOString(),
-        isInbox: source.isInbox,
-        role: "owner",
-      };
-      await database.pages.put(page);
-      await enqueuePageOperation({
-        operationId: crypto.randomUUID(),
-        workspaceId: workspace.id,
-        pageId: id,
-        expectedRevision: 0,
-        action: "create",
-        page,
-      });
-      const document = documents[index];
-      if (document) {
-        remapReferences(document, ids);
-        remapAttachmentIds(document, fileIds);
-        await database.documents.put({
-          id,
-          workspaceId: workspace.id,
-          update: Y.encodeStateAsUpdate(document),
-          ...getDocumentProjection(document),
-          generation: 1,
-          committedGeneration: 0,
-          state: "saved",
-          updatedAt: Date.now(),
-        });
-        await openDocument(page);
-      }
-    }
-    for (const file of importedFiles) {
-      const pageId = ids.get(file.pageId),
-        id = fileIds.get(file.id);
-      if (!pageId || !id) throw new Error("파일의 Page 정보가 없습니다.");
-      await database.attachments.add({
-        ...file,
-        id,
-        pageId,
-        workspaceId: workspace.id,
-        status: "pending",
-        operationId: crypto.randomUUID(),
-      });
-    }
-    if (!parsed.pages.some((page) => page.isInbox))
-      await createLocalPage(workspace.id, "받은 메모", "document", null, true);
-    await flushDocuments();
+    await database.transaction(
+      "rw",
+      [
+        database.workspaces,
+        database.pages,
+        database.documents,
+        database.operations,
+        database.attachments,
+      ],
+      async () => {
+        await database.workspaces.put(workspace);
+        for (const source of ordered) {
+          const index = parsed.pages.indexOf(source),
+            id = ids.get(source.id)!;
+          const page: LocalPage = {
+            id,
+            workspaceId: workspace.id,
+            parentId: source.parentId ? ids.get(source.parentId)! : null,
+            kind: source.kind,
+            title: source.title,
+            revision: 0,
+            deletedAt: null,
+            createdAt: new Date().toISOString(),
+            isInbox: source.isInbox,
+            role: "owner",
+          };
+          await database.pages.put(page);
+          await enqueuePageOperation({
+            operationId: crypto.randomUUID(),
+            workspaceId: workspace.id,
+            pageId: id,
+            expectedRevision: 0,
+            action: "create",
+            page,
+          });
+          const document = documents[index]!;
+          remapReferences(document, ids);
+          remapAttachmentIds(document, fileIds);
+          await database.documents.put({
+            id,
+            workspaceId: workspace.id,
+            update: Y.encodeStateAsUpdate(document),
+            ...getDocumentProjection(document),
+            generation: 1,
+            committedGeneration: 0,
+            state: "saved",
+            updatedAt: Date.now(),
+          });
+        }
+        for (const file of importedFiles) {
+          const pageId = ids.get(file.pageId),
+            id = fileIds.get(file.id);
+          if (!pageId || !id) throw new Error("파일의 Page 정보가 없습니다.");
+          await database.attachments.add({
+            ...file,
+            id,
+            pageId,
+            workspaceId: workspace.id,
+            status: "pending",
+            operationId: crypto.randomUUID(),
+          });
+        }
+        if (!parsed.pages.some((page) => page.isInbox)) {
+          const inbox: LocalPage = {
+            id: crypto.randomUUID(),
+            workspaceId: workspace.id,
+            parentId: null,
+            kind: "document",
+            title: "받은 메모",
+            revision: 0,
+            deletedAt: null,
+            createdAt: new Date().toISOString(),
+            isInbox: true,
+            role: "owner",
+          };
+          const document = new Y.Doc();
+          try {
+            document.getText("title").insert(0, inbox.title);
+            await database.pages.put(inbox);
+            await enqueuePageOperation({
+              operationId: crypto.randomUUID(),
+              workspaceId: workspace.id,
+              pageId: inbox.id,
+              expectedRevision: 0,
+              action: "create",
+              page: inbox,
+            });
+            await database.documents.put({
+              id: inbox.id,
+              workspaceId: workspace.id,
+              update: Y.encodeStateAsUpdate(document),
+              ...getDocumentProjection(document),
+              generation: 1,
+              committedGeneration: 0,
+              state: "saved",
+              updatedAt: Date.now(),
+            });
+          } finally {
+            document.destroy();
+          }
+        }
+      },
+    );
     useUiStore
       .getState()
       .select(
