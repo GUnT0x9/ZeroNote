@@ -32,6 +32,7 @@ import {
 } from "./workspace";
 import { openDocument, flushDocuments } from "./documents";
 import { searchLocalPages, availablePages, retainEqualItems } from "./search";
+import { useUiStore } from "./ui-store";
 import { stageAttachment, loadAttachment } from "./attachments";
 import { getAttachmentIds } from "@zeronote/shared";
 vi.mock("./api", () => ({
@@ -122,6 +123,46 @@ it("exports only requested accessible Pages and detaches an omitted parent", asy
   expect(exported.pages).toHaveLength(1);
   expect(exported.pages[0]?.parentId).toBeNull();
   expect((await exportWorkspace(source.id, ["missing"])).pages).toEqual([]);
+});
+it("opens a root document after import regardless of exported Database or child order", async () => {
+  const { workspace: source, page } = await workspace();
+  const child = await createLocalPage(source.id, "Child", "document", page.id);
+  const exported = await exportWorkspace(source.id);
+  const root = exported.pages.find((entry) => entry.id === page.id)!;
+  const childEntry = exported.pages.find((entry) => entry.id === child.id)!;
+  exported.pages = [
+    ...exported.pages.filter((entry) => entry.kind === "database"),
+    childEntry,
+    root,
+  ];
+  const imported = await importWorkspace(exported);
+  created.push(imported.workspace.id);
+  const landing = await database.pages.get(useUiStore.getState().pageId!);
+  expect(landing?.title).toBe(root.title);
+  expect(landing?.kind).toBe("document");
+  expect(landing?.parentId).toBeNull();
+});
+it("opens the Database for a Database-only import and keeps an empty import valid", async () => {
+  const { workspace: source } = await workspace();
+  const exported = await exportWorkspace(source.id);
+  const databaseOnly = await importWorkspace({
+    ...exported,
+    pages: exported.pages.filter((entry) => entry.kind === "database"),
+  });
+  created.push(databaseOnly.workspace.id);
+  expect((await database.pages.get(useUiStore.getState().pageId!))?.kind).toBe(
+    "database",
+  );
+  const empty = await importWorkspace({ ...exported, pages: [] });
+  created.push(empty.workspace.id);
+  expect(useUiStore.getState().workspaceId).toBe(empty.workspace.id);
+  expect(useUiStore.getState().pageId).toBeNull();
+  expect(
+    await database.pages
+      .where("workspaceId")
+      .equals(empty.workspace.id)
+      .count(),
+  ).toBe(1);
 });
 async function workspace() {
   const result = await createLocalWorkspace("Local tests");

@@ -429,12 +429,15 @@ export async function importWorkspace(
         }
       },
     );
+    const landing =
+      parsed.pages.find(
+        (page) => !page.isInbox && page.kind === "document" && !page.parentId,
+      ) ??
+      parsed.pages.find((page) => !page.isInbox && page.kind === "document") ??
+      parsed.pages.find((page) => !page.isInbox);
     useUiStore
       .getState()
-      .select(
-        workspace.id,
-        ids.get(parsed.pages.find((page) => !page.isInbox)?.id ?? "") ?? null,
-      );
+      .select(workspace.id, landing ? ids.get(landing.id)! : null);
     return { key, workspace };
   } finally {
     for (const document of documents) document.destroy();

@@ -414,6 +414,46 @@ export function TaskDatabase({
     </div>
   );
 }
+// Keep the component type stable: flexRender treats a newly created cell function
+// as a new component and would discard focused drafts on unrelated updates.
+function DatabaseTableCell({
+  page,
+  generic,
+  ...props
+}: Parameters<typeof DatabasePropertyCell>[0] & {
+  page: LocalPage;
+  generic: boolean;
+}) {
+  const { row, property } = props;
+  const label =
+    property.id === "title"
+      ? generic
+        ? "항목 이름"
+        : "Task 이름"
+      : property.id === "dueDate"
+        ? `${row.title} 마감일`
+        : property.id === "assigneeId"
+          ? `${row.title} 담당자`
+          : property.id === "priority"
+            ? `${row.title} 우선순위`
+            : undefined;
+  const control = <DatabasePropertyCell {...props} label={label} />;
+  if (property.id !== "title") return control;
+  return (
+    <div className="task-name-cell">
+      <button
+        className="task-open icon-button"
+        aria-label={`${row.title} 열기`}
+        onClick={() =>
+          useUiStore.getState().select(page.workspaceId, page.id, row.id)
+        }
+      >
+        <DesignIcon name="task-open" />
+      </button>
+      {control}
+    </div>
+  );
+}
 type UpdateTask = (
   id: string,
   field: Exclude<keyof TaskRow, "id" | "title">,
@@ -443,61 +483,13 @@ function TaskTable({
       properties.map((property) => ({
         id: property.id,
         header: property.name,
-        cell: ({ row }) =>
-          property.id === "title" ? (
-            <div className="task-name-cell">
-              <button
-                className="task-open icon-button"
-                aria-label={`${row.original.title} 열기`}
-                onClick={() =>
-                  useUiStore
-                    .getState()
-                    .select(page.workspaceId, page.id, row.original.id)
-                }
-              >
-                <DesignIcon name="task-open" />
-              </button>
-              <DatabasePropertyCell
-                document={session.document}
-                row={row.original}
-                property={property}
-                editable={editable}
-                identities={identities}
-                label={generic ? "항목 이름" : "Task 이름"}
-              />
-            </div>
-          ) : (
-            <DatabasePropertyCell
-              document={session.document}
-              row={row.original}
-              property={property}
-              editable={editable}
-              identities={identities}
-              label={
-                property.id === "dueDate"
-                  ? `${row.original.title} 마감일`
-                  : property.id === "assigneeId"
-                    ? `${row.original.title} 담당자`
-                    : property.id === "priority"
-                      ? `${row.original.title} 우선순위`
-                      : undefined
-              }
-            />
-          ),
       })),
-    [
-      properties,
-      session.document,
-      page.id,
-      page.workspaceId,
-      editable,
-      identities,
-      generic,
-    ],
+    [properties],
   );
   const table = useReactTable({
     data: rows,
     columns,
+    getRowId: (row) => row.id,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: 25 } },
@@ -543,10 +535,17 @@ function TaskTable({
                     <tr key={row.id}>
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id}>
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
+                          <DatabaseTableCell
+                            document={session.document}
+                            row={row.original}
+                            property={properties.find(
+                              (property) => property.id === cell.column.id,
+                            )!}
+                            editable={editable}
+                            identities={identities}
+                            page={page}
+                            generic={generic}
+                          />
                         </td>
                       ))}
                     </tr>

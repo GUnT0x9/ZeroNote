@@ -209,6 +209,8 @@ test("Encrypted Workspace backup rejects a wrong password and restores documents
       .click();
     await expect(page.getByTestId("recovery-key")).toBeVisible();
     await page.getByRole("button", { name: "계속하기", exact: true }).click();
+    importedId = new URL(page.url()).searchParams.get("workspace");
+    expect(importedId).not.toBe(originalId);
     await expect(page.getByLabel("Page 제목")).toHaveValue("Secret knowledge");
     await expect(
       page.getByRole("textbox", { name: "문서 본문" }),
@@ -216,8 +218,6 @@ test("Encrypted Workspace backup rejects a wrong password and restores documents
     await expect(
       page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
     ).toBeVisible();
-    importedId = new URL(page.url()).searchParams.get("workspace");
-    expect(importedId).not.toBe(originalId);
   } finally {
     for (const [id, workspaceName] of [
       [originalId, name],
@@ -1292,12 +1292,22 @@ test("Generic properties, saved filters and date/card views survive Offline relo
   await expect(
     page.locator(".sidebar").getByTestId("sync-status"),
   ).toHaveAttribute("data-state", "saved");
+  const numberDraft = page.getByLabel("Beta Points", { exact: true });
+  await numberDraft.fill("0");
+  await numberDraft.press("Tab");
+  await expect(numberDraft).toHaveValue("0");
+  await numberDraft.fill("25");
+  await numberDraft.evaluate((input) =>
+    input.setAttribute("data-draft-probe", "focused"),
+  );
   await context.setOffline(true);
-  await page.getByLabel("Beta Points", { exact: true }).fill("25");
-  await page.getByLabel("Beta Points", { exact: true }).press("Tab");
   await expect(
     page.locator(".sidebar").getByTestId("sync-status"),
   ).toHaveAttribute("data-state", "offline");
+  await expect(numberDraft).toHaveAttribute("data-draft-probe", "focused");
+  await expect(numberDraft).toBeFocused();
+  await expect(numberDraft).toHaveValue("25");
+  await numberDraft.press("Tab");
   await page.waitForTimeout(500);
   await page.reload();
   await expect(page.getByLabel("Beta Points", { exact: true })).toHaveValue(

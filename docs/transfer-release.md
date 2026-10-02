@@ -30,6 +30,12 @@ JSON과 ZeroNote ZIP은 Yjs의 전체 상태·Database 정의/값/뷰·Row 본�
 
 최종 lint/type-check/Build와 정확한 Commit의 CI를 통과한 뒤 Render → Vercel 순서로 수동 배포한다. 실제 HTTPS의 데이터 이전, 기존 최대 파일/Recovery/Offline PDF를 재검증한 결과를 아래에 추가한다. 실제 Android/iOS 기기와 남은 전체 요구는 아직 미완료다.
 
+### CI 회귀 수정
+
+`69da515`의 CI `36973769775`에서 Import 직후 첫 화면 선택과 Offline 숫자 Property 저장의 두 회귀를 확인했다. Import는 Export 파일의 UUID 순서에 의존하지 않고 최상위 일반 문서를 먼저 선택한다. Database-only와 빈 Import도 유지한다. Table은 고정된 Cell 컴포넌트와 실제 Row ID를 사용하여 문서/Sync/권한 갱신 때 입력값·Focus를 잃지 않는다. 숫자 0과 25, 입력 중 Offline 전환, 새로고침 뒤 값 보존을 회귀로 검증한다.
+
+수정 후 로컬 Unit/Server Tests 189개와 lint/type-check가 통과했다. 실패한 Commit은 Production에 배포하지 않았다. 로컬 브라우저의 암호화 백업/복구와 Generic Database Offline/Focus 회귀 2개도 통과했다. 수정 Commit의 전체 CI 결과는 확인 후 기록한다.
+
 ## 변경 파일과 이유
 
 | 파일                                                                                              | 이유                                         |
