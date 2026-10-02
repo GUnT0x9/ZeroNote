@@ -81,6 +81,9 @@ export function getWorkspaceSyncStatus(
   const failedOperation = operations.find(
     (operation) => operation.status !== "pending",
   );
+  const attachments = (data.attachmentStates ?? []).filter((file) =>
+    pageIds.has(file.pageId),
+  );
   return getSyncStatus({
     ...connection,
     hasWorkspace: !!workspace && !workspace.accessLost,
@@ -94,6 +97,7 @@ export function getWorkspaceSyncStatus(
         ? (failedOperation.error ?? "Page 구조 변경을 확인해주세요.")
         : null) ??
       comments.find((comment) => comment.error)?.error ??
+      attachments.find((file) => file.error)?.error ??
       null,
     pending:
       !!workspace?.pendingCreation ||
@@ -101,6 +105,7 @@ export function getWorkspaceSyncStatus(
         (document) => document.generation > document.committedGeneration,
       ) ||
       operations.some((operation) => operation.status === "pending") ||
-      comments.some((comment) => !comment.error),
+      comments.some((comment) => !comment.error) ||
+      attachments.some((file) => file.status === "pending"),
   });
 }

@@ -7,6 +7,9 @@ import {
   STORAGE_WARNING_BYTES,
   getDocumentProjection,
   AUTO_SNAPSHOT_DAYS,
+  EDITOR_PROTOCOL,
+  EDITOR_UPDATE_MESSAGE,
+  getDocumentEditorProtocol,
 } from "@zeronote/shared";
 import { DomainError } from "../errors";
 import type { Repository, Executor } from "./repository";
@@ -55,10 +58,28 @@ export class DocumentStore {
     );
     if (!pages.length) throw new DomainError(404, "Page를 찾을 수 없습니다.");
   }
+  async minimumProtocol(
+    pageId: string,
+    executor: Executor = this.repository.database,
+  ): Promise<number> {
+    const [row] = await this.repository.query<{ protocol: number }>(
+      sql`SELECT editor_protocol AS protocol FROM document_checkpoints WHERE page_id=${pageId}`,
+      executor,
+    );
+    const document = new Y.Doc();
+    try {
+      for (const update of await this.load(pageId, executor))
+        Y.applyUpdate(document, update);
+      return Math.max(row?.protocol ?? 1, getDocumentEditorProtocol(document));
+    } finally {
+      document.destroy();
+    }
+  }
   async commit(
     pageId: string,
     operationId: string,
     update: Uint8Array,
+    editorProtocol = EDITOR_PROTOCOL,
   ): Promise<void> {
     if (update.byteLength > MAX_DOCUMENT_BYTES)
       throw new DomainError(413, "문서 크기 제한을 초과했습니다.");
@@ -66,6 +87,10 @@ export class DocumentStore {
     await this.repository.database.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
       await this.lock(pageId, tx);
+      // Validate before deduplication too: a previous operation cannot grant an
+      // incompatible client access to the current document state.
+      if (editorProtocol < (await this.minimumProtocol(pageId, tx)))
+        throw new DomainError(426, EDITOR_UPDATE_MESSAGE);
       const [prior] = await this.repository.query<{
         pageId: string;
         hash: string;
@@ -88,6 +113,8 @@ export class DocumentStore {
         } catch {
           throw new DomainError(400, "문서를 처리할 수 없습니다.");
         }
+        if (editorProtocol < getDocumentEditorProtocol(document))
+          throw new DomainError(426, EDITOR_UPDATE_MESSAGE);
         const state = Y.encodeStateAsUpdate(document);
         if (
           state.byteLength > MAX_DOCUMENT_BYTES ||
@@ -123,8 +150,16 @@ export class DocumentStore {
     title: string,
     executor: Executor,
   ): Promise<void> {
+    const document = new Y.Doc();
+    let protocol: number;
+    try {
+      Y.applyUpdate(document, state);
+      protocol = getDocumentEditorProtocol(document);
+    } finally {
+      document.destroy();
+    }
     await executor.execute(
-      sql`INSERT INTO document_checkpoints(page_id,data,through_update_id) VALUES(${pageId},${Buffer.from(state)},${through}::bigint) ON CONFLICT(page_id) DO UPDATE SET data=excluded.data,through_update_id=excluded.through_update_id,updated_at=now()`,
+      sql`INSERT INTO document_checkpoints(page_id,data,through_update_id,editor_protocol) VALUES(${pageId},${Buffer.from(state)},${through}::bigint,${protocol}) ON CONFLICT(page_id) DO UPDATE SET data=excluded.data,through_update_id=excluded.through_update_id,editor_protocol=GREATEST(document_checkpoints.editor_protocol,excluded.editor_protocol),updated_at=now()`,
     );
     await executor.execute(
       sql`UPDATE pages SET title=${title} WHERE id=${pageId}`,

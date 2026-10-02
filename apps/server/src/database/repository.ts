@@ -6,6 +6,7 @@ import { migrateDatabase } from "./migrations";
 import { DocumentStore } from "./document-store";
 import { BetaStore } from "./beta-store";
 import { SnapshotStore } from "./snapshot-store";
+import { AttachmentStore } from "./attachment-store";
 import type { Page, Workspace, Role, PageComment } from "@zeronote/shared";
 
 export interface DeviceRecord {
@@ -49,6 +50,7 @@ export class Repository {
   readonly documents: DocumentStore;
   readonly beta: BetaStore;
   readonly snapshots: SnapshotStore;
+  readonly attachments: AttachmentStore;
   constructor(url: string) {
     this.pool = new Pool({
       connectionString: url,
@@ -60,6 +62,7 @@ export class Repository {
     this.documents = new DocumentStore(this);
     this.beta = new BetaStore(this);
     this.snapshots = new SnapshotStore(this);
+    this.attachments = new AttachmentStore(this);
   }
   async query<T>(
     statement: SQL,
@@ -283,8 +286,9 @@ export class Repository {
     pageId: string,
     operationId: string,
     update: Uint8Array,
+    editorProtocol?: number,
   ): Promise<void> {
-    await this.documents.commit(pageId, operationId, update);
+    await this.documents.commit(pageId, operationId, update, editorProtocol);
   }
   async checkpoint(
     pageId: string,

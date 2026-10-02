@@ -9,6 +9,7 @@ export default tseslint.config(
       "**/dist/**",
       "**/next-env.d.ts",
       "**/public/sw.js",
+      "**/public/pdfjs/**",
     ],
   },
   js.configs.recommended,

@@ -62,6 +62,7 @@ jobs:
           age-keygen -o "$RUNNER_TEMP/backup.agekey"
           export AGE_RECIPIENT="$(age-keygen -y "$RUNNER_TEMP/backup.agekey")"
           export BACKUP_DIRECTORY="$RUNNER_TEMP/zeronote-backups"
+          node scripts/postgres-client.mjs psql -c "INSERT INTO attachments(id,page_id,workspace_id,name,mime,size,payload_hash,data,created_by) SELECT gen_random_uuid(),p.id,p.workspace_id,'backup-fixture.txt','text/plain',5,encode(sha256(convert_to('bytes','UTF8')),'hex'),convert_to('bytes','UTF8'),(SELECT id FROM devices LIMIT 1) FROM pages p LIMIT 1"
           for iteration in 1 2 3 4 5; do bash scripts/backup.sh; done
           test "$(find "$BACKUP_DIRECTORY" -name 'zeronote-*.age' | wc -l)" -eq 4
           if BACKUP_DIRECTORY="$GITHUB_WORKSPACE/backups" bash scripts/backup.sh; then
@@ -73,9 +74,10 @@ jobs:
           export AGE_IDENTITY_FILE="$RUNNER_TEMP/backup.agekey"
           export BACKUP_FILE="$(find "$BACKUP_DIRECTORY" -name 'zeronote-*.age' -print -quit)"
           bash scripts/restore.sh
-          DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atc 'SELECT count(*) FROM schema_migrations' | grep -Ex '2'
+          DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atc 'SELECT count(*) FROM schema_migrations' | grep -Ex '4'
           node scripts/postgres-client.mjs psql -Atc 'SELECT EXISTS(SELECT 1 FROM pages) AND EXISTS(SELECT 1 FROM document_checkpoints)' | grep -Ex 't'
-          for table in workspaces pages document_checkpoints document_operations document_snapshots memberships grants comments beta_codes beta_devices; do
+          DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atc 'SELECT count(*) FROM attachments' | grep -Ex '1'
+          for table in workspaces pages document_checkpoints document_operations document_snapshots memberships grants comments beta_codes beta_devices attachments attachment_operations; do
             query="SELECT count(*)::text || ':' || md5(COALESCE(jsonb_agg(to_jsonb(data) ORDER BY to_jsonb(data)::text)::text, '[]')) FROM $table data"
             source_fingerprint="$(node scripts/postgres-client.mjs psql -Atqc "$query")"
             restored_fingerprint="$(DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atqc "$query")"

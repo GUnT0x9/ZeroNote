@@ -11,6 +11,7 @@ import { z } from "zod";
 import { database, errorMessage, type LocalPage } from "./database";
 import { api, ApiError, authenticate } from "./api";
 import { useUiStore } from "./ui-store";
+import { syncAttachments } from "./attachments";
 import {
   cacheRemoteDocument,
   setDocumentSyncRequest,
@@ -92,6 +93,7 @@ async function runSync(): Promise<void> {
     await authenticate();
     await syncWorkspaces();
     await syncMetadataOperations();
+    await syncAttachments();
     await syncDocuments();
     await syncComments();
     const metadata = MetadataSchema.parse(await api<unknown>("/metadata"));

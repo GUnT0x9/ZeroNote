@@ -10,6 +10,8 @@ import {
   base64ToBytes,
   sha256Hex,
   createRecoveryKey,
+  EDITOR_PROTOCOL,
+  EDITOR_PROTOCOL_HEADER,
 } from "@zeronote/shared";
 import { createApp } from "./app";
 import { Repository } from "./database/repository";
@@ -25,12 +27,19 @@ class OriginSocket extends WebSocket {
     super(url, { origin: env.WEB_ORIGIN });
   }
 }
-async function call(path: string, method = "GET", body?: unknown, cookie = "") {
+async function call(
+  path: string,
+  method = "GET",
+  body?: unknown,
+  cookie = "",
+  protocol = EDITOR_PROTOCOL,
+) {
   const response = await fetch(`${origin}/v1${path}`, {
     method,
     headers: {
       Origin: env.WEB_ORIGIN,
       Cookie: cookie,
+      [EDITOR_PROTOCOL_HEADER]: String(protocol),
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -135,13 +144,18 @@ async function collaborator(
   );
   return member;
 }
-async function connect(cookie: string, pageId: string) {
+async function connect(
+  cookie: string,
+  pageId: string,
+  protocol = EDITOR_PROTOCOL,
+) {
   const { token } = (await (
       await call(
         `/documents/${pageId}/realtime-token`,
         "POST",
         undefined,
         cookie,
+        protocol,
       )
     ).json()) as { token: string },
     document = new Y.Doc();
@@ -225,6 +239,98 @@ it("keeps presence heartbeat traffic in memory without periodic permission queri
   );
   expect(permission).toHaveBeenCalled();
 });
+it.each(["rest", "websocket"])(
+  "disconnects legacy editors before broadcasting new blocks through %s",
+  async (transport) => {
+    const { owner, pageId } = await setup(),
+      member = await collaborator(owner, pageId),
+      legacy = await connect(member.cookie, pageId, 1),
+      current = await connect(owner.cookie, pageId);
+    const staleToken = (await (
+      await call(
+        `/documents/${pageId}/realtime-token`,
+        "POST",
+        undefined,
+        member.cookie,
+        1,
+      )
+    ).json()) as { token: string };
+    await vi.waitFor(() =>
+      expect(current.provider.hasUnsyncedChanges).toBe(false),
+    );
+    expect(
+      application.realtime.documents.get(pageId)?.getConnectionsCount(),
+    ).toBe(2);
+    let delivered = false;
+    legacy.document.on("update", () => {
+      if (legacy.document.getXmlFragment("content").length) delivered = true;
+    });
+    if (transport === "websocket")
+      current.document
+        .getXmlFragment("content")
+        .insert(0, [new Y.XmlElement("attachment")]);
+    else {
+      const document = new Y.Doc();
+      document
+        .getXmlFragment("content")
+        .insert(0, [new Y.XmlElement("attachment")]);
+      await call(
+        `/documents/${pageId}/commit`,
+        "POST",
+        {
+          operationId: crypto.randomUUID(),
+          update: bytesToBase64(Y.encodeStateAsUpdate(document)),
+        },
+        owner.cookie,
+      );
+      document.destroy();
+    }
+    await vi.waitFor(() => {
+      expect(current.document.getXmlFragment("content").length).toBe(1);
+      expect(
+        application.realtime.documents.get(pageId)?.getConnectionsCount(),
+      ).toBe(1);
+    });
+    expect(delivered).toBe(false);
+    expect(legacy.document.getXmlFragment("content").length).toBe(0);
+    const fresh = new Y.Doc(),
+      socket = new HocuspocusProviderWebsocket({
+        url: origin.replace("http", "ws") + "/collaboration",
+        WebSocketPolyfill: OriginSocket,
+      });
+    documents.push(fresh);
+    sockets.push(socket);
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error("Legacy token was not rejected")),
+        3000,
+      );
+      const provider = new HocuspocusProvider({
+        name: pageId,
+        document: fresh,
+        websocketProvider: socket,
+        token: staleToken.token,
+        onAuthenticationFailed: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        onSynced: () => {
+          clearTimeout(timer);
+          reject(new Error("Legacy token received document state"));
+        },
+      });
+      providers.push(provider);
+      provider.attach();
+    });
+    expect(fresh.getXmlFragment("content").length).toBe(0);
+    await expect(connect(member.cookie, pageId, 1)).rejects.toThrow();
+    const loaded = new Y.Doc();
+    for (const update of await application.repository.loadDocument(pageId))
+      Y.applyUpdate(loaded, update);
+    expect(loaded.getXmlFragment("content").length).toBe(1);
+    loaded.destroy();
+  },
+);
 afterAll(async () => {
   for (const id of workspaces) await application.repository.deleteWorkspace(id);
   await application.app.close();

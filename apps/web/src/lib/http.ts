@@ -26,10 +26,10 @@ export async function requestJson<T>(
         method,
         credentials: "same-origin",
         signal: controller.signal,
-        headers:
-          body === undefined
-            ? undefined
-            : { "Content-Type": "application/json" },
+        headers: {
+          [EDITOR_PROTOCOL_HEADER]: String(EDITOR_PROTOCOL),
+          ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       let result: unknown;
@@ -74,3 +74,4 @@ export async function requestJson<T>(
   }
   throw new ApiError(503, "서버에 연결할 수 없습니다.");
 }
+import { EDITOR_PROTOCOL, EDITOR_PROTOCOL_HEADER } from "@zeronote/shared";

@@ -18,6 +18,8 @@ import {
   replaceSharedText,
   getTaskRows,
   updateTaskField,
+  isPageTemplate,
+  setPageTemplate,
 } from "@zeronote/shared";
 import {
   openDocument,
@@ -31,7 +33,11 @@ import {
   type WorkspaceData,
 } from "@/lib/hooks";
 import { database, errorMessage, type LocalPage } from "@/lib/database";
-import { changePageStructure, createLocalPage } from "@/lib/workspace";
+import {
+  changePageStructure,
+  createLocalPage,
+  duplicateLocalPage,
+} from "@/lib/workspace";
 import { requestSync } from "@/lib/sync";
 import { useUiStore } from "@/lib/ui-store";
 import { BlockEditor } from "./block-editor";
@@ -41,6 +47,7 @@ import { downloadJson } from "@/lib/workspace";
 import { bytesToBase64 } from "@zeronote/shared";
 import { EmptyState } from "./primitives";
 import { DesignIcon } from "./design-icon";
+import { TemplatesDialog } from "./templates-dialog";
 export function DocumentView({
   page,
   data,
@@ -53,6 +60,7 @@ export function DocumentView({
   const [session, setSession] = useState<DocumentSession | null>(null),
     [error, setError] = useState<string | null>(null),
     [menu, setMenu] = useState(false),
+    [templatesOpen, setTemplatesOpen] = useState(false),
     menuRef = useRef<HTMLDivElement>(null),
     menuButton = useRef<HTMLButtonElement>(null),
     [providerRevision, setProviderRevision] = useState(0),
@@ -154,10 +162,7 @@ export function DocumentView({
   );
   const record = data.documents.find((document) => document.id === page.id),
     editable =
-      canEdit(page.role) &&
-      !page.accessLost &&
-      record?.state !== "preserved" &&
-      !mobile;
+      canEdit(page.role) && !page.accessLost && record?.state !== "preserved";
   const row =
     session && ui.taskId
       ? getTaskRows(session.document).find((task) => task.id === ui.taskId)
@@ -383,12 +388,59 @@ export function DocumentView({
                     Trash로 이동
                   </button>
                 )}
+                {editable && page.role === "owner" && !row && session && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setTemplatesOpen(true);
+                        setMenu(false);
+                      }}
+                    >
+                      Template으로 새 Page
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPageTemplate(
+                          session.document,
+                          !isPageTemplate(session.document),
+                        );
+                        requestSync();
+                        setMenu(false);
+                      }}
+                    >
+                      {isPageTemplate(session.document)
+                        ? "Template 지정 해제"
+                        : "Template으로 지정"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMenu(false);
+                        void duplicateLocalPage(page)
+                          .then((copy) => {
+                            ui.select(copy.workspaceId, copy.id);
+                            requestSync();
+                          })
+                          .catch((problem) =>
+                            ui.patch({ notice: errorMessage(problem) }),
+                          );
+                      }}
+                    >
+                      Page 복제
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
         </div>
       </header>
       <div className="document-scroll">
+        {templatesOpen && (
+          <TemplatesDialog
+            data={data}
+            onClose={() => setTemplatesOpen(false)}
+          />
+        )}
         <main className="page-body">
           {row && (
             <div className="page-return">
@@ -420,8 +472,7 @@ export function DocumentView({
           />
           {(session?.localSaveError ||
             page.role === "viewer" ||
-            page.role === "commenter" ||
-            mobile) && (
+            page.role === "commenter") && (
             <div className="document-meta">
               {session?.localSaveError && (
                 <span className="save-error" role="alert">
@@ -433,9 +484,7 @@ export function DocumentView({
                   ? "읽기 전용"
                   : page.role === "commenter"
                     ? "읽기 및 Comment"
-                    : mobile
-                      ? "Mobile 읽기 모드"
-                      : ""}
+                    : ""}
               </span>
             </div>
           )}

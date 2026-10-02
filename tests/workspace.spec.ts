@@ -1,6 +1,301 @@
 import { test, expect, type Page } from "@playwright/test";
 import { createBrowserBetaCode } from "./beta-helpers";
 const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
+test("Media attachments render Audio, Video and bounded PDF pages without losing bytes", async ({
+  page,
+}) => {
+  const name = `Media ${Date.now()}`;
+  try {
+    await createWorkspace(page, name);
+    await page
+      .getByLabel("첨부 파일 선택")
+      .setInputFiles("tests/fixtures/silence.wav");
+    const audio = page.getByLabel("silence.wav", { exact: true });
+    await expect(audio).toBeVisible();
+    await expect
+      .poll(() =>
+        audio.evaluate((element) => (element as HTMLAudioElement).duration),
+      )
+      .toBeGreaterThan(0);
+    const video = await page.evaluate(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 24;
+      canvas.height = 24;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Missing canvas context");
+      context.fillRect(0, 0, 24, 24);
+      const stream = canvas.captureStream(10),
+        recorder = new MediaRecorder(stream, { mimeType: "video/webm" }),
+        chunks: Blob[] = [];
+      return new Promise<number[]>((resolve, reject) => {
+        recorder.ondataavailable = (event) => chunks.push(event.data);
+        recorder.onerror = () => reject(new Error("Recording failed"));
+        recorder.onstop = () => {
+          for (const track of stream.getTracks()) track.stop();
+          void new Blob(chunks)
+            .arrayBuffer()
+            .then((buffer) => resolve([...new Uint8Array(buffer)]))
+            .catch(reject);
+        };
+        recorder.start();
+        setTimeout(() => {
+          context.fillStyle = "white";
+          context.fillRect(0, 0, 24, 24);
+          recorder.stop();
+        }, 500);
+      });
+    });
+    await page
+      .getByLabel("첨부 파일 선택")
+      .setInputFiles({
+        name: "clip.webm",
+        mimeType: "video/webm",
+        buffer: Buffer.from(video),
+      });
+    const clip = page.getByLabel("clip.webm", { exact: true });
+    await expect(clip).toBeVisible();
+    await expect
+      .poll(() =>
+        clip.evaluate((element) => (element as HTMLVideoElement).videoWidth),
+      )
+      .toBe(24);
+    await page
+      .getByLabel("첨부 파일 선택")
+      .setInputFiles("tests/fixtures/sample.pdf");
+    await page.getByText("PDF 미리보기", { exact: true }).click();
+    const preview = page.locator(".pdf-pages");
+    await expect(preview).toHaveAttribute("aria-busy", "false");
+    await expect(preview).toContainText("ZeroNote PDF fixture");
+    await expect(
+      preview.getByRole("img", { name: "sample.pdf · Page 1", exact: true }),
+    ).toBeVisible();
+    await expect(
+      preview.getByRole("button", { name: "다음 Page", exact: true }),
+    ).toBeDisabled();
+    await expect(preview.getByRole("alert")).toHaveCount(0);
+    await page.getByText("PDF 미리보기", { exact: true }).click();
+    await page
+      .getByLabel("첨부 파일 선택")
+      .setInputFiles({
+        name: "corrupt.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from("%PDF-1.4 invalid bytes"),
+      });
+    await page.getByText("PDF 미리보기", { exact: true }).last().click();
+    await expect(page.locator(".pdf-pages").getByRole("alert")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "corrupt.pdf 다운로드", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await cleanup(page, name);
+  }
+});
+test("Attachment upload, image preview, Offline reload, Viewer access and Snapshot copy", async ({
+  page,
+  browser,
+}) => {
+  const name = `Files ${Date.now()}`;
+  const viewerContext = await browser.newContext(),
+    viewer = await viewerContext.newPage();
+  try {
+    await createWorkspace(page, name);
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5WQAAAAASUVORK5CYII=",
+      "base64",
+    );
+    await page.getByLabel("첨부 파일 선택").setInputFiles({
+      name: "sample.png",
+      mimeType: "image/png",
+      buffer: png,
+    });
+    const image = page.getByAltText("sample.png", { exact: true });
+    await expect(image).toBeVisible();
+    await expect
+      .poll(() =>
+        image.evaluate((element) => (element as HTMLImageElement).naturalWidth),
+      )
+      .toBe(1);
+    await expect(page.locator(".attachment-caption small")).toContainText(
+      "서버 저장됨",
+    );
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await page.context().setOffline(true);
+    await page.reload();
+    await expect(
+      page.getByAltText("sample.png", { exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page
+          .getByAltText("sample.png", { exact: true })
+          .evaluate((element) => (element as HTMLImageElement).naturalWidth),
+      )
+      .toBe(1);
+    await page.getByLabel("첨부 파일 선택").setInputFiles({
+      name: "offline.ts",
+      mimeType: "text/plain",
+      buffer: Buffer.from("const offline = true;"),
+    });
+    await expect(page.getByText("offline.ts", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText("offline.ts", { exact: true })).toBeVisible();
+    await page.context().setOffline(false);
+    await page
+      .getByRole("button", { name: "서버 동기화 완료", exact: true })
+      .waitFor();
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .evaluate((element) => {
+        const transfer = new DataTransfer();
+        transfer.items.add(
+          new File(["pasted bytes"], "pasted.txt", { type: "text/plain" }),
+        );
+        element.dispatchEvent(
+          new ClipboardEvent("paste", {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: transfer,
+          }),
+        );
+      });
+    await expect(page.getByText("pasted.txt", { exact: true })).toBeVisible();
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .evaluate((element) => {
+        const transfer = new DataTransfer();
+        transfer.items.add(
+          new File(["dropped bytes"], "dropped.txt", { type: "text/plain" }),
+        );
+        const rect = element.getBoundingClientRect();
+        element.dispatchEvent(
+          new DragEvent("drop", {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: transfer,
+            clientX: rect.left + 12,
+            clientY: rect.top + 12,
+          }),
+        );
+      });
+    await expect(page.getByText("dropped.txt", { exact: true })).toBeVisible();
+    await viewer.goto(await createInvite(page, "viewer"));
+    await expect(
+      viewer.getByAltText("sample.png", { exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        viewer
+          .getByAltText("sample.png", { exact: true })
+          .evaluate((element) => (element as HTMLImageElement).naturalWidth),
+      )
+      .toBe(1);
+    await expect(
+      viewer.getByRole("button", { name: "파일 첨부", exact: true }),
+    ).toHaveCount(0);
+    await openPageTool(page, "기록");
+    const panel = page.getByRole("complementary", { name: "기록" });
+    await panel.getByLabel("기록 이름").fill("With attachments");
+    await panel.getByRole("button", { name: "현재 상태 기록하기" }).click();
+    await panel.getByRole("button", { name: /With attachments/ }).click();
+    await expect(
+      panel.getByAltText("sample.png", { exact: true }),
+    ).toBeVisible();
+    await panel.getByRole("button", { name: "새 Page로 복구" }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(page.getByLabel("Page 제목")).toHaveValue(/^시작하기 \(복구/);
+    await expect(
+      page.getByAltText("sample.png", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("offline.ts", { exact: true })).toBeVisible();
+  } finally {
+    await viewerContext.close();
+    await cleanup(page, name);
+  }
+});
+test("Command Palette creates and navigates Pages, saves themes and reuses Templates", async ({
+  page,
+}) => {
+  const name = `Commands templates ${Date.now()}`;
+  try {
+    await createWorkspace(page, name);
+    await page.keyboard.press("Control+k");
+    await page.getByLabel("Workspace 검색").fill(">dark");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.keyboard.press("Control+k");
+    await page.getByLabel("Workspace 검색").fill(">문서");
+    await page.keyboard.press("Enter");
+    await expect(page.getByLabel("Page 제목")).toHaveValue("제목 없음");
+    await page.getByLabel("Page 제목").fill("Command document");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Original document body");
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Template으로 새 Page", exact: true })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^회의록/ })
+      .click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("회의록");
+    await expect(
+      page.getByRole("heading", { name: "참석자", level: 2 }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Template으로 지정", exact: true })
+      .click();
+    const original = new URL(page.url()).searchParams.get("page");
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Template으로 새 Page", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("dialog")
+        .getByRole("button", { name: "회의록", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "회의록", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("page"))
+      .not.toBe(original);
+    await expect(
+      page.getByRole("heading", { name: "참석자", level: 2 }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page.getByRole("button", { name: "Page 복제", exact: true }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("회의록 (복사)");
+    await expect(
+      page.getByRole("heading", { name: "참석자", level: 2 }),
+    ).toBeVisible();
+    await page.keyboard.press("Control+k");
+    await page.getByLabel("Workspace 검색").fill(">open Command document");
+    await page.keyboard.press("Enter");
+    await expect(page.getByLabel("Page 제목")).toHaveValue("Command document");
+    await expect(
+      page.getByRole("textbox", { name: "문서 본문" }),
+    ).toContainText("Original document body");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.keyboard.press("Control+k");
+    await page.getByLabel("Workspace 검색").fill(">");
+    await expect(
+      page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Page로 이동", exact: true }),
+    ).toHaveClass(/selected/);
+  } finally {
+    await cleanup(page, name);
+  }
+});
 async function createWorkspace(
   page: Page,
   name = "Browser workspace",
@@ -435,7 +730,7 @@ test("Offline edits survive a browser reload and sync after reconnecting", async
   ).toBeVisible();
   await cleanup(page, name);
 });
-test("Mobile viewport supports reading, capture and comments without exposing full editing", async ({
+test("Mobile viewport supports full editing, capture and comments with touch", async ({
   browser,
 }) => {
   const name = `Mobile ${Date.now()}`,
@@ -449,7 +744,21 @@ test("Mobile viewport supports reading, capture and comments without exposing fu
     await createWorkspace(page, name);
     await expect(
       page.getByRole("textbox", { name: "문서 본문" }),
-    ).toHaveAttribute("contenteditable", "false");
+    ).toHaveAttribute("contenteditable", "true");
+    await page.getByLabel("Page 제목").fill("Mobile edited page");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Touch body editing");
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel("Page 제목")).toHaveValue(
+      "Mobile edited page",
+    );
+    await expect(
+      page.getByRole("textbox", { name: "문서 본문" }),
+    ).toContainText("Touch body editing");
     await page.getByRole("button", { name: "Quick Capture 열기" }).tap();
     await expect(page.getByLabel("빠른 메모")).toBeFocused();
     await page.getByLabel("빠른 메모").fill("Mobile capture");

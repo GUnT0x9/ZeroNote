@@ -104,6 +104,15 @@ export function SyncStatus({ data }: { data: WorkspaceData }) {
               다시 시도
             </button>
           )}
+          {status.kind !== "error" && (
+            <button
+              className="button button-small"
+              disabled={busy || status.kind === "offline"}
+              onClick={() => requestSync()}
+            >
+              지금 동기화
+            </button>
+          )}
           <span
             className="sync-status-offline"
             title={ui.offlineReady ? "Offline 준비됨" : "Offline 화면 준비 중"}

@@ -18,6 +18,7 @@ it("returns JSON with same-origin credentials and retries only reads or operatio
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(fetch.mock.calls[0]?.[1]).toMatchObject({
     credentials: "same-origin",
+    headers: { "X-ZeroNote-Editor-Protocol": "2" },
   });
 });
 it("turns cold-start HTML errors into a usable error without retrying unsafe posts", async () => {
@@ -28,6 +29,18 @@ it("turns cold-start HTML errors into a usable error without retrying unsafe pos
   await expect(requestJson("/invites", "POST", {})).rejects.toBeInstanceOf(
     ApiError,
   );
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+it("preserves compatibility errors without retrying or claiming a successful commit", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(
+      new Response('{"error":"Editor update required"}', { status: 426 }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  await expect(
+    requestJson("/commit", "POST", { operationId: "stable" }),
+  ).rejects.toMatchObject({ status: 426, message: "Editor update required" });
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 it("uses a stable operation ID across retries and rejects authorization errors immediately", async () => {

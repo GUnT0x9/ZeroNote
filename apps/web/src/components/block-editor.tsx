@@ -33,6 +33,9 @@ import {
   ArrowDown,
   Trash2,
   Copy,
+  Paperclip,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { safeLinkHref } from "@zeronote/shared";
 import {
@@ -43,6 +46,11 @@ import {
 } from "./editor-nodes";
 import type { DocumentSession } from "@/lib/documents";
 import type { LocalPage } from "@/lib/database";
+import { errorMessage } from "@/lib/database";
+import { stageAttachment } from "@/lib/attachments";
+import { requestSync } from "@/lib/sync";
+import { AttachmentNode } from "./attachment-node";
+import { useMobile } from "@/lib/hooks";
 
 interface Popup {
   kind: "slash" | "mention";
@@ -158,19 +166,24 @@ const COMMANDS: Command[] = [
 export function BlockEditor({
   session,
   fragmentName = "content",
+  attachmentPageId = session.id,
   editable,
   pages,
   onConvertTask,
 }: {
   session: Pick<DocumentSession, "id" | "document" | "awareness">;
   fragmentName?: string;
+  attachmentPageId?: string;
   editable: boolean;
   pages: LocalPage[];
   onConvertTask?: (
     title: string,
   ) => Promise<{ databaseId: string; rowId: string }>;
 }) {
+  const mobile = useMobile();
   const container = useRef<HTMLDivElement>(null),
+    fileInput = useRef<HTMLInputElement>(null),
+    uploadRef = useRef<(files: File[]) => void>(() => {}),
     popupRef = useRef<Popup | null>(null),
     pagesRef = useRef(pages),
     activeRef = useRef(0),
@@ -220,6 +233,7 @@ export function BlockEditor({
         Callout,
         PageMention,
         TaskLink,
+        AttachmentNode.configure({ pageId: attachmentPageId }),
         UniqueID.configure({
           types: [
             "paragraph",
@@ -242,6 +256,25 @@ export function BlockEditor({
         }),
       ],
       editorProps: {
+        handlePaste(_view, event) {
+          const files = [...(event.clipboardData?.files ?? [])];
+          if (!editable || !files.length) return false;
+          event.preventDefault();
+          uploadRef.current(files);
+          return true;
+        },
+        handleDrop(view, event) {
+          const files = [...(event.dataTransfer?.files ?? [])];
+          if (!editable || !files.length) return false;
+          event.preventDefault();
+          const target = view.posAtCoords({
+            left: event.clientX,
+            top: event.clientY,
+          });
+          if (target) editor?.commands.setTextSelection(target.pos);
+          uploadRef.current(files);
+          return true;
+        },
         attributes: {
           class: "document-editor",
           "aria-label": "문서 본문",
@@ -320,6 +353,30 @@ export function BlockEditor({
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editor, editable]);
+  uploadRef.current = (files) => {
+    void (async () => {
+      if (!editor?.isEditable) return;
+      for (const file of files) {
+        const record = await stageAttachment(
+          session.id,
+          file.name,
+          new Uint8Array(await file.arrayBuffer()),
+        );
+        if (!editor.isEditable || editor.isDestroyed) return;
+        editor
+          .chain()
+          .focus()
+          .insertContent({
+            type: "attachment",
+            attrs: { attachmentId: record.id, name: record.name },
+          })
+          .run();
+        requestSync();
+      }
+    })().catch((error) =>
+      useUiStore.getState().patch({ notice: errorMessage(error) }),
+    );
+  };
   executeRef.current = (index) => {
     const current = popupRef.current,
       item = itemsRef.current[index];
@@ -409,6 +466,49 @@ export function BlockEditor({
   if (!editor) return <div className="editor-skeleton" />;
   return (
     <div className="editor-stage" ref={container}>
+      {editable && (
+        <div className="editor-tools">
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            hidden
+            aria-label="첨부 파일 선택"
+            onChange={(event) => {
+              uploadRef.current([...(event.target.files ?? [])]);
+              event.target.value = "";
+            }}
+          />
+          <button
+            className="button button-small"
+            onClick={() => fileInput.current?.click()}
+          >
+            <Paperclip size={14} />
+            파일 첨부
+          </button>
+          {mobile && (
+            <>
+              <button
+                className="icon-button"
+                aria-label="Undo"
+                disabled={!editor.can().undo()}
+                onClick={() => editor.chain().focus().undo().run()}
+              >
+                <Undo2 size={18} />
+              </button>
+              <button
+                className="icon-button"
+                aria-label="Redo"
+                disabled={!editor.can().redo()}
+                onClick={() => editor.chain().focus().redo().run()}
+              >
+                <Redo2 size={18} />
+              </button>
+            </>
+          )}
+          <span>4MiB 이하 · 붙여넣기 또는 끌어놓기</span>
+        </div>
+      )}
       <EditorContent editor={editor} />
       {editable && (
         <div className="block-controls" style={{ top: blockTop }}>

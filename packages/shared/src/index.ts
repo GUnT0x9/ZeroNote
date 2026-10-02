@@ -1,5 +1,7 @@
 import { z } from "zod";
 import * as Y from "yjs";
+import { ExportAttachmentSchema } from "./attachments";
+import { setXmlAttribute } from "./xml";
 
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 // Allow JSON/base64 and WebSocket framing; decoded documents still use 5 MiB.
@@ -125,9 +127,10 @@ export const TaskRowSchema = z.object({
 export type TaskRow = z.infer<typeof TaskRowSchema>;
 export const ExportSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     exportedAt: z.string(),
     name: NameSchema,
+    attachments: z.array(ExportAttachmentSchema).max(2000).optional(),
     pages: z
       .array(
         z
@@ -412,13 +415,13 @@ export function cloneDocumentContent(
       }
       const element = new Y.XmlElement(node.nodeName);
       for (const [key, value] of Object.entries(node.getAttributes()))
-        if (typeof value === "string")
-          element.setAttribute(
-            key,
-            ["pageId", "databaseId"].includes(key) && value === oldPageId
-              ? newPageId
-              : value,
-          );
+        setXmlAttribute(
+          element,
+          key,
+          ["pageId", "databaseId"].includes(key) && value === oldPageId
+            ? newPageId
+            : structuredClone(value),
+        );
       element.insert(
         0,
         node
@@ -441,7 +444,12 @@ export function cloneDocumentContent(
   };
   target.getText("title").insert(0, source.getText("title").toString());
   copyFragment("content");
-  for (const name of ["databaseConfig", "databaseProperties", "databaseViews"])
+  for (const name of [
+    "databaseConfig",
+    "databaseProperties",
+    "databaseViews",
+    "pageSettings",
+  ])
     for (const [key, value] of source.getMap<unknown>(name))
       target
         .getMap<unknown>(name)
@@ -461,3 +469,6 @@ export function cloneDocumentContent(
 }
 
 export * from "./database";
+export * from "./attachments";
+export * from "./templates";
+export * from "./editor-protocol";

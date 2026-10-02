@@ -6,6 +6,13 @@ import { env } from "./env";
 import { bytesToBase64, createRecoveryKey, sha256Hex } from "@zeronote/shared";
 import * as Y from "yjs";
 import type { FastifyInstance } from "fastify";
+import {
+  getAttachmentIds,
+  STORAGE_LIMIT_BYTES,
+  WORKSPACE_ATTACHMENT_BYTES,
+  EDITOR_PROTOCOL,
+  EDITOR_PROTOCOL_HEADER,
+} from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
 const created: string[] = [];
@@ -19,6 +26,7 @@ async function request(
   url: string,
   payload?: unknown,
   cookie = "",
+  editorProtocol = EDITOR_PROTOCOL,
 ) {
   return app.inject({
     method,
@@ -28,6 +36,7 @@ async function request(
       ...(payload === undefined ? {} : { "content-type": "application/json" }),
       origin: env.WEB_ORIGIN,
       cookie,
+      [EDITOR_PROTOCOL_HEADER]: String(editorProtocol),
     },
   });
 }
@@ -138,6 +147,499 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const id of created) await repository.deleteWorkspace(id);
   await app.close();
+});
+
+it("protects new blocks from legacy reads, offline deletions, retries and Snapshot previews", async () => {
+  const owner = await actor(),
+    space = await workspace(owner),
+    target = await page(owner, space.id);
+  const endpoint = `/v1/documents/${target.id}`;
+  expect(
+    (await request("GET", endpoint, undefined, owner.cookie, 1)).statusCode,
+  ).toBe(200);
+  const doc = new Y.Doc(),
+    attachment = new Y.XmlElement("attachment");
+  doc.getXmlFragment("content").insert(0, [attachment]);
+  const operationId = crypto.randomUUID(),
+    input = { operationId, update: bytesToBase64(Y.encodeStateAsUpdate(doc)) };
+  expect(
+    (await request("POST", `${endpoint}/commit`, input, owner.cookie, 1))
+      .statusCode,
+  ).toBe(426);
+  expect(
+    (await request("POST", `${endpoint}/commit`, input, owner.cookie))
+      .statusCode,
+  ).toBe(200);
+  for (const path of [endpoint, `${endpoint}/realtime-token`])
+    expect(
+      (
+        await request(
+          path === endpoint ? "GET" : "POST",
+          path,
+          undefined,
+          owner.cookie,
+          1,
+        )
+      ).statusCode,
+    ).toBe(426);
+  expect(
+    (await request("POST", `${endpoint}/commit`, input, owner.cookie, 1))
+      .statusCode,
+  ).toBe(426);
+  const snapshot = (
+    await request(
+      "POST",
+      `/v1/pages/${target.id}/snapshots`,
+      { operationId: crypto.randomUUID(), name: "New blocks" },
+      owner.cookie,
+    )
+  ).json<{ id: string }>();
+  expect(
+    (
+      await request(
+        "GET",
+        `/v1/snapshots/${snapshot.id}`,
+        undefined,
+        owner.cookie,
+        1,
+      )
+    ).statusCode,
+  ).toBe(426);
+  expect(
+    (
+      await request(
+        "GET",
+        `/v1/snapshots/${snapshot.id}`,
+        undefined,
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  doc.getXmlFragment("content").delete(0, 1);
+  const removal = {
+    operationId: crypto.randomUUID(),
+    update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+  };
+  expect(
+    (await request("POST", `${endpoint}/commit`, removal, owner.cookie, 1))
+      .statusCode,
+  ).toBe(426);
+  const unchanged = new Y.Doc();
+  for (const update of await repository.loadDocument(target.id))
+    Y.applyUpdate(unchanged, update);
+  expect(unchanged.getXmlFragment("content").length).toBe(1);
+  expect(
+    (await request("POST", `${endpoint}/commit`, removal, owner.cookie))
+      .statusCode,
+  ).toBe(200);
+  // The minimum stays pinned even when a current editor intentionally removes every new block.
+  await repository.documents.compact(target.id);
+  expect(
+    (await request("GET", endpoint, undefined, owner.cookie, 1)).statusCode,
+  ).toBe(426);
+  expect(
+    (await request("GET", endpoint, undefined, owner.cookie, 999)).statusCode,
+  ).toBe(400);
+  doc.destroy();
+  unchanged.destroy();
+});
+
+describe("permission-bound durable attachments", () => {
+  it("persists byte-identical files, deduplicates retries and rejects ID collisions", async () => {
+    const owner = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id);
+    const payload = {
+      id: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      name: "../../소스\r\n.ts",
+      data: bytesToBase64(new TextEncoder().encode("const value = 1;")),
+    };
+    const endpoint = `/v1/pages/${target.id}/attachments`;
+    const first = await request("POST", endpoint, payload, owner.cookie);
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({
+      id: payload.id,
+      pageId: target.id,
+      name: "소스.ts",
+      mime: "text/plain",
+      size: 16,
+    });
+    expect(
+      (await request("POST", endpoint, payload, owner.cookie)).json(),
+    ).toEqual(first.json());
+    expect(
+      (
+        await request(
+          "GET",
+          `/v1/attachments/${payload.id}`,
+          undefined,
+          owner.cookie,
+        )
+      ).json(),
+    ).toMatchObject({ data: payload.data });
+    expect(
+      (
+        await request(
+          "GET",
+          `/v1/attachments/${payload.id}/content`,
+          undefined,
+          owner.cookie,
+        )
+      ).body,
+    ).toBe("const value = 1;");
+    expect(
+      (
+        await request(
+          "POST",
+          endpoint,
+          {
+            ...payload,
+            data: bytesToBase64(new TextEncoder().encode("changed")),
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(409);
+    expect(
+      (
+        await request(
+          "POST",
+          endpoint,
+          { ...payload, id: crypto.randomUUID() },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(409);
+    expect(await repository.attachments.list(target.id)).toHaveLength(1);
+  });
+  it("honors Viewer/Commenter access, unrelated-page denial and immediate revoke", async () => {
+    const owner = await actor(),
+      viewer = await actor(),
+      commenter = await actor(),
+      stranger = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id);
+    const payload = {
+      id: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      name: "x.txt",
+      data: "eA==",
+    };
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/pages/${target.id}/attachments`,
+          payload,
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+    for (const [person, role] of [
+      [viewer, "viewer"],
+      [commenter, "commenter"],
+    ] as const) {
+      const invitation = await invite(owner, target.id, role);
+      await request(
+        "POST",
+        `/v1/invites/${invitation.id}/redeem`,
+        { secret: invitation.secret },
+        person.cookie,
+      );
+      expect(
+        (
+          await request(
+            "GET",
+            `/v1/attachments/${payload.id}`,
+            undefined,
+            person.cookie,
+          )
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await request(
+            "POST",
+            `/v1/pages/${target.id}/attachments`,
+            {
+              ...payload,
+              id: crypto.randomUUID(),
+              operationId: crypto.randomUUID(),
+            },
+            person.cookie,
+          )
+        ).statusCode,
+      ).toBe(403);
+      expect(
+        (
+          await request(
+            "DELETE",
+            `/v1/attachments/${payload.id}`,
+            undefined,
+            person.cookie,
+          )
+        ).statusCode,
+      ).toBe(403);
+      expect(
+        (
+          await request(
+            "GET",
+            `/v1/workspaces/${space.id}/attachments/storage`,
+            undefined,
+            person.cookie,
+          )
+        ).statusCode,
+      ).toBe(403);
+    }
+    expect(
+      (
+        await request(
+          "GET",
+          `/v1/attachments/${payload.id}/content`,
+          undefined,
+          stranger.cookie,
+        )
+      ).statusCode,
+    ).toBe(403);
+    const member = await repository.getMembership(viewer.id, space.id);
+    const grant = (await repository.listPageGrants(target.id)).find(
+      (value) => value.identityId === member?.identityId,
+    );
+    expect(grant).toBeDefined();
+    await request(
+      "DELETE",
+      `/v1/pages/${target.id}/grants/${grant!.id}`,
+      undefined,
+      owner.cookie,
+    );
+    expect(
+      (
+        await request(
+          "GET",
+          `/v1/attachments/${payload.id}`,
+          undefined,
+          viewer.cookie,
+        )
+      ).statusCode,
+    ).toBe(403);
+  });
+  it("serves bounded byte ranges and active content as a safe download", async () => {
+    const owner = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id);
+    const payload = {
+      id: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      name: "evil.svg",
+      data: bytesToBase64(new TextEncoder().encode("<svg onload='bad()'/>")),
+    };
+    await request(
+      "POST",
+      `/v1/pages/${target.id}/attachments`,
+      payload,
+      owner.cookie,
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/attachments/${payload.id}/content`,
+      headers: { cookie: owner.cookie, range: "bytes=0-3" },
+    });
+    expect(response.statusCode).toBe(206);
+    expect(response.body).toBe("<svg");
+    expect(response.headers["content-type"]).toBe("application/octet-stream");
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.headers["content-disposition"]).toContain("attachment;");
+    expect(
+      (
+        await app.inject({
+          method: "GET",
+          url: `/v1/attachments/${payload.id}/content`,
+          headers: { cookie: owner.cookie, range: "bytes=999-" },
+        })
+      ).statusCode,
+    ).toBe(416);
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/pages/${target.id}/attachments`,
+          {
+            ...payload,
+            id: crypto.randomUUID(),
+            operationId: crypto.randomUUID(),
+            data: "bad?",
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(400);
+  });
+  it("keeps local clients retryable when global and Workspace storage is exhausted", async () => {
+    const owner = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id);
+    const payload = {
+      id: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      name: "x.txt",
+      data: "eA==",
+    };
+    const capacity = vi
+      .spyOn(repository.documents, "capacity")
+      .mockResolvedValue({
+        bytes: STORAGE_LIMIT_BYTES,
+        warning: true,
+        blocked: true,
+      });
+    try {
+      expect(
+        (
+          await request(
+            "POST",
+            `/v1/pages/${target.id}/attachments`,
+            payload,
+            owner.cookie,
+          )
+        ).statusCode,
+      ).toBe(507);
+    } finally {
+      capacity.mockRestore();
+    }
+    const usage = vi.spyOn(repository.attachments, "usage").mockResolvedValue({
+      bytes: WORKSPACE_ATTACHMENT_BYTES,
+      count: 1,
+      retained: 0,
+      limit: WORKSPACE_ATTACHMENT_BYTES,
+      fileLimit: 4194304,
+    });
+    try {
+      expect(
+        (
+          await request(
+            "POST",
+            `/v1/pages/${target.id}/attachments`,
+            payload,
+            owner.cookie,
+          )
+        ).statusCode,
+      ).toBe(507);
+    } finally {
+      usage.mockRestore();
+    }
+    expect(await repository.attachments.list(target.id)).toHaveLength(0);
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/pages/${target.id}/attachments`,
+          payload,
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+  });
+  it("restores Snapshot files with new Page-scoped IDs even after Trash and file removal", async () => {
+    const owner = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id);
+    const payload = {
+      id: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      name: "old.txt",
+      data: "eA==",
+    };
+    await request(
+      "POST",
+      `/v1/pages/${target.id}/attachments`,
+      payload,
+      owner.cookie,
+    );
+    const doc = new Y.Doc();
+    doc.getText("title").insert(0, "Attached");
+    const node = new Y.XmlElement("attachment");
+    node.setAttribute("attachmentId", payload.id);
+    node.setAttribute("name", "old.txt");
+    doc.getXmlFragment("content").insert(0, [node]);
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/documents/${target.id}/commit`,
+          {
+            operationId: crypto.randomUUID(),
+            update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+    const snapshot = (
+      await request(
+        "POST",
+        `/v1/pages/${target.id}/snapshots`,
+        { operationId: crypto.randomUUID(), name: "With file" },
+        owner.cookie,
+      )
+    ).json<{ id: string }>();
+    await request(
+      "DELETE",
+      `/v1/attachments/${payload.id}`,
+      undefined,
+      owner.cookie,
+    );
+    await request(
+      "POST",
+      "/v1/sync/page",
+      {
+        operationId: crypto.randomUUID(),
+        pageId: target.id,
+        workspaceId: space.id,
+        expectedRevision: 0,
+        action: "trash",
+      },
+      owner.cookie,
+    );
+    const operationId = crypto.randomUUID();
+    const restore = await request(
+      "POST",
+      `/v1/snapshots/${snapshot.id}/restore-copy`,
+      { operationId },
+      owner.cookie,
+    );
+    expect(restore.statusCode).toBe(200);
+    const copy = restore.json<{ id: string }>();
+    const files = await repository.attachments.list(copy.id);
+    expect(files).toHaveLength(1);
+    expect(files[0]?.id).not.toBe(payload.id);
+    expect(
+      (
+        await request(
+          "GET",
+          `/v1/attachments/${files[0]!.id}`,
+          undefined,
+          owner.cookie,
+        )
+      ).json(),
+    ).toMatchObject({ data: payload.data });
+    const decoded = new Y.Doc();
+    for (const update of await repository.loadDocument(copy.id))
+      Y.applyUpdate(decoded, update);
+    expect(getAttachmentIds(decoded)).toEqual([files[0]!.id]);
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/snapshots/${snapshot.id}/restore-copy`,
+          { operationId },
+          owner.cookie,
+        )
+      ).json(),
+    ).toEqual(copy);
+    expect(await repository.attachments.list(copy.id)).toHaveLength(1);
+    doc.destroy();
+    decoded.destroy();
+  });
 });
 
 describe("Accountless API integration", () => {

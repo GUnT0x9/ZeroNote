@@ -8,14 +8,28 @@ import {
   base64ToBytes,
   bytesToBase64,
   getDocumentProjection,
+  getAttachmentIds,
+  remapAttachmentIds,
+  MAX_WORKSPACE_ATTACHMENTS,
+  WORKSPACE_ATTACHMENT_BYTES,
+  detectAttachmentMime,
+  safeAttachmentName,
+  cloneDocumentContent,
+  setPageTemplate,
   type WorkspaceExport,
   type PageOperation,
 } from "@zeronote/shared";
-import { database, type LocalWorkspace, type LocalPage } from "./database";
+import {
+  database,
+  type LocalWorkspace,
+  type LocalPage,
+  type LocalAttachment,
+} from "./database";
 import { openDocument, flushDocuments, removeLocalDocument } from "./documents";
 import { availablePages } from "./search";
 import { useUiStore } from "./ui-store";
 import { requireBetaAccess } from "./beta";
+import { attachmentDigest, loadAttachment } from "./attachments";
 let sequence = 0;
 export async function enqueuePageOperation(
   payload: PageOperation,
@@ -97,6 +111,96 @@ export function insertParagraphs(document: Y.Doc, text: string): void {
     fragment.insert(fragment.length, paragraphs);
   });
 }
+export async function duplicateLocalPage(
+  source: LocalPage,
+  title = `${source.title} (복사)`,
+): Promise<LocalPage> {
+  if (source.role !== "owner" || source.accessLost || source.deletedAt)
+    throw new Error("Workspace Owner의 사용 가능한 Page를 복제해주세요.");
+  const session = await openDocument(source),
+    id = crypto.randomUUID(),
+    copy = cloneDocumentContent(session.document, source.id, id);
+  try {
+    const page: LocalPage = {
+      id,
+      workspaceId: source.workspaceId,
+      parentId: source.parentId,
+      kind: source.kind,
+      title: title.slice(0, 500),
+      revision: 0,
+      deletedAt: null,
+      createdAt: new Date().toISOString(),
+      isInbox: false,
+      role: "owner",
+    };
+    replaceSharedText(copy.getText("title"), page.title);
+    setPageTemplate(copy, false);
+    const copiedFiles: LocalAttachment[] = [];
+    const ids = new Map<string, string>();
+    for (const fileId of getAttachmentIds(copy)) {
+      const file = await loadAttachment(fileId, source.id),
+        newId = crypto.randomUUID();
+      ids.set(fileId, newId);
+      copiedFiles.push({
+        ...file,
+        id: newId,
+        pageId: id,
+        createdAt: page.createdAt,
+        operationId: crypto.randomUUID(),
+        status: "pending" as const,
+        error: undefined,
+      });
+    }
+    remapAttachmentIds(copy, ids);
+    await database.transaction(
+      "rw",
+      [
+        database.pages,
+        database.documents,
+        database.operations,
+        database.attachments,
+      ],
+      async () => {
+        const existing = await database.attachments
+          .where("workspaceId")
+          .equals(page.workspaceId)
+          .toArray();
+        if (
+          existing.length + copiedFiles.length > MAX_WORKSPACE_ATTACHMENTS ||
+          [...existing, ...copiedFiles].reduce(
+            (sum, file) => sum + file.size,
+            0,
+          ) > WORKSPACE_ATTACHMENT_BYTES
+        )
+          throw new Error("복제할 첨부 파일의 저장 한도를 초과했습니다.");
+        await database.pages.add(page);
+        await enqueuePageOperation({
+          operationId: crypto.randomUUID(),
+          workspaceId: page.workspaceId,
+          pageId: id,
+          expectedRevision: 0,
+          action: "create",
+          page,
+        });
+        await database.documents.add({
+          id,
+          workspaceId: page.workspaceId,
+          update: Y.encodeStateAsUpdate(copy),
+          ...getDocumentProjection(copy),
+          generation: 1,
+          committedGeneration: 0,
+          state: "saved",
+          updatedAt: Date.now(),
+        });
+        await database.attachments.bulkAdd(copiedFiles);
+      },
+    );
+    await openDocument(page);
+    return page;
+  } finally {
+    copy.destroy();
+  }
+}
 export async function changePageStructure(
   page: LocalPage,
   action: "move" | "trash" | "restore",
@@ -143,8 +247,21 @@ export async function exportWorkspace(
     await database.pages.where("workspaceId").equals(workspaceId).toArray(),
   );
   const exported: WorkspaceExport["pages"] = [];
+  const attachments: NonNullable<WorkspaceExport["attachments"]> = [];
   for (const page of pages) {
     const session = await openDocument(page);
+    for (const id of getAttachmentIds(session.document)) {
+      const file = await loadAttachment(id, page.id);
+      const {
+        workspaceId: _workspace,
+        operationId: _operation,
+        status: _status,
+        error: _error,
+        data,
+        ...metadata
+      } = file;
+      attachments.push({ ...metadata, data: bytesToBase64(data) });
+    }
     exported.push({
       id: page.id,
       parentId: page.parentId,
@@ -155,7 +272,8 @@ export async function exportWorkspace(
     });
   }
   return ExportSchema.parse({
-    schemaVersion: 1,
+    schemaVersion: attachments.length ? 2 : 1,
+    ...(attachments.length ? { attachments } : {}),
     exportedAt: new Date().toISOString(),
     name: workspace.name,
     pages: exported,
@@ -167,10 +285,18 @@ export async function importWorkspace(
   await requireBetaAccess();
   const parsed = ExportSchema.parse(input);
   validateImportedTree(parsed);
+  const importedFiles = await validateImportedAttachments(parsed);
   const documents = parsed.pages.map((page) => {
     const document = new Y.Doc({ gc: false });
     try {
       Y.applyUpdate(document, base64ToBytes(page.document));
+      for (const id of getAttachmentIds(document))
+        if (
+          !importedFiles.some(
+            (file) => file.id === id && file.pageId === page.id,
+          )
+        )
+          throw new Error("첨부 파일의 Page 또는 파일 정보가 없습니다.");
       return document;
     } catch {
       document.destroy();
@@ -189,6 +315,9 @@ export async function importWorkspace(
     };
   const ids = new Map(
     parsed.pages.map((page) => [page.id, crypto.randomUUID()]),
+  );
+  const fileIds = new Map(
+    importedFiles.map((file) => [file.id, crypto.randomUUID()]),
   );
   try {
     await database.workspaces.put(workspace);
@@ -223,6 +352,7 @@ export async function importWorkspace(
       const document = documents[index];
       if (document) {
         remapReferences(document, ids);
+        remapAttachmentIds(document, fileIds);
         await database.documents.put({
           id,
           workspaceId: workspace.id,
@@ -235,6 +365,19 @@ export async function importWorkspace(
         });
         await openDocument(page);
       }
+    }
+    for (const file of importedFiles) {
+      const pageId = ids.get(file.pageId),
+        id = fileIds.get(file.id);
+      if (!pageId || !id) throw new Error("파일의 Page 정보가 없습니다.");
+      await database.attachments.add({
+        ...file,
+        id,
+        pageId,
+        workspaceId: workspace.id,
+        status: "pending",
+        operationId: crypto.randomUUID(),
+      });
     }
     if (!parsed.pages.some((page) => page.isInbox))
       await createLocalPage(workspace.id, "받은 메모", "document", null, true);
@@ -289,6 +432,34 @@ export function validateImportedTree(input: WorkspaceExport): void {
     importDepth(page, input);
   }
 }
+export async function validateImportedAttachments(input: WorkspaceExport) {
+  const files = input.attachments ?? [],
+    pageIds = new Set(input.pages.map((page) => page.id));
+  if (
+    files.length > MAX_WORKSPACE_ATTACHMENTS ||
+    files.reduce((sum, file) => sum + file.size, 0) > WORKSPACE_ATTACHMENT_BYTES
+  )
+    throw new Error("Import 파일의 첨부 저장 한도를 초과했습니다.");
+  if (new Set(files.map((file) => file.id)).size !== files.length)
+    throw new Error("중복된 파일 ID가 있습니다.");
+  const imported = [];
+  for (const file of files) {
+    const data = base64ToBytes(file.data);
+    if (
+      !pageIds.has(file.pageId) ||
+      data.length !== file.size ||
+      (await attachmentDigest(data)) !== file.hash
+    )
+      throw new Error("Import 파일에 손상된 첨부 파일이 있습니다.");
+    imported.push({
+      ...file,
+      name: safeAttachmentName(file.name),
+      mime: detectAttachmentMime(data, file.name),
+      data,
+    });
+  }
+  return imported;
+}
 function importDepth(
   page: WorkspaceExport["pages"][number],
   input: WorkspaceExport,
@@ -323,11 +494,16 @@ export async function deleteLocalWorkspace(workspaceId: string): Promise<void> {
       database.operations,
       database.comments,
       database.pendingComments,
+      database.attachments,
     ],
     async () => {
       await database.workspaces.delete(workspaceId);
       await database.pages.bulkDelete(ids);
       await database.documents.bulkDelete(ids);
+      await database.attachments
+        .where("workspaceId")
+        .equals(workspaceId)
+        .delete();
       await database.operations
         .filter((operation) => operation.payload.workspaceId === workspaceId)
         .delete();

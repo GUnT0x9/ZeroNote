@@ -2735,3 +2735,145 @@ small,
     width: 100%;
   }
 }
+/* Attachments use the same page permissions and local persistence as their document. */
+.editor-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.attachment-block {
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.attachment-block img,
+.attachment-block video {
+  display: block;
+  max-width: 100%;
+  max-height: 560px;
+  margin: auto;
+  object-fit: contain;
+}
+.attachment-block audio {
+  display: block;
+  width: 100%;
+  padding: 8px;
+}
+.attachment-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.attachment-caption span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-caption small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.attachment-text {
+  padding: 10px 12px;
+}
+.attachment-text pre {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.attachment-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 767px) {
+  .editor-tools {
+    flex-wrap: wrap;
+  }
+  .editor-tools button {
+    min-height: 44px;
+  }
+  .attachment-caption {
+    flex-wrap: wrap;
+  }
+  .attachment-caption small {
+    width: 100%;
+    order: 3;
+  }
+  .editor-tools .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .block-controls {
+    position: sticky;
+    top: auto !important;
+    bottom: 0;
+    left: 0;
+    opacity: 1;
+    width: max-content;
+    background: var(--background);
+    border-top: 1px solid var(--border);
+    gap: 4px;
+  }
+  .block-controls .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .block-controls .block-menu {
+    top: auto;
+    bottom: 44px;
+    left: 0;
+  }
+}
+.templates-list {
+  padding: 8px 24px 24px;
+}
+.templates-list h3 {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+.template-option {
+  display: block;
+  text-align: left;
+  width: 100%;
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.template-option:hover {
+  background: var(--surface);
+}
+.template-option strong,
+.template-option small {
+  display: block;
+}
+.template-option small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pdf-pages canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 12px auto;
+}
+.pdf-page-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 0;
+}

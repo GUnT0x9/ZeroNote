@@ -99,6 +99,37 @@ describe("sync presentation", () => {
 });
 
 describe("workspace sync presentation", () => {
+  it("waits for attachment commits and reports retained upload errors", () => {
+    const pending: WorkspaceData = {
+      ...data,
+      attachmentStates: [
+        { id: crypto.randomUUID(), pageId, status: "pending" },
+      ],
+    };
+    expect(getWorkspaceSyncStatus(pending, workspaceId, online).kind).toBe(
+      "saving",
+    );
+    expect(
+      getWorkspaceSyncStatus(
+        { ...pending, attachmentStates: [] },
+        workspaceId,
+        online,
+      ).kind,
+    ).toBe("saved");
+    expect(
+      getWorkspaceSyncStatus(
+        {
+          ...pending,
+          attachmentStates: pending.attachmentStates!.map((file) => ({
+            ...file,
+            error: "quota exceeded",
+          })),
+        },
+        workspaceId,
+        online,
+      ),
+    ).toMatchObject({ kind: "error", detail: "quota exceeded" });
+  });
   it("includes uncommitted documents and resolves after a durable acknowledgment", () => {
     const pending = {
       ...data,

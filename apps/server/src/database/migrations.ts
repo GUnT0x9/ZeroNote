@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 import type { Pool } from "pg";
-const MIGRATIONS = ["001-alpha.sql", "002-beta.sql"] as const;
+const MIGRATIONS = [
+  "001-alpha.sql",
+  "002-beta.sql",
+  "003-attachments.sql",
+  "004-editor-protocol.sql",
+] as const;
 export async function migrateDatabase(pool: Pool): Promise<void> {
   const client = await pool.connect();
   try {

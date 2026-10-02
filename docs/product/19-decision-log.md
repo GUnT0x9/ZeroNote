@@ -67,3 +67,13 @@ Status: Accepted Alpha specification
 Confirmed: 미구현 항목 확인 후 구현과 Production 배포까지 진행한다. Accepted: 체크리스트 P0의 남은 일반 Database 속성·Filter/Sort/Group·Calendar/Timeline/Gallery부터 구현한다. 기존 즐겨찾기·Quote/Divider·Snapshot 기록은 구현 증거에 따라 완료 상태를 바로잡는다.
 
 Accepted: 기존 Task Row와 문서 API를 재사용하고 일반 Database 모드/속성/View를 Yjs에 추가한다. 기존 문서 자동 변환과 DB Migration은 하지 않는다. Snapshot은 확장 데이터를 새 문서에 복제한다. Gallery는 실제 속성 카드이며 Media 업로드는 후속이다. 날짜 계산은 날짜 전용 값이며 날짜 없는 Row를 숨기지 않는다.
+
+### DEC-040 — 전체 미완료 항목 완료 목표
+
+Confirmed: 사용자가 P4 언급을 정정하고 체크되지 않은 모든 기능 구현·배포를 요청했다. 우선순위는 실행 순서이며 제외 범위가 아니다. 148개 요구를 `docs/full-completion.md`에서 실제 구현과 검증 증거로 추적하고 전체 완료 전 goal을 종료하지 않는다.
+
+### DEC-041 — 파일 기반과 Editor 호환성
+
+Accepted: 무료 Beta는 PostgreSQL Bytea에 파일을 저장하고 4MiB/파일, Workspace 25MiB/200개와 서버 용량 한도를 적용한다. 로컬 bytes/Hash/Operation ID를 먼저 저장한다. 파일은 Page 권한을 상속하고 Snapshot/Page 복제는 새 파일 ID로 복사한다. Export version 2에 참조 파일을 포함하고 기존 version 1 Import를 유지한다. 파일 삭제는 Snapshot 복구용 bytes를 보존한다. Storage 관리 UI/영구 정리는 별도 요구로 남는다.
+
+Accepted: 새 Block을 이해하지 못하는 구버전 Yjs Editor의 삭제를 막기 위해 Editor Protocol 2와 서버 Checkpoint 최소 버전을 사용한다. 새 기능 방송 전에 구버전 연결을 종료하고 REST/WS/Snapshot에서 426으로 앱 새로고침을 안내한다. 기존 Block 문서는 버전 1을 허용한다. 파일/PDF/Template/Command/Mobile Editor 구현과 검증은 `docs/editor-files-release.md`를 따른다.

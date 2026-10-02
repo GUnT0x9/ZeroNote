@@ -173,13 +173,13 @@ export function HistoryPanel({ page }: { page: LocalPage }) {
                     operationId,
                   }),
                 );
-                await database.pages.put({ ...restored, role: "owner" });
+                // Finish metadata refresh before opening the copy; an earlier refresh may omit it.
+                await synchronize();
                 ui.select(restored.workspaceId, restored.id);
                 ui.patch({
                   panel: null,
                   notice: "기록을 새 Page로 복구했습니다.",
                 });
-                await synchronize();
               })
             }
           >
@@ -221,7 +221,12 @@ function SnapshotPreview({
   return (
     <div>
       <strong>{session.document.getText("title").toString()}</strong>
-      <BlockEditor session={session} editable={false} pages={[]} />
+      <BlockEditor
+        session={session}
+        attachmentPageId={detail.pageId}
+        editable={false}
+        pages={[]}
+      />
       {!!rows.length && (
         <>
           <label className="field-label">

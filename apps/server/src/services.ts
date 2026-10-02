@@ -4,6 +4,9 @@ import {
   CHALLENGE_LIFETIME_MS,
   SESSION_LIFETIME_MS,
   MAX_DOCUMENT_BYTES,
+  EDITOR_PROTOCOL,
+  EDITOR_UPDATE_MESSAGE,
+  getDocumentEditorProtocol,
   sha256Hex,
   normalizeRecoveryKey,
   canEdit,
@@ -380,10 +383,26 @@ export class DocumentService {
       Y.applyUpdate(document, update);
     return document;
   }
-  async read(deviceId: string, pageId: string): Promise<string> {
+  async assertProtocol(
+    pageId: string,
+    editorProtocol: number,
+  ): Promise<number> {
+    const required = await this.repository.documents.minimumProtocol(pageId);
+    if (editorProtocol < required)
+      throw new DomainError(426, EDITOR_UPDATE_MESSAGE);
+    return required;
+  }
+  async read(
+    deviceId: string,
+    pageId: string,
+    editorProtocol = EDITOR_PROTOCOL,
+  ): Promise<string> {
     await this.access.page(deviceId, pageId);
+    await this.assertProtocol(pageId, editorProtocol);
     const document = await this.load(pageId);
     try {
+      if (editorProtocol < getDocumentEditorProtocol(document))
+        throw new DomainError(426, EDITOR_UPDATE_MESSAGE);
       return bytesToBase64(Y.encodeStateAsUpdate(document));
     } finally {
       document.destroy();
@@ -394,6 +413,7 @@ export class DocumentService {
     pageId: string,
     operationId: string,
     encoded: string,
+    editorProtocol = EDITOR_PROTOCOL,
   ): Promise<Uint8Array> {
     await this.access.editor(deviceId, pageId);
     let update: Uint8Array;
@@ -404,7 +424,12 @@ export class DocumentService {
     }
     if (update.byteLength > MAX_DOCUMENT_BYTES)
       throw new DomainError(413, "문서 크기 제한을 초과했습니다.");
-    await this.repository.appendUpdate(pageId, operationId, update);
+    await this.repository.appendUpdate(
+      pageId,
+      operationId,
+      update,
+      editorProtocol,
+    );
     return update;
   }
 }

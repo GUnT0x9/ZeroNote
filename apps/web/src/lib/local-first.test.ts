@@ -28,9 +28,12 @@ import {
   deleteLocalWorkspace,
   validateImportedTree,
   changePageStructure,
+  duplicateLocalPage,
 } from "./workspace";
 import { openDocument, flushDocuments } from "./documents";
 import { searchLocalPages, availablePages, retainEqualItems } from "./search";
+import { stageAttachment, loadAttachment } from "./attachments";
+import { getAttachmentIds } from "@zeronote/shared";
 vi.mock("./api", () => ({
   api: vi.fn(async () => {
     throw new Error("Network disabled in local tests");
@@ -40,6 +43,48 @@ vi.mock("./api", () => ({
   },
 }));
 const created: string[] = [];
+it("exports and imports attachment bytes with remapped Page/file IDs and rejects corrupt files", async () => {
+  const { workspace: source, page } = await workspace();
+  const session = await openDocument(page),
+    file = await stageAttachment(
+      page.id,
+      "한글.ts",
+      new TextEncoder().encode("const value=1;"),
+    );
+  const node = new Y.XmlElement("attachment");
+  node.setAttribute("attachmentId", file.id);
+  session.document.getXmlFragment("content").insert(0, [node]);
+  const exported = await exportWorkspace(source.id);
+  expect(exported.schemaVersion).toBe(2);
+  expect(exported.attachments).toHaveLength(1);
+  expect(JSON.stringify(exported)).not.toContain(file.operationId);
+  const imported = await importWorkspace(exported);
+  created.push(imported.workspace.id);
+  const copy = (
+    await database.pages
+      .where("workspaceId")
+      .equals(imported.workspace.id)
+      .toArray()
+  ).find((value) => value.title === page.title)!;
+  const copied = await openDocument(copy),
+    ids = getAttachmentIds(copied.document);
+  expect(ids).toHaveLength(1);
+  expect(ids[0]).not.toBe(file.id);
+  const bytes = await loadAttachment(ids[0]!, copy.id);
+  expect(bytes.data).toEqual(file.data);
+  expect(bytes.status).toBe("pending");
+  const before = await database.workspaces.count();
+  await expect(
+    importWorkspace({
+      ...exported,
+      attachments: exported.attachments!.map((value) => ({
+        ...value,
+        hash: "0".repeat(64),
+      })),
+    }),
+  ).rejects.toThrow("손상");
+  expect(await database.workspaces.count()).toBe(before);
+});
 async function workspace() {
   const result = await createLocalWorkspace("Local tests");
   created.push(result.workspace.id);
@@ -71,6 +116,35 @@ it("opens an unchanged cached page without rewriting its local projection", asyn
   expect(write).not.toHaveBeenCalled();
   expect(session.generation).toBe(0);
   document.destroy();
+});
+it("duplicates a Page into independent content and attachment IDs without copying Template or grants", async () => {
+  const { page } = await workspace(),
+    session = await openDocument(page);
+  session.document.getMap("pageSettings").set("template", true);
+  const file = await stageAttachment(
+      page.id,
+      "copy.txt",
+      new TextEncoder().encode("copy me"),
+    ),
+    node = new Y.XmlElement("attachment");
+  node.setAttribute("attachmentId", file.id);
+  session.document.getXmlFragment("content").insert(0, [node]);
+  const copy = await duplicateLocalPage(page),
+    copied = await openDocument(copy);
+  expect(copy.id).not.toBe(page.id);
+  expect(copy.title).toBe(`${page.title} (복사)`);
+  expect(copied.document.getText("title").toString()).toBe(copy.title);
+  expect(copied.document.getMap("pageSettings").get("template")).toBe(false);
+  const ids = getAttachmentIds(copied.document);
+  expect(ids[0]).not.toBe(file.id);
+  expect((await loadAttachment(ids[0]!, copy.id)).data).toEqual(file.data);
+  await expect(duplicateLocalPage({ ...page, role: "viewer" })).rejects.toThrow(
+    "Owner",
+  );
+  await expect(
+    duplicateLocalPage({ ...page, deletedAt: new Date().toISOString() }),
+  ).rejects.toThrow("Owner");
+  expect(session.document.getMap("pageSettings").get("template")).toBe(true);
 });
 it("recovers newer persisted edits after a crash and marks them uncommitted", async () => {
   const { page: original } = await workspace();

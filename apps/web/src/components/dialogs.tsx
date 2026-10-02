@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   Search,
   FileText,
@@ -28,11 +28,18 @@ import {
   exportWorkspace,
   importWorkspace,
   downloadJson,
+  createLocalPage,
 } from "@/lib/workspace";
 import { searchLocalPages } from "@/lib/search";
 import { deleteLocalWorkspace } from "@/lib/workspace";
 import { api, authenticate, getDevice } from "@/lib/api";
 import { requestSync, synchronize } from "@/lib/sync";
+import {
+  filterWorkspaceCommands,
+  recordRecentCommand,
+  parseCommandNavigation,
+  type WorkspaceCommand,
+} from "@/lib/commands";
 
 import {
   clientBetaRequired,
@@ -253,16 +260,136 @@ export function SearchDialog({
 }) {
   const ui = useUiStore(),
     [query, setQuery] = useState(""),
-    [active, setActive] = useState(0);
+    [active, setActive] = useState(0),
+    [recent, setRecent] = useState<string[]>([]),
+    [busy, setBusy] = useState(false),
+    input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    void database.preferences
+      .get("recent-commands")
+      .then((record) => {
+        if (!record) return;
+        const value: unknown = JSON.parse(record.value);
+        if (Array.isArray(value))
+          setRecent(
+            value
+              .filter((item): item is string => typeof item === "string")
+              .slice(0, 8),
+          );
+      })
+      .catch((error) => ui.patch({ notice: errorMessage(error) }));
+  }, []);
+  const workspacePages = data.pages.filter(
+      (page) =>
+        page.workspaceId === ui.workspaceId &&
+        !page.accessLost &&
+        !page.deletedAt,
+    ),
+    owner = workspacePages.some((page) => page.role === "owner"),
+    navigation = parseCommandNavigation(query),
+    commandMode = query.startsWith(">") && navigation === null,
+    commands = commandMode
+      ? filterWorkspaceCommands(
+          query,
+          {
+            canCreate: owner,
+            hasWorkspace: !!ui.workspaceId,
+            hasInbox: workspacePages.some((page) => page.isInbox),
+            online: ui.syncState !== "offline",
+          },
+          recent,
+        )
+      : [];
   const results = useMemo(
-    () => searchLocalPages(data.pages, data.documents, query),
-    [query, data.pages, data.documents],
+    () =>
+      commandMode
+        ? []
+        : searchLocalPages(data.pages, data.documents, navigation ?? query),
+    [query, commandMode, navigation, data.pages, data.documents],
   );
+  const runCommand = async (command: WorkspaceCommand) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (command.id === "page:open") {
+        const history = recordRecentCommand(recent, command.id);
+        await database.preferences.put({
+          id: "recent-commands",
+          value: JSON.stringify(history),
+        });
+        setRecent(history);
+        setQuery(">open ");
+        setActive(0);
+        input.current?.focus();
+        return;
+      }
+      if (
+        ["page:create", "database:create", "task:create"].includes(command.id)
+      ) {
+        if (!owner || !ui.workspaceId)
+          throw new Error("Workspace Owner 권한이 필요합니다.");
+        const kind = command.id === "page:create" ? "document" : "database";
+        const created = await createLocalPage(
+          ui.workspaceId,
+          kind === "document"
+            ? "제목 없음"
+            : command.id === "task:create"
+              ? "새 To-Do"
+              : "새 Database",
+          kind,
+          null,
+          false,
+          command.id === "database:create" ? "generic" : "task",
+        );
+        ui.select(created.workspaceId, created.id);
+        requestSync();
+      } else if (command.id.startsWith("theme:")) {
+        const theme =
+          command.id === "theme:light"
+            ? "light"
+            : command.id === "theme:dark"
+              ? "dark"
+              : "system";
+        await database.preferences.put({ id: "theme", value: theme });
+        ui.patch({ theme });
+      } else if (command.id === "inbox:open") {
+        const inbox = workspacePages.find((page) => page.isInbox);
+        if (inbox) ui.select(inbox.workspaceId, inbox.id);
+      } else if (command.id === "sync:run") requestSync();
+      const history = recordRecentCommand(recent, command.id);
+      await database.preferences.put({
+        id: "recent-commands",
+        value: JSON.stringify(history),
+      });
+      setRecent(history);
+      onClose();
+      if (command.id === "capture:open") ui.patch({ captureOpen: true });
+      if (command.id === "settings:open") ui.patch({ settingsOpen: true });
+    } catch (error) {
+      ui.patch({ notice: errorMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
   const select = (index: number) => {
+    if (commandMode) {
+      const command = commands[index];
+      if (command) void runCommand(command);
+      return;
+    }
     const result = results[index];
     if (result) {
-      ui.select(result.page.workspaceId, result.page.id);
-      onClose();
+      const open = () => {
+        ui.select(result.page.workspaceId, result.page.id);
+        onClose();
+      };
+      if (navigation !== null) {
+        const history = recordRecentCommand(recent, "page:open");
+        void database.preferences
+          .put({ id: "recent-commands", value: JSON.stringify(history) })
+          .then(open)
+          .catch((error) => ui.patch({ notice: errorMessage(error) }));
+      } else open();
     }
   };
   return (
@@ -270,8 +397,9 @@ export function SearchDialog({
       <div className="search-input">
         <Search size={20} />
         <input
+          ref={input}
           aria-label="Workspace 검색"
-          placeholder="Page 제목과 내용을 검색하세요…"
+          placeholder="Page 검색 또는 > 명령"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -280,7 +408,15 @@ export function SearchDialog({
           onKeyDown={(event) => {
             if (event.key === "ArrowDown") {
               event.preventDefault();
-              setActive((index) => Math.min(index + 1, results.length - 1));
+              setActive((index) =>
+                Math.max(
+                  0,
+                  Math.min(
+                    index + 1,
+                    (commandMode ? commands.length : results.length) - 1,
+                  ),
+                ),
+              );
             }
             if (event.key === "ArrowUp") {
               event.preventDefault();
@@ -294,7 +430,28 @@ export function SearchDialog({
         />
       </div>
       <div className="search-results">
-        <div className="menu-caption">{query ? "검색 결과" : "최근 Page"}</div>
+        <div className="menu-caption">
+          {commandMode
+            ? recent.length && query.trim() === ">"
+              ? "최근 명령"
+              : "명령"
+            : query
+              ? "검색 결과"
+              : "최근 Page"}
+        </div>
+        {commands.map((command, index) => (
+          <button
+            key={command.id}
+            disabled={busy}
+            className={active === index ? "selected" : ""}
+            onClick={() => select(index)}
+          >
+            <ArrowUpRight size={17} />
+            <span>
+              <strong>{command.label}</strong>
+            </span>
+          </button>
+        ))}
         {results.map(({ page, record }, index) => (
           <button
             className={active === index ? "selected" : ""}
@@ -318,13 +475,23 @@ export function SearchDialog({
             <ArrowUpRight size={15} />
           </button>
         ))}
-        {!results.length && (
+        {!results.length && !commands.length && (
           <div className="panel-empty">
             <p>검색 결과가 없습니다.</p>
           </div>
         )}
       </div>
       <div className="search-footer">
+        <button
+          className="text-button"
+          onClick={() => {
+            setQuery(">");
+            setActive(0);
+            input.current?.focus();
+          }}
+        >
+          명령 보기
+        </button>
         <span>↑ ↓ 선택</span>
         <span>Enter 열기</span>
         <span>Esc 닫기</span>

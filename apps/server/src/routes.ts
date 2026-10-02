@@ -25,11 +25,15 @@ import {
   DocumentService,
   DomainError,
 } from "./services";
-import { createRealtimeToken } from "./realtime";
+import { closeIncompatibleConnections, createRealtimeToken } from "./realtime";
+import { requestEditorProtocol } from "./editor-protocol";
+import { EDITOR_PROTOCOL } from "@zeronote/shared";
 import type { createRealtime } from "./realtime";
 import { SnapshotService } from "./snapshot-service";
 import { env } from "./env";
 import * as Y from "yjs";
+import { AttachmentService } from "./attachment-service";
+import { registerAttachmentRoutes } from "./attachment-routes";
 
 type Handler = (
   request: FastifyRequest,
@@ -51,6 +55,11 @@ export function registerRoutes(
     access = new AccessService(repository),
     workspaces = new WorkspaceService(repository, access),
     snapshots = new SnapshotService(repository, access);
+  registerAttachmentRoutes(
+    app,
+    auth,
+    new AttachmentService(repository, access),
+  );
   const authenticated =
     (handler: Handler) =>
     async (request: FastifyRequest, reply: FastifyReply) =>
@@ -100,7 +109,11 @@ export function registerRoutes(
   app.get(
     "/v1/snapshots/:id",
     authenticated(async (request, _reply, deviceId) =>
-      snapshots.read(deviceId, parameter(request, "id")),
+      snapshots.read(
+        deviceId,
+        parameter(request, "id"),
+        requestEditorProtocol(request),
+      ),
     ),
   );
   app.delete(
@@ -254,7 +267,11 @@ export function registerRoutes(
   app.get(
     "/v1/documents/:id",
     authenticated(async (request, _reply, deviceId) => ({
-      update: await documents.read(deviceId, parameter(request, "id")),
+      update: await documents.read(
+        deviceId,
+        parameter(request, "id"),
+        requestEditorProtocol(request),
+      ),
     })),
   );
   app.post(
@@ -267,7 +284,12 @@ export function registerRoutes(
           id,
           input.operationId,
           input.update,
+          requestEditorProtocol(request),
         );
+      closeIncompatibleConnections(
+        realtime.documents.get(id),
+        await documents.assertProtocol(id, EDITOR_PROTOCOL),
+      );
       const connection = await realtime.openDirectConnection(id, { deviceId });
       try {
         await connection.transact((document) =>
@@ -281,13 +303,15 @@ export function registerRoutes(
   );
   app.post(
     "/v1/documents/:id/realtime-token",
-    authenticated(async (request, _reply, deviceId) => ({
-      token: await createRealtimeToken(
-        deviceId,
-        parameter(request, "id"),
-        access,
-      ),
-    })),
+    authenticated(async (request, _reply, deviceId) => {
+      const pageId = parameter(request, "id"),
+        protocol = requestEditorProtocol(request);
+      await access.page(deviceId, pageId);
+      await documents.assertProtocol(pageId, protocol);
+      return {
+        token: await createRealtimeToken(deviceId, pageId, access, protocol),
+      };
+    }),
   );
   app.post(
     "/v1/invites",

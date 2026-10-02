@@ -2,6 +2,8 @@
 
 Status: Accepted Alpha specification
 
+2026-10-02 사용자 확정: 체크리스트의 모든 미완료 기능을 구현·배포한다. 기존 P0–P3는 실행 순서이며 범위 제한이 아니다. 148개 항목의 완료 증거와 남은 작업은 [전체 목표](../full-completion.md)에서 추적한다. 파일 기반/Template/Command/Mobile 편집 다음에는 Export/Public Share와 나머지 Editor·Knowledge·Database·협업·암호화·AI·Integration·Canvas·플랫폼 기능을 이어간다.
+
 Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Recovery/Capability → Realtime/Durable Sync → Task/Comments/Search/Mobile → Failure Recovery/Export/검증.
 
 1주차: Editor와 Local Workspace. 완료: Offline 작성과 Reload 유지. 2주차: 두 기기 공동 편집·초대·Recovery. 완료: Role과 영속 저장 검증. 3주차: Task View·Comments·Quick Capture·Mobile. 완료: 대표 흐름 연결. 4주차: 장애·성능·데이터 이전·회귀. 완료: lint/type/test/e2e/build와 Alpha 기준 검증.

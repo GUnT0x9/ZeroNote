@@ -161,9 +161,6 @@ export class SnapshotStore {
         const text = copy.getText("title");
         text.delete(0, text.length);
         text.insert(0, title);
-        const state = Y.encodeStateAsUpdate(copy);
-        if (state.byteLength > MAX_DOCUMENT_BYTES)
-          throw new DomainError(413, "복구 문서가 크기 제한을 초과했습니다.");
         const page: Page = {
           ...source,
           id: pageId,
@@ -177,6 +174,17 @@ export class SnapshotStore {
         await tx.execute(
           sql`INSERT INTO pages(id,workspace_id,parent_id,kind,title,revision,created_at,is_inbox) VALUES(${page.id},${page.workspaceId},NULL,${page.kind},${title},0,${page.createdAt},false)`,
         );
+        await this.repository.attachments.copyReferences(
+          copy,
+          source.id,
+          pageId,
+          page.workspaceId,
+          deviceId,
+          tx,
+        );
+        const state = Y.encodeStateAsUpdate(copy);
+        if (state.byteLength > MAX_DOCUMENT_BYTES)
+          throw new DomainError(413, "복구 문서가 크기 제한을 초과했습니다.");
         await this.repository.documents.writeCheckpoint(
           pageId,
           state,

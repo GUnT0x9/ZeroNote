@@ -10,6 +10,7 @@ import {
   type LocalDocument,
   type PendingOperation,
   type PendingComment,
+  type LocalAttachment,
 } from "./database";
 import { useUiStore } from "./ui-store";
 import { retainEqualItems } from "./search";
@@ -21,6 +22,10 @@ export interface WorkspaceData {
   documents: LocalDocument[];
   operations: PendingOperation[];
   pendingComments: PendingComment[];
+  attachmentStates?: Pick<
+    LocalAttachment,
+    "id" | "pageId" | "status" | "error"
+  >[];
   identities: (Identity & { workspaceId: string })[];
 }
 const EMPTY: WorkspaceData = {
@@ -42,6 +47,7 @@ export function useWorkspaceData(): WorkspaceData {
         documents,
         operations,
         pendingComments,
+        attachmentStates,
         identities,
       ] = await Promise.all([
         database.workspaces.toArray(),
@@ -49,6 +55,18 @@ export function useWorkspaceData(): WorkspaceData {
         database.documents.toArray(),
         database.operations.toArray(),
         database.pendingComments.toArray(),
+        database.attachments
+          .where("status")
+          .anyOf("pending", "preserved")
+          .toArray()
+          .then((files) =>
+            files.map(({ id, pageId, status, error }) => ({
+              id,
+              pageId,
+              status,
+              error,
+            })),
+          ),
         database.preferences.get("identities"),
       ]);
       let parsed: WorkspaceData["identities"] = [];
@@ -66,6 +84,7 @@ export function useWorkspaceData(): WorkspaceData {
         documents,
         operations,
         pendingComments,
+        attachmentStates,
         identities: parsed,
       };
     }).subscribe({

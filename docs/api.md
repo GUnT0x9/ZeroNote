@@ -60,3 +60,24 @@ Snapshot metadata: id, pageId, kind(manual/automatic), name, schemaVersion(1), c
 Beta 코드는 Hash만 저장한다. Recovery/Page Invite는 Beta 자격을 요구하지 않는다. 신규 Workspace는 자격당 3개로 제한한다. Snapshot 생성/복구는 Operation ID·Device·대상·동작을 확인하여 재시도한다. 권한은 서버에서 검증한다.
 
 저장 공간 부족은 507, 문서 크기 초과는 413, Operation 충돌/수동 Snapshot 제한/Version 미지원은 409다. Durable Ack는 PostgreSQL Commit 후 반환한다. REST와 WebSocket은 같은 Transaction 저장 경로를 사용한다.
+
+# Page attachments
+
+기기 Cookie 인증과 Page Role을 기존 문서 API와 동일하게 적용한다. 모든 응답은 `no-store`이며 Service Worker가 인증 응답을 Cache하지 않는다.
+
+| Method | Path                                     | 권한 / 응답                                                                                             |
+| ------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| GET    | `/v1/pages/:id/attachments`              | Page 접근자. 삭제되지 않은 파일 Metadata 목록                                                           |
+| POST   | `/v1/pages/:id/attachments`              | Editor/Owner. `{ operationId, id, name, data }`, data는 canonical base64. PostgreSQL Commit 후 Metadata |
+| GET    | `/v1/attachments/:id`                    | Page 접근자. Metadata + base64 data. Owner는 Trash/보존 파일도 조회                                     |
+| GET    | `/v1/attachments/:id/content`            | Page 접근자. 원본 bytes와 Range 지원(206/416), `nosniff`/강제 다운로드                                  |
+| DELETE | `/v1/attachments/:id`                    | Editor/Owner. 목록에서 삭제. Snapshot용 bytes는 Workspace 삭제까지 유지                                 |
+| GET    | `/v1/workspaces/:id/attachments/storage` | Owner. bytes/count/retained/limit/fileLimit                                                             |
+
+Beta 파일 제한: 파일당 4MiB, Workspace당 25MiB/200개. 동일 Operation ID/파일 ID의 같은 요청은 중복 저장하지 않는다. 다른 Payload로 재사용하면 409, 저장 한도는 507이며 로컬 bytes/재시도 Operation ID를 보존한다. MIME은 서버가 signature로 판별하며 SVG/HTML 실행은 제공하지 않는다.
+
+Snapshot 복구는 참조된 파일 bytes를 새 Page의 새 Attachment ID로 복사한다. 소스 Page와 Snapshot은 유지하며 Share Grant는 복사하지 않는다. Export version 2는 인증 Secret 없이 참조된 첨부를 포함하고 version 1 Import도 지원한다. Import는 파일 크기/Hash/Page 소속과 ID를 검증하고 새 Page/file ID로 재매핑한다.
+
+## Editor 호환성
+
+문서 read/commit/realtime-token과 Snapshot read는 `X-ZeroNote-Editor-Protocol: 2`를 사용한다. Header가 없으면 기존 Editor 1이다. 새 Block/Mark가 있는 문서는 최소 버전 2이며 서버 Checkpoint에 최소 버전을 유지한다. 미지원 버전의 읽기·쓰기·Token/미리보기는 426, 잘못된 Header는 400이다. 새 기능 방송 전에 활성 구버전 연결을 종료하고 WebSocket 인증·Sync에서도 검사한다. 로컬 변경은 유지하며 앱 새로고침을 안내한다. 버전 Header는 Role 권한을 부여하지 않는다.
