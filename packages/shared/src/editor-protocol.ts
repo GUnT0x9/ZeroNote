@@ -6,6 +6,7 @@ export const EDITOR_UPDATE_MESSAGE =
   "새 Editor 기능이 포함된 문서입니다. 변경은 이 기기에 보관됩니다. 앱을 새로고침한 뒤 다시 동기화해주세요.";
 const LEGACY_NODES = new Set([
   "paragraph",
+  "hardBreak",
   "heading",
   "bulletList",
   "orderedList",
@@ -39,7 +40,7 @@ export function getDocumentEditorProtocol(document: Y.Doc): number {
         .toDelta()
         .every((part: { attributes?: Record<string, unknown> }) =>
           Object.keys(part.attributes ?? {}).every((mark) =>
-            LEGACY_MARKS.has(mark),
+            LEGACY_MARKS.has(mark.replace(/--[a-zA-Z0-9+/=]{8}$/, "")),
           ),
         );
     if (node instanceof Y.XmlElement && !LEGACY_NODES.has(node.nodeName))

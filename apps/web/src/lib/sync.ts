@@ -102,7 +102,9 @@ async function runSync(): Promise<void> {
       .object({ warning: z.boolean() })
       .parse(await api("/storage"));
     useUiStore.getState().patch({ storageWarning: capacity.warning });
-    useUiStore.getState().patch({ syncState: "online" });
+    useUiStore
+      .getState()
+      .patch({ syncState: navigator.onLine ? "online" : "offline" });
     const pages = await database.pages
       .filter((page) => !page.accessLost && !page.deletedAt)
       .toArray();

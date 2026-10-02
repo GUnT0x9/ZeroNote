@@ -34,3 +34,5 @@ Migration `003-attachments.sql`과 `004-editor-protocol.sql`은 기존 데이터
 - 로컬 Docker는 WSL Docker Desktop CLI 경로가 끊겨 실행하지 못했다. CI에서 Docker Build/512MiB 시작과 파일 bytes를 포함한 암호화 백업·복원을 검증한다. Production 배포 결과는 아래에 확정 기록한다.
 - 실제 Android Chrome/iOS Safari 기기 검증은 아직 미실행이다. Chromium Touch Viewport로 Mobile 편집/Capture/Comments를 검증한다.
 - Storage 관리 UI/영구 정리, Table/Column/Math/Embed, Public Share/Export 추가 형식 등 나머지 항목은 계속 구현한다.
+
+최종 호환성 검증에서 기본 `hardBreak`와 Yjs의 Hash가 붙은 기존 Link Mark도 Protocol 1로 인식하도록 보강했다. 이전 CI의 Offline 상태 회귀도 확인해, 연결이 끊긴 후 늦은 정상 응답이 상태를 Online으로 바꾸지 않게 수정했다. Unit/Server 총 163개, 최종 lint/type-check와 앱 Build가 통과했다.

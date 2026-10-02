@@ -91,3 +91,26 @@ it("leaves local data available without contacting the server offline", async ()
   expect(api).not.toHaveBeenCalled();
   expect(useUiStore.getState().syncState).toBe("offline");
 });
+it("keeps Offline visible when an older successful response finishes after disconnection", async () => {
+  let release!: (value: { warning: boolean }) => void, began!: () => void;
+  const paused = new Promise<{ warning: boolean }>((resolve) => {
+      release = resolve;
+    }),
+    started = new Promise<void>((resolve) => {
+      began = resolve;
+    });
+  vi.mocked(api).mockImplementation(async (path) => {
+    if (path === "/storage") {
+      began();
+      return paused;
+    }
+    return emptyMetadata;
+  });
+  const sync = synchronize();
+  await started;
+  vi.stubGlobal("navigator", { onLine: false });
+  useUiStore.getState().patch({ syncState: "offline" });
+  release({ warning: false });
+  await sync;
+  expect(useUiStore.getState().syncState).toBe("offline");
+});

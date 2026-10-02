@@ -9,6 +9,10 @@ it("accepts legacy text, headings and marks, including decoded documents", () =>
   paragraph.insert(0, [text]);
   doc.getXmlFragment("content").insert(0, [paragraph]);
   text.insert(0, "Text", { bold: {} });
+  text.insert(text.length, "Link", {
+    "link--AbCd1234": { href: "https://example.com" },
+  });
+  paragraph.insert(1, [new Y.XmlElement("hardBreak")]);
   const copy = new Y.Doc();
   Y.applyUpdate(copy, Y.encodeStateAsUpdate(doc));
   expect(getDocumentEditorProtocol(copy)).toBe(1);
