@@ -101,3 +101,5 @@ Render Free의 512MiB 제한에서 첫 배포가 실패했다. 원인은 Runtime
 ### 2026-10-02 P0 Database/메인 UI 배포
 
 `4b07123`의 CI 통과 후 Render `dep-davg5gtg1s2s73acvs20` → Vercel `dpl_ANsVUuXFkgjcgq9Phb99gYh8Eggd` 순서로 배포했다. 제공 도메인과 Secret은 유지했고 Render 자동 배포는 꺼져 있다. 일반 Database 속성·Saved View·Calendar/Timeline/Gallery/List과 이전 Figma 메인/상단 저장 아이콘 개편을 포함한다. Production 11개 흐름과 기존 데이터/Recovery/권한을 확인했다. 앱 소스와 검증/미실행 항목은 [Database 배포 기록](database-release.md)을 따른다.
+
+2026-10-02 현재 Render 수동 배포 Branch는 `codex/remaining-features`이며 Auto Deploy는 꺼져 있다. 파일·Editor 확장의 현재 배포 Commit/검증/호환 Rollback은 [배포 기록](editor-files-release.md)을 따른다.

@@ -38,3 +38,9 @@ Migration `003-attachments.sql`과 `004-editor-protocol.sql`은 기존 데이터
 최종 호환성 검증에서 기본 `hardBreak`와 Yjs의 Hash가 붙은 기존 Link Mark도 Protocol 1로 인식하도록 보강했다. 이전 CI의 Offline 상태 회귀도 확인해, 연결이 끊긴 후 늦은 정상 응답이 상태를 Online으로 바꾸지 않게 수정했다. Unit/Server 총 163개, 최종 lint/type-check와 앱 Build가 통과했다.
 
 `36f2411`의 CI `36958355714`에서 163 Tests/15 E2E/Build/Docker 512MiB/첨부 bytes 백업 복원을 통과하고 Render `dep-davhvqegekts73e4pt4g` → Vercel `dpl_Bi9b5jt6Zf3b31sB6kCjimvbNcdT` 순서로 배포했다. 실제 HTTPS 14개 Browser 시나리오와 기존 Recovery/문서/Task/Comments/Snapshot/Viewer 권한 유지도 통과했다. 수동 최대 파일 검증에서 4MiB Base64 반복 Group의 RegExp Stack Overflow를 발견했고, Padding/Pad Bits/Decoded Size를 검사하는 검증으로 수정한다. 최대 파일 저장·다운로드·재시도와 초과 크기 거절 회귀를 추가해 재배포 후 최대 크기 HTTPS 검증을 마무리한다.
+
+최대 파일 검증의 Transport Schema와 공통 Base64 Codec에서 반복 Group RegExp를 모두 제거했다. `adf6e84948a43dc622822dbc037b4f17260f4325`의 CI `36961503685`에서 166 Tests/15 E2E/Build/Docker/암호화 백업·복원이 통과했다. 배포 전 암호화 백업 후 Render `dep-davk0kmgekts73ec9neg` → Vercel `dpl_5p5mHE5KDHtEwjFqLzHCh38wr4Ny`를 배포했고 두 서비스의 해당 Commit과 Ready 상태를 확인했다.
+
+실제 HTTPS 검증은 4MiB 파일 Upload/Download/Retry·Snapshot 새 파일 복사, 신규 브라우저 Recovery 후 4MiB 파일의 SHA-256 일치, PDF Preview의 Offline 새로고침까지 통과했다. 캐시된 1,000 Pages/500 Blocks/1,000 Rows에서 문서 열기 146.5ms·Local Search 22.6ms를 측정했다. 실제 Android/iOS 기기 확인과 전체 목표의 124개 항목은 아직 남아 있다.
+
+변경 파일과 이유는 Shared의 attachments/xml/templates/editor-protocol 및 테스트(파일 계약·복제·호환성), Server의 attachment service/routes/store·Migration·Snapshot·인증·통합 테스트(영속 저장과 권한), Web의 attachment/PDF/Editor·Template/Command·Sync/Local 데이터·회귀 테스트(작성·미리보기·Offline·저장 상태), PDF Asset 준비·Service Worker·CI(Offline Asset과 Build/백업 검증), 제품/API/완료 기록(계약·범위·실행 증거)에 나눠 기록했다.
