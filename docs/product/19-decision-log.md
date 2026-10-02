@@ -83,3 +83,9 @@ Accepted: 새 Block을 이해하지 못하는 구버전 Yjs Editor의 삭제를 
 사용자가 Confirmed한 전체 미완료 범위에서 JSON/ZIP은 Yjs와 첨부를 보존하는 복원 형식으로 제공한다. Markdown/HTML/PDF/Notion Markdown & CSV는 공유·이전 형식으로 추가한다. Notion/Obsidian 가져오기는 ZIP의 Markdown/CSV/참조 첨부, 안정적인 새 Page ID와 Row 본문을 복원한다. HTML 구문은 실행하지 않고 원문으로, Table은 현재 Editor에서 셀 값을 텍스트 표로 보존하며 변환 내용을 가져오기 전에 표시한다. CSV에는 원본의 Formula/Relation 정의·권한 정보가 없으므로 값을 text 속성으로 복원한다.
 
 암호화 Export는 기기에서 PBKDF2-SHA-256 600,000회·32-byte Salt·AES-256-GCM·12-byte IV를 사용한다. 암호·Recovery·초대·인증 정보는 보관/전송하지 않는다. 이는 선택형 E2EE의 완료를 의미하지 않는다. E2EE와 기기 Pairing은 별도 미완료 요구다. Import는 로컬 transaction 실패 시 부분 Workspace/Queue를 남기지 않는다.
+
+## DEC-043 · Storage 관리와 영구 정리
+
+사용자가 Confirmed한 Storage 관리 요구를 Settings의 저장 공간 화면에서 제공한다. 서버의 전체 파일 사용량과 이 기기의 사본·미전송/보존 파일을 구분한다. 서버 파일 정리는 Online Workspace Owner만 수행하며 현재 문서·Trash·유효 Snapshot의 참조가 있으면 거절한다. 정리 성공 후에도 ID·Hash·Operation은 Tombstone으로 유지해 중복 Upload로 파일이 살아나지 않게 한다. 파일 사본 제거는 접근 철회·Trash·미전송/보존 파일을 유지한다. REST/WS Commit은 정리된 파일을 참조한 내용을 수락하지 않고 로컬 변경을 보존한다.
+
+Migration 005 이후 Server rollback은 Tombstone과 422 문서 검증을 이해하는 버전을 사용한다. DB를 되감거나 영구 정리한 bytes를 자동 복원하지 않는다. 일반 파일 삭제는 계속 Snapshot용 bytes를 보존한다.

@@ -121,6 +121,11 @@ export class DocumentStore {
           document.getText("title").length > 500
         )
           throw new DomainError(413, "문서 크기 제한을 초과했습니다.");
+        await this.repository.attachments.assertReferences(
+          document,
+          pageId,
+          tx,
+        );
         await this.assertCapacity(tx);
         await tx.execute(
           sql`INSERT INTO document_operations(operation_id,page_id,payload_hash) VALUES(${operationId},${pageId},${hash})`,

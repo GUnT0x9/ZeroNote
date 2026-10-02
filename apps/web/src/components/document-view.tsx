@@ -143,19 +143,18 @@ export function DocumentView({
     }
     if (ui.syncState === "offline") {
       session.provider?.disconnect();
-    } else if (ui.syncState === "online") {
-      if (session.provider && document.visibilityState === "visible") {
-        session.awareness.setLocalStateField("user", {
-          name: "내 기기",
-          color: "#5277cc",
-        });
-        session.provider.connect();
-      } else
-        void connectDocument(session, page)
-          .then(() => setProviderRevision((value) => value + 1))
-          .catch((problem) => ui.patch({ notice: errorMessage(problem) }));
+    } else if (
+      ui.syncState === "online" &&
+      document.visibilityState === "visible"
+    ) {
+      session.awareness.setLocalStateField("user", {
+        name: "내 기기",
+        color: "#5277cc",
+      });
+      void connectDocument(session, page)
+        .then(() => setProviderRevision((value) => value + 1))
+        .catch((problem) => ui.patch({ notice: errorMessage(problem) }));
     }
-    return () => {};
   }, [ui.syncState, session?.id, page.accessLost, page.deletedAt]);
   useEffect(
     () => () => {

@@ -33,6 +33,28 @@ export const AttachmentMetadataSchema = z.object({
   createdAt: z.string(),
 });
 export type AttachmentMetadata = z.infer<typeof AttachmentMetadataSchema>;
+export const AttachmentStorageSchema = z.object({
+  bytes: z.number().int().nonnegative(),
+  count: z.number().int().nonnegative(),
+  retained: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  fileLimit: z.number().int().positive(),
+  files: z
+    .array(
+      AttachmentMetadataSchema.extend({
+        pageTitle: z.string(),
+        pageDeletedAt: z.string().nullable(),
+        deletedAt: z.string().nullable(),
+      }),
+    )
+    .max(MAX_WORKSPACE_ATTACHMENTS),
+});
+export type AttachmentStorage = z.infer<typeof AttachmentStorageSchema>;
+export const PurgeAttachmentSchema = z
+  .object({
+    name: z.string().min(1).max(240),
+  })
+  .strict();
 export const AttachmentUploadSchema = z
   .object({
     operationId: z.uuid(),

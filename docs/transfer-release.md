@@ -36,6 +36,12 @@ JSON과 ZeroNote ZIP은 Yjs의 전체 상태·Database 정의/값/뷰·Row 본�
 
 수정 후 로컬 Unit/Server Tests 189개와 lint/type-check가 통과했다. 실패한 Commit은 Production에 배포하지 않았다. 로컬 브라우저의 암호화 백업/복구와 Generic Database Offline/Focus 회귀 2개도 통과했다. 수정 Commit의 전체 CI 결과는 확인 후 기록한다.
 
+### Production 확정
+
+`b9a9ded9fb6a284c922951e3795e2f038a8fa65a`의 CI `36975304512`에서 189 Unit/Server Tests, 18 Browser Tests, lint/type-check/Build, Docker 512MiB 실행과 파일 bytes를 포함한 암호화 백업·복원을 통과했다. Production DB를 백업하고 최근 4개를 보관한 뒤 Render `dep-davl9pid0e5s738egdtg` → Vercel `dpl_8omsM1hsBDSeSkPHzgEeYsMMWGmP`를 배포했다. 두 서비스의 동일 Commit과 Live/Ready를 확인했다.
+
+[Beta Web](https://zeronote-kohl.vercel.app)에서 실제 다운로드/안전한 HTML/Pretendard·한글 PDF·Offline PDF Export, Notion/Obsidian 링크·CSV Row 본문 Import, 잘못된 암호 거절·암호화 백업 복원, 숫자 입력 Focus 유지·Offline 새로고침의 4개 시나리오를 통과했다. 별도 신규 브라우저에서도 4MiB 파일 Upload → Recovery → SHA-256이 일치하는 Download → Offline PDF 새로고침을 통과했다. QA Workspace는 이름과 ID로 한정해 정리했다. 실제 Android/iOS 기기 검증과 나머지 116개 기능은 계속 미완료다.
+
 ## 변경 파일과 이유
 
 | 파일                                                                                              | 이유                                         |

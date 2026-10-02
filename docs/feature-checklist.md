@@ -8,7 +8,7 @@
 - 최근 방문은 Search의 최근 목록과 별도의 Sidebar 기능을 구분한다.
 - 좌측 상단 Sync 상태에서 수동 동기화를 실행한다. 파일·문서 모두 서버 Commit 전에는 완료로 표시하지 않는다.
 - 전체 미완료 항목은 [전체 완료 목표](full-completion.md)에서 추적한다. 이번 추가 기능의 검증/배포 상태는 [파일·Editor 확장 기록](editor-files-release.md)에 기록한다. 일부 기능 구현으로 전체 목표를 종료하지 않는다.
-- 파일은 4MiB/개, Workspace 25MiB/200개다. PDF·Audio·Video·이미지·소스 미리보기와 파일을 포함한 Export/Import/Snapshot 복구를 제공한다. Storage 관리 UI와 영구 정리는 계속 구현 대상이다.
+- 파일은 4MiB/개, Workspace 25MiB/200개다. PDF·Audio·Video·이미지·소스 미리보기와 파일을 포함한 Export/Import/Snapshot 복구를 제공한다. Storage 관리 UI와 참조 검사·영구 정리는 로컬 회귀를 통과했고 CI/배포를 진행한다. [검증 기록](storage-release.md)을 따른다.
 - Template은 기본 문서 3개와 저장한 Page 재사용이다. Task Template은 별도 구현 대상이다.
 
 ## Workspace / 인증
@@ -353,7 +353,7 @@
 - [x] Audio
 - [x] PDF
 - [x] File Preview
-- [ ] Storage 관리
+- [x] Storage 관리
 - [x] Attachment 권한 관리
 
 ---

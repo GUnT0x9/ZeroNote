@@ -1411,3 +1411,115 @@ test("Custom database properties enforce Viewer access and survive server Snapsh
     await cleanup(page, name);
   }
 });
+
+test("Storage UI protects active files, purges unused bytes and retains Offline pending files while clearing cache", async ({
+  page,
+  context,
+}) => {
+  const name = `Storage ${Date.now()}`;
+  try {
+    await createWorkspace(page, name);
+    await page
+      .getByLabel("첨부 파일 선택")
+      .setInputFiles({
+        name: "keep-qa.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("keep bytes"),
+      });
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    const pageId = new URL(page.url()).searchParams.get("page"),
+      unusedId = crypto.randomUUID();
+    const upload = await page.request.post(
+      `${ORIGIN}/v1/pages/${pageId}/attachments`,
+      {
+        headers: { origin: ORIGIN },
+        data: {
+          id: unusedId,
+          operationId: crypto.randomUUID(),
+          name: "unused-qa.txt",
+          data: Buffer.from("unused bytes").toString("base64"),
+        },
+      },
+    );
+    expect(upload.ok()).toBe(true);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "저장 공간", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "저장 공간" });
+    await expect(
+      dialog.getByText("unused-qa.txt", { exact: true }),
+    ).toBeVisible();
+    await dialog
+      .getByRole("button", { name: "keep-qa.txt 파일 정리", exact: true })
+      .click();
+    await dialog.getByLabel("정리할 파일 이름").fill("keep-qa.txt");
+    await dialog
+      .getByRole("button", { name: "영구 정리하기", exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toContainText("사용 중");
+    await dialog.getByRole("button", { name: "취소", exact: true }).click();
+    await dialog
+      .getByRole("button", { name: "unused-qa.txt 파일 정리", exact: true })
+      .click();
+    await dialog.getByLabel("정리할 파일 이름").fill("wrong.txt");
+    await expect(
+      dialog.getByRole("button", { name: "영구 정리하기", exact: true }),
+    ).toBeDisabled();
+    await dialog.getByLabel("정리할 파일 이름").fill("unused-qa.txt");
+    await dialog
+      .getByRole("button", { name: "영구 정리하기", exact: true })
+      .click();
+    await expect(
+      dialog.getByText("unused-qa.txt", { exact: true }),
+    ).toHaveCount(0);
+    expect(
+      (await page.request.get(`${ORIGIN}/v1/attachments/${unusedId}`)).status(),
+    ).toBe(410);
+    await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Settings" })
+      .getByRole("button", { name: "닫기", exact: true })
+      .click();
+    await context.setOffline(true);
+    await page
+      .getByLabel("첨부 파일 선택")
+      .setInputFiles({
+        name: "pending-qa.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("pending bytes"),
+      });
+    await expect(
+      page.getByText("pending-qa.txt", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "저장 공간", exact: true }).click();
+    await expect(dialog.getByText(/미전송\/보존 1개/)).toBeVisible();
+    await dialog
+      .getByRole("button", { name: "오프라인 파일 사본 제거", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", { name: "사본 제거하기", exact: true })
+      .click();
+    await expect(dialog.getByText(/1개 파일 · 미전송\/보존 1개/)).toBeVisible();
+    await page.reload();
+    const pending = page.getByRole("link", {
+      name: "pending-qa.txt 다운로드",
+      exact: true,
+    });
+    await expect(pending).toHaveAttribute("href", /^blob:/);
+    await context.setOffline(false);
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    const waiting = page.waitForEvent("download");
+    await pending.click();
+    const download = await waiting,
+      path = await download.path();
+    if (!path) throw new Error("Missing pending file after reconnect");
+    expect((await readFile(path)).toString()).toBe("pending bytes");
+  } finally {
+    await context.setOffline(false);
+    await cleanup(page, name);
+  }
+});

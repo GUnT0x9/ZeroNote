@@ -2891,3 +2891,38 @@ small,
   font-size: 12px;
   margin: 12px 0;
 }
+
+.storage-file-list {
+  margin-top: 12px;
+  max-height: 300px;
+  overflow: auto;
+}
+.storage-file {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.storage-file > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.storage-file small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.storage-confirm {
+  border-left: 2px solid var(--border);
+  padding-left: 16px;
+}
+.storage-confirm .button-row {
+  margin-top: 12px;
+}
+.settings-content progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
+}

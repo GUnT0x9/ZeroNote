@@ -5,6 +5,7 @@ const MIGRATIONS = [
   "002-beta.sql",
   "003-attachments.sql",
   "004-editor-protocol.sql",
+  "005-attachment-purge.sql",
 ] as const;
 export async function migrateDatabase(pool: Pool): Promise<void> {
   const client = await pool.connect();

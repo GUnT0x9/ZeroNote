@@ -26,6 +26,16 @@ export function registerAttachmentRoutes(
   app.get("/v1/workspaces/:id/attachments/storage", async (request) =>
     files.storage(await device(request), parameter(request, "id")),
   );
+  app.delete(
+    "/v1/workspaces/:id/attachments/:fileId/content",
+    async (request) =>
+      files.purge(
+        await device(request),
+        parameter(request, "id"),
+        parameter(request, "fileId"),
+        request.body,
+      ),
+  );
   app.get("/v1/attachments/:id/content", async (request, reply) => {
     const record = await files.read(
       await device(request),

@@ -12,6 +12,7 @@ import {
 } from "@zeronote/shared";
 import { database, errorMessage, type LocalAttachment } from "./database";
 import { api, ApiError } from "./api";
+import { pauseDocumentForAttachmentUpload } from "./documents";
 
 export async function attachmentDigest(data: Uint8Array): Promise<string> {
   const hash = await crypto.subtle.digest("SHA-256", Uint8Array.from(data));
@@ -68,6 +69,7 @@ export async function stageAttachment(
       throw new Error("Workspace 파일 저장 한도를 초과했습니다.");
     await database.attachments.add(record);
   });
+  pauseDocumentForAttachmentUpload(pageId, record.id);
   return record;
 }
 export async function loadAttachment(

@@ -71,8 +71,8 @@ Beta 코드는 Hash만 저장한다. Recovery/Page Invite는 Beta 자격을 요�
 | POST   | `/v1/pages/:id/attachments`              | Editor/Owner. `{ operationId, id, name, data }`, data는 canonical base64. PostgreSQL Commit 후 Metadata |
 | GET    | `/v1/attachments/:id`                    | Page 접근자. Metadata + base64 data. Owner는 Trash/보존 파일도 조회                                     |
 | GET    | `/v1/attachments/:id/content`            | Page 접근자. 원본 bytes와 Range 지원(206/416), `nosniff`/강제 다운로드                                  |
-| DELETE | `/v1/attachments/:id`                    | Editor/Owner. 목록에서 삭제. Snapshot용 bytes는 Workspace 삭제까지 유지                                 |
-| GET    | `/v1/workspaces/:id/attachments/storage` | Owner. bytes/count/retained/limit/fileLimit                                                             |
+| DELETE | `/v1/attachments/:id`                    | Editor/Owner. 목록에서 삭제. Snapshot용 bytes는 참조가 없어질 때까지 유지                               |
+| GET    | `/v1/workspaces/:id/attachments/storage` | Owner. bytes/count/retained/limit/fileLimit/files                                                       |
 
 Beta 파일 제한: 파일당 4MiB, Workspace당 25MiB/200개. 동일 Operation ID/파일 ID의 같은 요청은 중복 저장하지 않는다. 다른 Payload로 재사용하면 409, 저장 한도는 507이며 로컬 bytes/재시도 Operation ID를 보존한다. MIME은 서버가 signature로 판별하며 SVG/HTML 실행은 제공하지 않는다.
 
@@ -81,3 +81,11 @@ Snapshot 복구는 참조된 파일 bytes를 새 Page의 새 Attachment ID로 �
 ## Editor 호환성
 
 문서 read/commit/realtime-token과 Snapshot read는 `X-ZeroNote-Editor-Protocol: 2`를 사용한다. Header가 없으면 기존 Editor 1이다. 새 Block/Mark가 있는 문서는 최소 버전 2이며 서버 Checkpoint에 최소 버전을 유지한다. 미지원 버전의 읽기·쓰기·Token/미리보기는 426, 잘못된 Header는 400이다. 새 기능 방송 전에 활성 구버전 연결을 종료하고 WebSocket 인증·Sync에서도 검사한다. 로컬 변경은 유지하며 앱 새로고침을 안내한다. 버전 Header는 Role 권한을 부여하지 않는다.
+
+## Storage 관리
+
+`GET /v1/workspaces/:id/attachments/storage`는 Workspace Owner에게 실제 bytes가 남은 파일과 `bytes/count/retained/limit/fileLimit`을 반환한다. `files[]`는 기존 Metadata에 `pageTitle`, `pageDeletedAt`, `deletedAt`을 더한다. bytes 원문이나 다른 Workspace의 목록은 포함하지 않는다. 집계는 동일 파일 목록에서 계산하고 주기적 Polling을 하지 않는다.
+
+`DELETE /v1/workspaces/:id/attachments/:fileId/content`는 Owner와 정확한 `{name}` 확인을 요구한다. PostgreSQL의 문서 Commit/Snapshot/파일 저장과 같은 Lock을 사용해 현재 문서(Trash 포함)와 보관 중인 Snapshot에 참조가 없을 때만 bytes를 제거한다. 성공은 `{id,purged:true}`이며 같은 파일의 재시도는 같은 응답을 반환한다. 참조는 409, 이름 불일치는 400, 권한 없음은 403, 다른 Workspace/없는 ID는 404다. 일반 `DELETE /v1/attachments/:id`는 계속 soft delete다.
+
+Migration 005는 파일 ID·원래 Hash/크기·Operation 기록을 유지하고 Payload만 제거한다. 정리된 파일 읽기/동일 Upload 재시도는 410, 다른 Payload를 같은 ID로 보내면 409다. 현재 문서는 자기 Page의 저장된 파일만 참조할 수 있다. 누락/다른 Page/영구 정리된 파일 참조는 REST와 WebSocket Commit을 422로 거절하며 서버 저장 완료로 표시하지 않는다. 로컬 변경과 파일 bytes는 남는다. 기기의 사본 제거는 미전송/보존/접근 철회/Trash 파일을 제외한다.

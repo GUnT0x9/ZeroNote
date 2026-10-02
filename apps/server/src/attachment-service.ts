@@ -1,4 +1,8 @@
-import { AttachmentUploadSchema, bytesToBase64 } from "@zeronote/shared";
+import {
+  AttachmentUploadSchema,
+  PurgeAttachmentSchema,
+  bytesToBase64,
+} from "@zeronote/shared";
 import type { Repository } from "./database/repository";
 import { DomainError, type AccessService } from "./services";
 
@@ -45,6 +49,16 @@ export class AttachmentService {
   }
   async storage(deviceId: string, workspaceId: string) {
     await this.access.workspaceOwner(deviceId, workspaceId);
-    return this.repository.attachments.usage(workspaceId);
+    return this.repository.attachments.storage(workspaceId);
+  }
+  async purge(
+    deviceId: string,
+    workspaceId: string,
+    id: string,
+    input: unknown,
+  ) {
+    await this.access.workspaceOwner(deviceId, workspaceId);
+    const { name } = PurgeAttachmentSchema.parse(input);
+    return this.repository.attachments.purge(workspaceId, id, name);
   }
 }

@@ -7,6 +7,7 @@ import {
   bytesToBase64,
   getDocumentProjection,
   replaceSharedText,
+  getAttachmentIds,
 } from "@zeronote/shared";
 import { database, errorMessage, type LocalPage } from "./database";
 import { api, ApiError } from "./api";
@@ -19,6 +20,7 @@ export interface DocumentSession {
   awareness: Awareness;
   persistence: IndexeddbPersistence;
   provider?: HocuspocusProvider;
+  attachmentUploads?: Set<string>;
   generation: number;
   localSaveError?: string;
   connecting?: Promise<HocuspocusProvider | undefined>;
@@ -213,13 +215,53 @@ export async function cacheRemoteDocument(page: LocalPage): Promise<void> {
     document.destroy();
   }
 }
+export function pauseDocumentForAttachmentUpload(
+  pageId: string,
+  attachmentId?: string,
+): void {
+  const session = sessions.get(pageId);
+  if (session) {
+    if (attachmentId)
+      (session.attachmentUploads ??= new Set()).add(attachmentId);
+    session.provider?.disconnect();
+  }
+  requestSync();
+}
+async function hasUncommittedDocumentFiles(
+  session: DocumentSession,
+): Promise<boolean> {
+  const references = new Set(getAttachmentIds(session.document));
+  const ids = [
+    ...new Set([...references, ...(session.attachmentUploads ?? [])]),
+  ];
+  const files = await database.attachments.bulkGet(ids);
+  for (let index = 0; index < ids.length; index++) {
+    const file = files[index];
+    if (
+      !file ||
+      file.status === "uploaded" ||
+      (file.status === "preserved" && !references.has(file.id))
+    )
+      session.attachmentUploads?.delete(ids[index]!);
+  }
+  return files.some(
+    (file) =>
+      file &&
+      file.status !== "uploaded" &&
+      (references.has(file.id) || session.attachmentUploads?.has(file.id)),
+  );
+}
 export async function connectDocument(
   session: DocumentSession,
   page: LocalPage,
 ): Promise<HocuspocusProvider | undefined> {
   if (page.accessLost || page.deletedAt || !navigator.onLine) return undefined;
+  if (await hasUncommittedDocumentFiles(session)) {
+    session.provider?.disconnect();
+    return undefined;
+  }
   if (session.provider) {
-    session.provider.connect();
+    await session.provider.connect();
     return session.provider;
   }
   if (session.connecting) return session.connecting;
@@ -256,6 +298,7 @@ async function createProvider(
     useUiStore.getState().patch({ syncError: errorMessage(error) });
     return undefined;
   }
+  if (await hasUncommittedDocumentFiles(session)) return undefined;
   const provider = new HocuspocusProvider({
     url: collaborationUrl(window.location.origin),
     name: page.id,

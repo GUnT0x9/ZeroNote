@@ -5,14 +5,16 @@ import {
   WORKSPACE_ATTACHMENT_BYTES,
   MAX_WORKSPACE_ATTACHMENTS,
   STORAGE_LIMIT_BYTES,
+  AUTO_SNAPSHOT_DAYS,
   safeAttachmentName,
   detectAttachmentMime,
   type AttachmentMetadata,
   type AttachmentUpload,
+  type AttachmentStorage,
   getAttachmentIds,
   remapAttachmentIds,
 } from "@zeronote/shared";
-import type * as Y from "yjs";
+import * as Y from "yjs";
 import type { Repository, Executor } from "./repository";
 import { DomainError } from "../errors";
 
@@ -25,19 +27,94 @@ export class AttachmentStore {
   constructor(readonly repository: Repository) {}
   async list(pageId: string): Promise<AttachmentMetadata[]> {
     return this.repository.query<AttachmentMetadata>(
-      sql`SELECT ${METADATA} FROM attachments WHERE page_id=${pageId} AND deleted_at IS NULL ORDER BY created_at,id`,
+      sql`SELECT ${METADATA} FROM attachments WHERE page_id=${pageId} AND deleted_at IS NULL AND purged_at IS NULL ORDER BY created_at,id`,
     );
   }
   async get(
     id: string,
     executor: Executor = this.repository.database,
   ): Promise<AttachmentRecord> {
-    const [record] = await this.repository.query<AttachmentRecord>(
-      sql`SELECT ${METADATA},data,deleted_at::text AS "deletedAt" FROM attachments WHERE id=${id}`,
+    const [record] = await this.repository.query<
+      AttachmentRecord & { purgedAt: string | null }
+    >(
+      sql`SELECT ${METADATA},data,deleted_at::text AS "deletedAt",purged_at::text AS "purgedAt" FROM attachments WHERE id=${id}`,
       executor,
     );
     if (!record) throw new DomainError(404, "파일을 찾을 수 없습니다.");
-    return record;
+    if (record.purgedAt) throw new DomainError(410, "영구 정리된 파일입니다.");
+    const { purgedAt: _purged, ...available } = record;
+    return available;
+  }
+  async storage(workspaceId: string): Promise<AttachmentStorage> {
+    const files = await this.repository.query<
+      AttachmentStorage["files"][number]
+    >(
+      sql`SELECT a.id,a.page_id AS "pageId",a.name,a.mime,a.size,a.payload_hash AS hash,a.created_at::text AS "createdAt",a.deleted_at::text AS "deletedAt",p.title AS "pageTitle",p.deleted_at::text AS "pageDeletedAt" FROM attachments a JOIN pages p ON p.id=a.page_id WHERE a.workspace_id=${workspaceId} AND a.purged_at IS NULL ORDER BY a.created_at DESC,a.id`,
+    );
+    return {
+      bytes: files.reduce((sum, file) => sum + file.size, 0),
+      count: files.length,
+      retained: files.filter((file) => file.deletedAt).length,
+      limit: WORKSPACE_ATTACHMENT_BYTES,
+      fileLimit: MAX_ATTACHMENT_BYTES,
+      files,
+    };
+  }
+  async purge(
+    workspaceId: string,
+    id: string,
+    name: string,
+  ): Promise<{ id: string; purged: true }> {
+    return this.repository.database.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      const [file] = await this.repository.query<{
+        pageId: string;
+        name: string;
+        purgedAt: string | null;
+      }>(
+        sql`SELECT page_id AS "pageId",name,purged_at::text AS "purgedAt" FROM attachments WHERE workspace_id=${workspaceId} AND id=${id} FOR UPDATE`,
+        tx,
+      );
+      if (!file) throw new DomainError(404, "파일을 찾을 수 없습니다.");
+      if (file.name !== name)
+        throw new DomainError(400, "파일 이름이 일치하지 않습니다.");
+      if (file.purgedAt) return { id, purged: true };
+      await this.repository.documents.lock(file.pageId, tx);
+      if (
+        this.referencesFile(
+          await this.repository.documents.load(file.pageId, tx),
+          id,
+        )
+      )
+        throw new DomainError(
+          409,
+          "현재 문서나 휴지통 문서에서 사용 중인 파일입니다.",
+        );
+      const snapshots = await this.repository.query<{ data: Buffer }>(
+        sql`SELECT data FROM document_snapshots WHERE page_id=${file.pageId} AND (kind='manual' OR automatic_day >= (now() AT TIME ZONE 'UTC')::date - ${AUTO_SNAPSHOT_DAYS - 1}::integer)`,
+        tx,
+      );
+      if (
+        snapshots.some((snapshot) => this.referencesFile([snapshot.data], id))
+      )
+        throw new DomainError(
+          409,
+          "기록에서 보관 중인 파일입니다. 필요 없는 기록을 먼저 삭제해주세요.",
+        );
+      await tx.execute(
+        sql`UPDATE attachments SET data=decode('','hex'),deleted_at=COALESCE(deleted_at,now()),purged_at=now() WHERE id=${id}`,
+      );
+      return { id, purged: true };
+    });
+  }
+  private referencesFile(updates: Uint8Array[], id: string): boolean {
+    const document = new Y.Doc();
+    try {
+      for (const update of updates) Y.applyUpdate(document, update);
+      return getAttachmentIds(document).includes(id);
+    } finally {
+      document.destroy();
+    }
   }
   async usage(
     workspaceId: string,
@@ -48,7 +125,7 @@ export class AttachmentStore {
       count: string;
       retained: string;
     }>(
-      sql`SELECT COALESCE(sum(size),0)::text AS bytes,count(*)::text AS count,count(*) FILTER (WHERE deleted_at IS NOT NULL)::text AS retained FROM attachments WHERE workspace_id=${workspaceId}`,
+      sql`SELECT COALESCE(sum(size),0)::text AS bytes,count(*)::text AS count,count(*) FILTER (WHERE deleted_at IS NOT NULL)::text AS retained FROM attachments WHERE workspace_id=${workspaceId} AND purged_at IS NULL`,
       executor,
     );
     return {
@@ -148,10 +225,40 @@ export class AttachmentStore {
     });
   }
   async remove(id: string): Promise<void> {
-    // Snapshot references retain their bytes until Workspace deletion.
+    // Marked files remain readable by the Owner for Snapshot recovery.
+    // purge() removes bytes only after proving no current or retained references.
     await this.repository.database.execute(
       sql`UPDATE attachments SET deleted_at=COALESCE(deleted_at,now()) WHERE id=${id}`,
     );
+  }
+  async assertReferences(
+    document: Y.Doc,
+    pageId: string,
+    executor: Executor,
+  ): Promise<void> {
+    const ids = getAttachmentIds(document);
+    if (!ids.length) return;
+    if (ids.length > MAX_WORKSPACE_ATTACHMENTS)
+      throw new DomainError(422, "문서의 파일 개수 제한을 초과했습니다.");
+    const records = await this.repository.query<{
+      id: string;
+      pageId: string;
+      purgedAt: string | null;
+    }>(
+      sql`SELECT id,page_id AS "pageId",purged_at::text AS "purgedAt" FROM attachments WHERE id IN (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`,
+      executor,
+    );
+    if (
+      records.length !== ids.length ||
+      records.some((record) => record.pageId !== pageId || record.purgedAt)
+    )
+      throw new DomainError(
+        422,
+        "저장되지 않았거나 영구 정리된 파일을 참조하고 있습니다. 로컬 파일을 Export하거나 새로 첨부해주세요.",
+      );
   }
   async copyReferences(
     document: Y.Doc,
