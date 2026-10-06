@@ -43,11 +43,27 @@ it("upgrades Alpha data once and rebuilds checkpoints from committed logs", asyn
     await legacy.migrate();
     expect(
       await legacy.query(sql`SELECT version FROM schema_migrations`),
-    ).toHaveLength(7);
+    ).toHaveLength(8);
     const loaded = new Y.Doc();
     for (const update of await legacy.loadDocument(pageId))
       Y.applyUpdate(loaded, update);
     expect(loaded.getText("title").toString()).toBe("Committed");
+    await legacy.search.backfill();
+    const firstIndex = await legacy.search.list([pageId]);
+    await legacy.search.backfill();
+    expect(await legacy.search.list([pageId])).toEqual(firstIndex);
+    expect((await legacy.search.list([pageId]))[0]?.projection.title).toBe(
+      "Committed",
+    );
+    const emptyPageId = crypto.randomUUID();
+    await legacy.database.execute(
+      sql`INSERT INTO pages(id,workspace_id,kind,title) VALUES(${emptyPageId},${workspaceId},'document','Registered title')`,
+    );
+    await legacy.search.backfill();
+    expect((await legacy.search.list([emptyPageId]))[0]?.projection.title).toBe(
+      "Registered title",
+    );
+    expect(await legacy.loadDocument(emptyPageId)).toHaveLength(0);
     await legacy.documents.compact(pageId);
     expect(
       await legacy.query(sql`SELECT id FROM document_updates`),

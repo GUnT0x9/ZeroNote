@@ -1293,6 +1293,40 @@ small,
   align-items: center;
   gap: 4px;
 }
+.page-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+.page-tag-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.page-tag-list li > span {
+  overflow-wrap: anywhere;
+}
+.page-tag-list .icon-button {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.page-tag-form {
+  margin: 12px 0;
+}
+.page-tag-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .priority-tag {
   padding: 0;
   border: 0;

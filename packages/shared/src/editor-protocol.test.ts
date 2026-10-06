@@ -54,3 +54,15 @@ it("requires protocol 3 for new Property definitions, including decoded and dele
     .set("field", new Y.Map([["type", "number"]]));
   expect(getDocumentEditorProtocol(document)).toBe(1);
 });
+it("keeps Tag protocol 4 above advanced Property protocol 3 after the last Tag is removed", () => {
+  const doc = new Y.Doc();
+  doc.getMap("pageTags").set("team", "Team");
+  doc.getMap("pageSettings").set("tagProtocol", 4);
+  doc
+    .getMap<Y.Map<unknown>>("databaseProperties")
+    .set("field", new Y.Map([["type", "formula"]]));
+  expect(getDocumentEditorProtocol(doc)).toBe(4);
+  doc.getMap("pageTags").clear();
+  expect(getDocumentEditorProtocol(doc)).toBe(4);
+  doc.destroy();
+});

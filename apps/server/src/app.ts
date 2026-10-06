@@ -15,6 +15,7 @@ export async function createApp(
   logging = true,
 ) {
   await repository.migrate();
+  await repository.search.backfill();
   const app = Fastify({
     logger: logging
       ? {

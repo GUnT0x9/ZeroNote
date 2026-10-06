@@ -8,6 +8,8 @@ import {
   base64ToBytes,
   bytesToBase64,
   getDocumentProjection,
+  getKnowledgeProjection,
+  assertPageTags,
   getAttachmentIds,
   remapAttachmentIds,
   remapDatabasePageIds,
@@ -189,6 +191,7 @@ export async function duplicateLocalPage(
           workspaceId: page.workspaceId,
           update: Y.encodeStateAsUpdate(copy),
           ...getDocumentProjection(copy),
+          knowledge: getKnowledgeProjection(copy),
           generation: 1,
           committedGeneration: 0,
           state: "saved",
@@ -295,6 +298,7 @@ export async function importWorkspace(
     const document = new Y.Doc({ gc: false });
     try {
       Y.applyUpdate(document, base64ToBytes(page.document));
+      assertPageTags(document);
       for (const id of getAttachmentIds(document))
         if (
           !importedFiles.some(
@@ -371,6 +375,7 @@ export async function importWorkspace(
             workspaceId: workspace.id,
             update: Y.encodeStateAsUpdate(document),
             ...getDocumentProjection(document),
+            knowledge: getKnowledgeProjection(document),
             generation: 1,
             committedGeneration: 0,
             state: "saved",
@@ -420,6 +425,7 @@ export async function importWorkspace(
               workspaceId: workspace.id,
               update: Y.encodeStateAsUpdate(document),
               ...getDocumentProjection(document),
+              knowledge: getKnowledgeProjection(document),
               generation: 1,
               committedGeneration: 0,
               state: "saved",

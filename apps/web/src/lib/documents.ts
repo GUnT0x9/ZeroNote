@@ -6,6 +6,7 @@ import {
   base64ToBytes,
   bytesToBase64,
   getDocumentProjection,
+  getKnowledgeProjection,
   replaceSharedText,
   getAttachmentIds,
 } from "@zeronote/shared";
@@ -124,6 +125,11 @@ async function hydrate(
       state.byteLength === cached.update.byteLength &&
       state.every((byte, index) => byte === cached.update[index])
     ) {
+      if (!cached.knowledge)
+        await database.documents.update(page.id, {
+          knowledge: getKnowledgeProjection(session.document),
+          tags: getDocumentProjection(session.document).tags,
+        });
       if (cached.generation > cached.committedGeneration) requestSync();
       return;
     }
@@ -151,6 +157,7 @@ async function saveLocal(
           workspaceId: page.workspaceId,
           update: Y.encodeStateAsUpdate(session.document),
           ...projection,
+          knowledge: getKnowledgeProjection(session.document),
           generation,
           committedGeneration: previous?.committedGeneration ?? 0,
           state: previous?.state === "preserved" ? "preserved" : "saved",
@@ -203,6 +210,7 @@ export async function cacheRemoteDocument(page: LocalPage): Promise<void> {
       workspaceId: page.workspaceId,
       update: Y.encodeStateAsUpdate(document),
       ...projection,
+      knowledge: getKnowledgeProjection(document),
       generation: existing?.generation ?? 0,
       committedGeneration: existing?.committedGeneration ?? 0,
       state: existing?.state ?? "saved",

@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { DatabaseFilterSchema } from "./database";
+import { DatabaseFilterSchema } from "./database-values";
+import { normalizeSearchText } from "./search-normalize";
+export { normalizeSearchText } from "./search-normalize";
 
 export const MAX_SEARCH_QUERY_LENGTH = 512;
 export const MAX_SEARCH_CLAUSES = 32;
@@ -9,7 +11,7 @@ export const SearchClauseSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("text"),
-      value: z.string().min(1).max(MAX_SEARCH_QUERY_LENGTH),
+      value: z.string().trim().min(1).max(MAX_SEARCH_QUERY_LENGTH),
       phrase: z.boolean(),
       excluded: z.boolean(),
     })
@@ -46,6 +48,14 @@ export const SearchQuerySchema = z
   .strict();
 export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 export type SearchClause = z.infer<typeof SearchClauseSchema>;
+export const SearchRequestSchema = z
+  .object({
+    query: SearchQuerySchema,
+    workspaceId: z.uuid().nullable(),
+    limit: z.number().int().min(1).max(50).default(30),
+  })
+  .strict();
+export type SearchRequest = z.infer<typeof SearchRequestSchema>;
 interface SearchPart {
   value: string;
   quoted: boolean;
@@ -66,10 +76,6 @@ export class SearchSyntaxError extends Error {
     super(`${position + 1}번째 문자: ${message}`);
     this.name = "SearchSyntaxError";
   }
-}
-
-export function normalizeSearchText(value: string): string {
-  return value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
 }
 
 function readQuotedPart(source: string, start: number): SearchPart {

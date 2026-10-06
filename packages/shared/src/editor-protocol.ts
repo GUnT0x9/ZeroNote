@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 
-export const EDITOR_PROTOCOL = 3;
+export const EDITOR_PROTOCOL = 4;
 export const EDITOR_PROTOCOL_HEADER = "X-ZeroNote-Editor-Protocol";
 export const EDITOR_UPDATE_MESSAGE =
   "새 Editor 기능이 포함된 문서입니다. 변경은 이 기기에 보관됩니다. 앱을 새로고침한 뒤 다시 동기화해주세요.";
@@ -34,7 +34,11 @@ const LEGACY_MARKS = new Set([
 
 /** Older ProseMirror schemas delete unknown Yjs nodes and marks while rendering. */
 export function getDocumentEditorProtocol(document: Y.Doc): number {
-  let required = 1;
+  let required =
+    document.getMap("pageTags").size ||
+    document.getMap("pageSettings").get("tagProtocol") === 4
+      ? 4
+      : 1;
   for (const property of document
     .getMap<Y.Map<unknown>>("databaseProperties")
     .values())
@@ -44,7 +48,7 @@ export function getDocumentEditorProtocol(document: Y.Doc): number {
         String(property.get("type")),
       )
     )
-      required = 3;
+      required = Math.max(required, 3);
   const inspect = (node: unknown): void => {
     if (node instanceof Y.XmlText)
       for (const part of node.toDelta())

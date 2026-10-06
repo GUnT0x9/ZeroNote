@@ -1,4 +1,17 @@
 import { z } from "zod";
+import {
+  PropertyValueSchema,
+  DatabaseFilterSchema,
+  type PropertyValue,
+  type DatabaseFilter,
+} from "./database-values";
+export {
+  PropertyValueSchema,
+  DatabaseFilterSchema,
+  FilterOperators,
+  type PropertyValue,
+  type DatabaseFilter,
+} from "./database-values";
 import * as Y from "yjs";
 import type { DatabaseValueReader } from "./database-computation";
 import {
@@ -114,33 +127,6 @@ export const DatabasePropertySchema = z
     "속성 종류와 설정이 일치해야 합니다.",
   );
 export type DatabaseProperty = z.infer<typeof DatabasePropertySchema>;
-export type PropertyValue = string | number | boolean | string[] | null;
-const PropertyValueSchema = z.union([
-  z.string().max(10000),
-  z.number().finite(),
-  z.boolean(),
-  z.array(z.string().max(80)).max(50),
-  z.null(),
-]);
-export const FilterOperators = [
-  "contains",
-  "equals",
-  "not_equals",
-  "empty",
-  "not_empty",
-  "gt",
-  "gte",
-  "lt",
-  "lte",
-] as const;
-export const DatabaseFilterSchema = z
-  .object({
-    propertyId: z.string(),
-    operator: z.enum(FilterOperators),
-    value: PropertyValueSchema,
-  })
-  .strict();
-export type DatabaseFilter = z.infer<typeof DatabaseFilterSchema>;
 export const DatabaseViewKinds = [
   "table",
   "board",
@@ -578,6 +564,31 @@ export function matchesDatabaseFilter(
         ? comparison < 0
         : comparison <= 0;
 }
+export function matchesDatabasePropertyFilter(
+  value: PropertyValue,
+  property: DatabaseProperty,
+  filter: DatabaseFilter,
+  label?: string,
+): boolean {
+  const computed = ["formula", "rollup"].includes(property.type);
+  const typedFilter =
+    computed &&
+    typeof filter.value === "string" &&
+    typeof value === "number" &&
+    filter.value.trim() !== "" &&
+    Number.isFinite(Number(filter.value))
+      ? { ...filter, value: Number(filter.value) }
+      : computed &&
+          typeof value === "boolean" &&
+          ["true", "false"].includes(String(filter.value))
+        ? { ...filter, value: filter.value === "true" }
+        : filter;
+  const useLabel =
+    label !== undefined &&
+    ["file", "relation"].includes(property.type) &&
+    !["empty", "not_empty"].includes(filter.operator);
+  return matchesDatabaseFilter(useLabel ? label : value, typedFilter);
+}
 export function queryDatabaseRows(
   document: Y.Doc,
   view: DatabaseView,
@@ -607,26 +618,15 @@ export function queryDatabaseRows(
         const value = reader
           ? result!.value
           : readDatabaseValue(document, row, property);
-        const useLabel =
+        return matchesDatabasePropertyFilter(
+          value,
+          property,
+          filter,
           reader &&
-          ["file", "relation"].includes(property.type) &&
-          !["empty", "not_empty"].includes(filter.operator);
-        const computed = ["formula", "rollup"].includes(property.type);
-        const typedFilter =
-          computed &&
-          typeof filter.value === "string" &&
-          typeof value === "number" &&
-          filter.value.trim() !== "" &&
-          Number.isFinite(Number(filter.value))
-            ? { ...filter, value: Number(filter.value) }
-            : computed &&
-                typeof value === "boolean" &&
-                ["true", "false"].includes(String(filter.value))
-              ? { ...filter, value: filter.value === "true" }
-              : filter;
-        return matchesDatabaseFilter(
-          useLabel ? reader.label(row, property) : value,
-          typedFilter,
+            ["file", "relation"].includes(property.type) &&
+            !["empty", "not_empty"].includes(filter.operator)
+            ? reader.label(row, property)
+            : undefined,
         );
       }),
   );

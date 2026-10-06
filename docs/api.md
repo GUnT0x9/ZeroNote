@@ -80,7 +80,7 @@ Snapshot 복구는 참조된 파일 bytes를 새 Page의 새 Attachment ID로 �
 
 ## Editor 호환성
 
-현재 Web은 `X-ZeroNote-Editor-Protocol: 3`을 사용한다. Header가 없으면 기존 Editor 1이다. 기존 문서는 최소 버전 1, Attachment Block은 2, File/Formula/Relation/Rollup 속성이나 미지원 Block/Mark는 3이다. 서버 Checkpoint에 필요한 최소 버전을 유지하며 삭제된 속성 정의에도 호환성 경계를 적용한다. 미지원 버전의 읽기·쓰기·Token/미리보기는 426, 잘못된 Header는 400이다. 새 기능 방송 전에 활성 구버전 연결을 종료하고 WebSocket 인증·Sync에서도 검사한다. 로컬 변경은 유지하며 앱 새로고침을 안내한다. 버전 Header는 Role 권한을 부여하지 않는다. Migration 007은 기존 Checkpoint와 Update를 보존하며 Protocol 허용 범위를 1–3으로 확장한다.
+현재 Web은 `X-ZeroNote-Editor-Protocol: 4`를 사용한다. Header가 없으면 기존 Editor 1이다. 기존 문서는 최소 버전 1, Attachment Block은 2, File/Formula/Relation/Rollup 속성은 3, Tag나 미지원 Block/Mark는 4다. 서버 Checkpoint에 필요한 최소 버전을 유지하며 삭제된 속성 정의와 마지막 Tag 제거 후에도 호환성 경계를 적용한다. 미지원 버전의 읽기·쓰기·Token/미리보기는 426, 잘못된 Header는 400이다. 새 기능 방송 전에 활성 구버전 연결을 종료하고 WebSocket 인증·Sync에서도 검사한다. 로컬 변경은 유지하며 앱 새로고침을 안내한다. 버전 Header는 Role 권한을 부여하지 않는다. Migration 008은 기존 Checkpoint와 Update를 보존하며 Protocol 허용 범위를 1–4로 확장하고 파생 검색 Index를 추가한다. Index는 Commit/Checkpoint와 같은 transaction에 저장하며 검색 API는 다음 단계에서 연결한다.
 
 Database의 File/Relation 값은 중복 없는 UUID 배열(최대 50개), Formula는 길이/노드/깊이를 제한한 속성 ID AST, Rollup은 Relation/대상 속성 ID/집계 연산 정의다. 계산 결과를 서버의 별도 편집 원본으로 저장하지 않는다. Commit 전에 공유 Schema와 File/Relation 값 형식을 검증하고 잘못된 정의는 422로 거절한다. Relation은 대상 접근 권한을 추가하지 않는다. Public Projection은 게시 범위 밖 Relation과 Person에서 파생한 결과를 반환하지 않는다.
 

@@ -99,7 +99,10 @@ export class AccessService {
       for (const page of pages) {
         const role = owner ? "owner" : roleForPage(page, pages, grants);
         if (role) {
-          result.pages.push(page);
+          result.pages.push({
+            ...page,
+            ancestorTrashed: !page.deletedAt && isTrashed(page, pages),
+          });
           result.roles[page.id] = role;
         }
       }

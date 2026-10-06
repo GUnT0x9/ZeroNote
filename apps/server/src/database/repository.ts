@@ -8,6 +8,7 @@ import { BetaStore } from "./beta-store";
 import { SnapshotStore } from "./snapshot-store";
 import { PublicShareStore } from "./public-share-store";
 import { AttachmentStore } from "./attachment-store";
+import { SearchStore } from "./search-store";
 import type { Page, Workspace, Role, PageComment } from "@zeronote/shared";
 
 export interface DeviceRecord {
@@ -53,6 +54,7 @@ export class Repository {
   readonly snapshots: SnapshotStore;
   readonly attachments: AttachmentStore;
   readonly publicShares: PublicShareStore;
+  readonly search: SearchStore;
   constructor(url: string) {
     this.pool = new Pool({
       connectionString: url,
@@ -66,6 +68,7 @@ export class Repository {
     this.snapshots = new SnapshotStore(this);
     this.attachments = new AttachmentStore(this);
     this.publicShares = new PublicShareStore(this);
+    this.search = new SearchStore(this);
   }
   async query<T>(
     statement: SQL,

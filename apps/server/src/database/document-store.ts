@@ -11,6 +11,7 @@ import {
   EDITOR_UPDATE_MESSAGE,
   getDocumentEditorProtocol,
   assertDatabaseState,
+  assertPageTags,
 } from "@zeronote/shared";
 import { DomainError } from "../errors";
 import type { Repository, Executor } from "./repository";
@@ -118,10 +119,11 @@ export class DocumentStore {
           throw new DomainError(426, EDITOR_UPDATE_MESSAGE);
         try {
           assertDatabaseState(document);
+          assertPageTags(document);
         } catch {
           throw new DomainError(
             422,
-            "Database 속성이나 파일·관계 값이 올바르지 않습니다. 로컬 변경을 보존했습니다.",
+            "Database 속성·파일·관계 값이나 Tag가 올바르지 않습니다. 로컬 변경을 보존했습니다.",
           );
         }
         const state = Y.encodeStateAsUpdate(document);
@@ -169,6 +171,7 @@ export class DocumentStore {
     try {
       Y.applyUpdate(document, state);
       protocol = getDocumentEditorProtocol(document);
+      await this.repository.search.write(pageId, document, executor);
     } finally {
       document.destroy();
     }

@@ -8,6 +8,7 @@ const MIGRATIONS = [
   "005-attachment-purge.sql",
   "006-public-sharing.sql",
   "007-database-properties.sql",
+  "008-knowledge-search.sql",
 ] as const;
 export async function migrateDatabase(pool: Pool): Promise<void> {
   const client = await pool.connect();

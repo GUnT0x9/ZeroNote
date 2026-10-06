@@ -29,6 +29,10 @@ import {
   getDatabaseProperties,
   readDatabaseValue,
   base64ToBytes,
+  setPageTag,
+  removePageTag,
+  getPageTags,
+  type Metadata,
 } from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
@@ -1315,6 +1319,188 @@ describe("Accountless API integration", () => {
     expect(retried.statusCode).toBe(200);
     expect(retried.json()).toMatchObject({ durable: true });
     expect(await repository.loadDocument(root.id)).toHaveLength(1);
+  });
+
+  it("persists Tags and the source search Index atomically and rejects incompatible clients and malformed Tags", async () => {
+    const owner = await actor(),
+      ws = await workspace(owner),
+      target = await page(owner, ws.id),
+      doc = new Y.Doc();
+    doc.getText("title").insert(0, "Tagged note");
+    setPageTag(doc, "Knowledge");
+    const path = `/v1/documents/${target.id}/commit`,
+      input = {
+        operationId: crypto.randomUUID(),
+        update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+      };
+    expect(
+      (await request("POST", path, input, owner.cookie, 3)).statusCode,
+    ).toBe(426);
+    expect(await repository.search.list([target.id])).toEqual([]);
+    const writeIndex = repository.search.write.bind(repository.search);
+    const failed = vi
+      .spyOn(repository.search, "write")
+      .mockImplementationOnce(async (...args) => {
+        await writeIndex(...args);
+        throw new Error("Checkpoint unavailable after Index write");
+      });
+    try {
+      expect(
+        (await request("POST", path, input, owner.cookie)).statusCode,
+      ).toBe(500);
+    } finally {
+      failed.mockRestore();
+    }
+    expect(await repository.loadDocument(target.id)).toHaveLength(0);
+    expect(await repository.search.list([target.id])).toEqual([]);
+    expect(
+      (await request("POST", path, input, owner.cookie)).json(),
+    ).toMatchObject({ durable: true });
+    expect(
+      (await repository.search.list([target.id]))[0]?.projection,
+    ).toMatchObject({ title: "Tagged note", tags: ["Knowledge"] });
+    expect(await repository.search.list([])).toEqual([]);
+    expect(await repository.search.list([crypto.randomUUID()])).toEqual([]);
+    const snapshot = (
+      await request(
+        "POST",
+        `/v1/pages/${target.id}/snapshots`,
+        { operationId: crypto.randomUUID(), name: "Tags" },
+        owner.cookie,
+      )
+    ).json<{ id: string }>();
+    const restored = (
+      await request(
+        "POST",
+        `/v1/snapshots/${snapshot.id}/restore-copy`,
+        { operationId: crypto.randomUUID() },
+        owner.cookie,
+      )
+    ).json<{ id: string }>();
+    expect(
+      (await repository.search.list([restored.id]))[0]?.projection.tags,
+    ).toEqual(["Knowledge"]);
+    removePageTag(doc, "Knowledge");
+    expect(
+      (
+        await request(
+          "POST",
+          path,
+          {
+            operationId: crypto.randomUUID(),
+            update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await repository.search.list([target.id]))[0]?.projection.tags,
+    ).toEqual([]);
+    expect(
+      (
+        await request(
+          "GET",
+          `/v1/documents/${target.id}`,
+          undefined,
+          owner.cookie,
+          3,
+        )
+      ).statusCode,
+    ).toBe(426);
+    doc.getMap("pageTags").set("broken", false);
+    expect(
+      (
+        await request(
+          "POST",
+          path,
+          {
+            operationId: crypto.randomUUID(),
+            update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(422);
+    const committed = new Y.Doc();
+    for (const update of await repository.loadDocument(target.id))
+      Y.applyUpdate(committed, update);
+    expect(getPageTags(committed)).toEqual([]);
+    expect(committed.getMap("pageTags").has("broken")).toBe(false);
+    doc.destroy();
+    committed.destroy();
+    await repository.deleteWorkspace(ws.id);
+    expect(await repository.search.list([target.id, restored.id])).toEqual([]);
+  });
+
+  it("marks a shared child as unavailable when its invisible parent is trashed without exposing the parent", async () => {
+    const owner = await actor(),
+      viewer = await actor(),
+      ws = await workspace(owner),
+      parent = await page(owner, ws.id),
+      child = await page(owner, ws.id, parent.id),
+      link = await invite(owner, child.id, "viewer");
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/invites/${link.id}/redeem`,
+          { secret: link.secret },
+          viewer.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+    const metadata = () =>
+      request("GET", "/v1/metadata", undefined, viewer.cookie);
+    expect((await metadata()).json<Metadata>().pages).toMatchObject([
+      { id: child.id, ancestorTrashed: false },
+    ]);
+    const trash = {
+      operationId: crypto.randomUUID(),
+      workspaceId: ws.id,
+      pageId: parent.id,
+      expectedRevision: (await repository.getPage(parent.id))!.revision,
+      action: "trash",
+    };
+    expect(
+      (await request("POST", "/v1/sync/page", trash, owner.cookie)).statusCode,
+    ).toBe(200);
+    const after = (await metadata()).json<Metadata>();
+    expect(after.pages).toHaveLength(1);
+    expect(after.pages[0]).toMatchObject({
+      id: child.id,
+      ancestorTrashed: true,
+      deletedAt: null,
+    });
+    expect(after.pages.some((value) => value.id === parent.id)).toBe(false);
+    expect(
+      (
+        await request(
+          "GET",
+          `/v1/documents/${child.id}`,
+          undefined,
+          viewer.cookie,
+        )
+      ).statusCode,
+    ).toBe(410);
+    expect(
+      (
+        await request(
+          "POST",
+          "/v1/sync/page",
+          {
+            ...trash,
+            operationId: crypto.randomUUID(),
+            expectedRevision: (await repository.getPage(parent.id))!.revision,
+            action: "restore",
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+    expect((await metadata()).json<Metadata>().pages[0]?.ancestorTrashed).toBe(
+      false,
+    );
   });
 
   it("revokes granted access and prevents credential export", async () => {

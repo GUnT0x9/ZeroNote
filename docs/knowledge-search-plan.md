@@ -50,9 +50,13 @@ Graph는 현재 Page를 중심으로 열고 한 화면에 최대 200개 Node를 
 
 `49f85c5`의 [CI 37421627184](https://github.com/GUnT0x9/ZeroNote/actions/runs/37421627184)도 통과했다. 아직 검색 API/UI와 새 데이터 형식이 없는 기반 모듈이며 Production은 검증한 `f7b4c00`을 유지한다.
 
-| 파일 | 변경 이유 |
-| --- | --- |
-| `packages/shared/src/search-query.ts` | UI·서버가 사용할 제한된 검색 AST/정규화/구문 파서 |
-| `packages/shared/src/search-query.test.ts` | 정상/오류 구문·날짜·형·길이·요청 AST 33개 회귀 |
-| `apps/server/src/realtime.test.ts` | 반복된 로컬 초기화 지연에 맞춘 Hook 대기 |
-| `docs/knowledge-search-plan.md` | 9개 기능의 저장·권한·Offline·UI·검증 계약 |
+| 파일                                       | 변경 이유                                         |
+| ------------------------------------------ | ------------------------------------------------- |
+| `packages/shared/src/search-query.ts`      | UI·서버가 사용할 제한된 검색 AST/정규화/구문 파서 |
+| `packages/shared/src/search-query.test.ts` | 정상/오류 구문·날짜·형·길이·요청 AST 33개 회귀    |
+| `apps/server/src/realtime.test.ts`         | 반복된 로컬 초기화 지연에 맞춘 Hook 대기          |
+| `docs/knowledge-search-plan.md`            | 9개 기능의 저장·권한·Offline·UI·검증 계약         |
+
+## 2026-10-06 Tag와 source Index 진행
+
+Tag CRDT·Properties 편집·Snapshot 미리보기·복제/Import 보존을 구현했다. Migration 008은 Protocol 4와 source 검색 Index를 추가하며 Commit/Checkpoint transaction에서 Index를 함께 저장한다. 기존 데이터의 초기 Index는 Page lock과 Checkpoint+이후 Update로 생성한다. Relation 대상 이름과 Formula/Rollup 결과는 공통 Index에 보관하지 않는다. 검색 API/새 필터 UI/Graph/추천은 아직 연결하지 않았다. Tag의 CI·배포·실제 HTTPS는 [출시 기록](tags-release.md)에 확인 후 기록하며 그 전에는 전체 완료 수를 늘리지 않는다.

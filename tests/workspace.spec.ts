@@ -560,6 +560,8 @@ async function openPageTool(
   page: Page,
   name: "Comments" | "Properties" | "Backlinks" | "기록",
 ): Promise<void> {
+  if (await page.getByRole("complementary", { name, exact: true }).isVisible())
+    return;
   const action = page.getByRole("button", { name, exact: true });
   if (!(await action.isVisible()))
     await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
@@ -1098,6 +1100,135 @@ test("Export and Import preserve document and Task data in a fresh workspace", a
     page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
   ).toBeVisible();
   await cleanup(page, `${name} (가져옴)`);
+});
+
+test("Page Tags converge across devices, survive Offline reload and restore from Snapshot with Viewer enforcement", async ({
+  page,
+  context,
+  browser,
+}) => {
+  const name = `Tags ${Date.now()}`,
+    title = `Tagged ${Date.now()}`;
+  const editorContext = await browser.newContext({
+      viewport: { width: 1440, height: 960 },
+    }),
+    viewerContext = await browser.newContext({
+      viewport: { width: 1440, height: 960 },
+    }),
+    collaborator = await editorContext.newPage(),
+    viewer = await viewerContext.newPage();
+  const tags = (target: Page) =>
+    target.getByRole("region", { name: "Page Tags", exact: true });
+  const add = async (target: Page, tag: string) => {
+    await tags(target).getByLabel("Tag 추가").fill(tag);
+    await tags(target)
+      .getByRole("button", { name: "추가", exact: true })
+      .click();
+    await expect(tags(target).getByLabel("Tag 추가")).toHaveValue("");
+  };
+  try {
+    await createWorkspace(page, name);
+    await page.getByLabel("Page 제목").fill(title);
+    await openPageTool(page, "Properties");
+    await add(page, "Team");
+    await add(page, "team");
+    await expect(tags(page).getByRole("listitem")).toHaveCount(1);
+    await tags(page)
+      .getByRole("button", { name: "Tag team 이름 변경", exact: true })
+      .click();
+    await tags(page).getByLabel("Tag 이름", { exact: true }).fill("설계");
+    await tags(page)
+      .getByRole("button", { name: "Tag 이름 저장", exact: true })
+      .click();
+    await expect(tags(page).getByText("설계", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await collaborator.goto(await createInvite(page, "editor"));
+    await expect(collaborator.getByLabel("Page 제목")).toHaveValue(title);
+    await openPageTool(collaborator, "Properties");
+    await add(collaborator, "협업");
+    await openPageTool(page, "Properties");
+    await expect(tags(page).getByText("협업", { exact: true })).toBeVisible();
+    await viewer.goto(await createInvite(page, "viewer"));
+    await expect(viewer.getByLabel("Page 제목")).toHaveValue(title);
+    await openPageTool(viewer, "Properties");
+    await expect(tags(viewer).getByText("협업", { exact: true })).toBeVisible();
+    await expect(tags(viewer).getByLabel("Tag 추가")).toHaveCount(0);
+    await expect(tags(viewer).getByRole("button")).toHaveCount(0);
+    await openPageTool(page, "Properties");
+    await page.evaluate(() =>
+      navigator.serviceWorker.ready.then(() => undefined),
+    );
+    await context.setOffline(true);
+    await add(page, "Offline");
+    await tags(page)
+      .getByRole("button", { name: "Tag 설계 삭제", exact: true })
+      .click();
+    await expect(tags(page).getByText("설계", { exact: true })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByLabel("Page 제목")).toHaveValue(title);
+    await openPageTool(page, "Properties");
+    await expect(
+      tags(page).getByText("Offline", { exact: true }),
+    ).toBeVisible();
+    await expect(tags(page).getByText("협업", { exact: true })).toBeVisible();
+    await expect(tags(page).getByText("설계", { exact: true })).toHaveCount(0);
+    await context.setOffline(false);
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await expect(
+      tags(collaborator).getByText("Offline", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      tags(collaborator).getByText("설계", { exact: true }),
+    ).toHaveCount(0);
+    await openPageTool(page, "기록");
+    const history = page.getByRole("complementary", {
+      name: "기록",
+      exact: true,
+    });
+    await history.getByLabel("기록 이름").fill("Tagged checkpoint");
+    await history.getByRole("button", { name: "현재 상태 기록하기" }).click();
+    await history.getByRole("button", { name: /Tagged checkpoint/ }).click();
+    await expect(
+      tags(page).getByText("Offline", { exact: true }),
+    ).toBeVisible();
+    await expect(tags(page).getByRole("button")).toHaveCount(0);
+    await history.getByRole("button", { name: "새 Page로 복구" }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue(
+      new RegExp(`^${title} \\(복구`),
+    );
+    await openPageTool(page, "Properties");
+    await expect(
+      tags(page).getByText("Offline", { exact: true }),
+    ).toBeVisible();
+    await expect(tags(page).getByText("협업", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page.getByRole("button", { name: "Page 복제", exact: true }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue(/\(복사\)$/);
+    await openPageTool(page, "Properties");
+    await expect(
+      tags(page).getByText("Offline", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "Search", exact: true })
+      .getByRole("textbox")
+      .fill("Offline");
+    await expect(
+      page
+        .getByRole("dialog", { name: "Search", exact: true })
+        .getByText(title, { exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+  } finally {
+    await context.setOffline(false);
+    await cleanup(page, name);
+    await editorContext.close();
+    await viewerContext.close();
+  }
 });
 
 test("Snapshot preview is read-only and restores a new Page while retaining the source", async ({

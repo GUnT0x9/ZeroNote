@@ -7,6 +7,7 @@ import type {
   CommentInput,
   PageComment,
   AttachmentMetadata,
+  KnowledgeProjection,
 } from "@zeronote/shared";
 export interface LocalWorkspace extends Workspace {
   pendingCreation: boolean;
@@ -26,6 +27,8 @@ export interface LocalDocument {
   title: string;
   text: string;
   references: string[];
+  tags?: string[];
+  knowledge?: KnowledgeProjection;
   generation: number;
   committedGeneration: number;
   state: "saved" | "error" | "preserved";

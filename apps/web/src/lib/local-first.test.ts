@@ -17,6 +17,8 @@ import {
   bytesToBase64,
   type WorkspaceExport,
   getDocumentProjection,
+  setPageTag,
+  getPageTags,
 } from "@zeronote/shared";
 import { database, type LocalPage, type LocalDocument } from "./database";
 import {
@@ -307,6 +309,7 @@ describe("Local-first data", () => {
     session.document.getXmlFragment("content").insert(0, [mention]);
     createTaskRow((await openDocument(project!)).document, "Ship Alpha");
     replaceSharedText(session.document.getText("title"), "Knowledge");
+    setPageTag(session.document, "설계");
     await flushDocuments();
     const exported = await exportWorkspace(ws.id);
     expect(JSON.stringify(exported)).not.toContain(key);
@@ -326,9 +329,61 @@ describe("Local-first data", () => {
     expect((await database.documents.get(document!.id))?.title).toBe(
       "Knowledge",
     );
+    expect((await database.documents.get(document!.id))?.tags).toEqual([
+      "설계",
+    ]);
+    expect(
+      (await database.documents.get(document!.id))?.knowledge?.tags,
+    ).toEqual(["설계"]);
     expect((await database.documents.get(newProject!.id))?.text).toContain(
       "Ship Alpha",
     );
+  });
+  it("preserves Tags and search projection in a duplicate with a fresh Page identity", async () => {
+    const { page } = await workspace(),
+      session = await openDocument(page);
+    setPageTag(session.document, "Reusable");
+    await flushDocuments();
+    const copy = await duplicateLocalPage(page),
+      copied = await openDocument(copy);
+    expect(copy.id).not.toBe(page.id);
+    expect(getPageTags(copied.document)).toEqual(["Reusable"]);
+    expect((await database.documents.get(copy.id))?.knowledge?.tags).toEqual([
+      "Reusable",
+    ]);
+    expect(
+      searchLocalPages(
+        [page],
+        await database.documents.toArray(),
+        "reusable",
+      ).map((item) => item.page.id),
+    ).toEqual([page.id]);
+    copied.document.getMap("pageTags").clear();
+    expect(getPageTags(session.document)).toEqual(["Reusable"]);
+  });
+  it("rejects malformed Tag imports before writing Pages or a Workspace", async () => {
+    const doc = new Y.Doc(),
+      before = await database.workspaces.count();
+    doc.getMap("pageTags").set("invalid", false);
+    await expect(
+      importWorkspace({
+        schemaVersion: 1,
+        name: "Invalid",
+        exportedAt: "now",
+        pages: [
+          {
+            id: crypto.randomUUID(),
+            parentId: null,
+            kind: "document",
+            title: "Bad",
+            isInbox: false,
+            document: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+          },
+        ],
+      }),
+    ).rejects.toThrow("손상");
+    expect(await database.workspaces.count()).toBe(before);
+    doc.destroy();
   });
   it("rejects invalid versions or corrupted document data before creating a workspace", async () => {
     const before = await database.workspaces.count();
@@ -461,6 +516,25 @@ describe("Local search and visibility", () => {
     const first = page("Loop");
     first.parentId = first.id;
     expect(availablePages([first])).toEqual([]);
+  });
+  it("hides a shared child when its private parent is trashed or inaccessible", () => {
+    const child = {
+      ...page("Shared child"),
+      parentId: crypto.randomUUID(),
+      ancestorTrashed: true,
+    };
+    expect(availablePages([child])).toEqual([]);
+    expect(searchLocalPages([child], [], "Shared")).toEqual([]);
+    expect(availablePages([{ ...child, ancestorTrashed: false }])).toHaveLength(
+      1,
+    );
+    const parent = { ...page("Revoked parent"), accessLost: true };
+    expect(
+      availablePages([
+        parent,
+        { ...child, parentId: parent.id, ancestorTrashed: false },
+      ]),
+    ).toEqual([]);
   });
   it("accepts valid binary CRDT exports without credentials", async () => {
     const doc = new Y.Doc();

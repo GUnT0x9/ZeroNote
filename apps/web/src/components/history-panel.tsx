@@ -9,6 +9,7 @@ import {
   PageSchema,
   base64ToBytes,
   getTaskRows,
+  getPageTags,
   type DocumentSnapshot,
 } from "@zeronote/shared";
 import { api, authenticate } from "@/lib/api";
@@ -18,6 +19,7 @@ import { flushDocuments } from "@/lib/documents";
 import { synchronize } from "@/lib/sync";
 import { BlockEditor } from "./block-editor";
 import { DatabaseRowProperties } from "./database-property";
+import { PageTags } from "./page-tags";
 import type { WorkspaceData } from "@/lib/hooks";
 export function HistoryPanel({
   page,
@@ -237,6 +239,9 @@ function SnapshotPreview({
   return (
     <div>
       <strong>{session.document.getText("title").toString()}</strong>
+      {getPageTags(session.document).length > 0 && (
+        <PageTags document={session.document} editable={false} />
+      )}
       <BlockEditor
         session={session}
         attachmentPageId={detail.pageId}

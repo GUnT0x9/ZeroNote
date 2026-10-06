@@ -38,6 +38,7 @@ import { DatabaseRowProperties } from "./database-property";
 
 import { PublicShareManager } from "./public-share-manager";
 import { HistoryPanel } from "./history-panel";
+import { PageTags } from "./page-tags";
 
 const PANEL_NAMES = {
   history: "기록",
@@ -89,7 +90,7 @@ export function ContextPanel({
       ) : ui.panel === "backlinks" ? (
         <BacklinksPanel page={page} data={data} />
       ) : (
-        <PropertiesPanel page={page} data={data} />
+        <PropertiesPanel key={page.id} page={page} data={data} />
       )}
     </aside>
   );
@@ -534,7 +535,12 @@ function PropertiesPanel({
       session && ui.taskId
         ? getTaskRows(session.document).find((item) => item.id === ui.taskId)
         : undefined,
-    editable = canEdit(page.role) && !mobile && !page.accessLost;
+    editable =
+      canEdit(page.role) &&
+      !mobile &&
+      !page.accessLost &&
+      !page.deletedAt &&
+      !page.ancestorTrashed;
   return (
     <div className="context-content">
       {row && session ? (
@@ -589,6 +595,9 @@ function PropertiesPanel({
             </strong>
           </div>
         </>
+      )}
+      {session && !row && (
+        <PageTags document={session.document} editable={editable} />
       )}
       <div className="property-row">
         <span>생성일</span>

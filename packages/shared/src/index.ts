@@ -4,6 +4,7 @@ import * as Y from "yjs";
 import { isCanonicalBase64 } from "./attachments";
 import { ExportAttachmentSchema } from "./attachments";
 import { setXmlAttribute } from "./xml";
+import { getPageTags } from "./page-tags";
 export * from "./portable-document";
 
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -50,6 +51,7 @@ export const PageSchema = z.object({
   deletedAt: z.string().nullable(),
   createdAt: z.string(),
   isInbox: z.boolean().default(false),
+  ancestorTrashed: z.boolean().optional(),
 });
 export type Page = z.infer<typeof PageSchema>;
 export const PageOperationSchema = z
@@ -285,6 +287,7 @@ export function getDocumentProjection(document: Y.Doc): {
   title: string;
   text: string;
   references: string[];
+  tags: string[];
 } {
   const references = new Set<string>();
   const read = (node: Y.XmlFragment | Y.XmlElement | Y.XmlText): string => {
@@ -314,6 +317,7 @@ export function getDocumentProjection(document: Y.Doc): {
       ...getTaskRows(document).map((row) => row.title),
     ].join(" "),
     references: [...references],
+    tags: getPageTags(document),
   };
 }
 export function wouldCreateCycle(
@@ -449,6 +453,7 @@ export function cloneDocumentContent(
     "databaseProperties",
     "databaseViews",
     "pageSettings",
+    "pageTags",
   ])
     for (const [key, value] of source.getMap<unknown>(name))
       target
@@ -476,3 +481,6 @@ export * from "./editor-protocol";
 export * from "./public-sharing";
 export * from "./formula";
 export * from "./database-computation";
+export * from "./search-query";
+export * from "./page-tags";
+export * from "./knowledge-projection";

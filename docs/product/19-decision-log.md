@@ -107,3 +107,9 @@ Confirmed: 전체 미완료 범위의 File Property/Formula/Relation/Rollup을 �
 새 Property를 모르는 Editor의 데이터 손실을 막기 위해 Protocol 3과 Migration 007을 적용한다. 기존 Block/Attachment의 Protocol 1/2를 유지한다. File 참조는 현재 Row·Row 본문·Trash·Snapshot과 Public Scope의 보호에 포함한다. Snapshot은 외부 Database의 과거 내용을 복사하지 않고 현재 허용된 값으로 계산한다. Public Projection은 게시되지 않은 관계 대상과 Person/비공개 파생 값을 제외한다.
 
 Verified 2026-10-06: `f7b4c00` CI 343 Tests/23 E2E/Docker/512MiB/암호화 복원과 Production Migration 7개, Render → Vercel 소스 일치, 실제 HTTPS 협업/Recovery와 속성/Offline/권한 철회/Snapshot을 확인했다. [출시 기록](../database-advanced-release.md)에 따라 44/148 완료, 104개는 계속 구현한다.
+
+### DEC-046 — Page Tag와 검색 source Index
+
+Confirmed: 남은 전체 체크리스트의 Tag와 검색·Knowledge 요구를 구현·배포한다. Adopted: Tag는 Page의 Yjs Map에 표시 이름과 NFKC/공백/대소문자를 정리한 Key로 저장한다. Page의 권한을 상속하며 기본 한도는 30개·각 64자다. 동시 추가로 한도를 초과하면 로컬 목록을 유지하고 제거 후 다시 저장할 수 있다. 복제/Export/Import/Snapshot에 포함하고 마지막 제거 이후에도 Editor Protocol 4 경계를 유지한다.
+
+Migration 008의 source Index는 Commit·Checkpoint와 같은 transaction에 저장하며 과거 삭제 Row/속성과 요청별 Relation 이름·Formula/Rollup 결과를 보관하지 않는다. Ready 전에 Page lock으로 기존 committed state를 읽어 한 번 생성한다. 접근 가능한 문서 목록에는 보이지 않는 부모의 Trash 상태만 파생 boolean으로 전달하며 부모 내용을 노출하지 않는다. 기존 로컬 검색/탐색에서도 제외한다. 검색 API/UI·Graph·추천은 별도 미완료 항목으로 유지하고 실제 배포 검증 뒤 완료 수를 기록한다.

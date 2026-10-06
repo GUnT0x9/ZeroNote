@@ -16,7 +16,7 @@ export function searchLocalPages(
     .filter(
       ({ page, record }) =>
         !normalized ||
-        `${page.title} ${record?.text ?? ""}`
+        `${page.title} ${record?.text ?? ""} ${(record?.tags ?? []).join(" ")}`
           .normalize("NFKC")
           .toLowerCase()
           .includes(normalized),
@@ -32,14 +32,19 @@ export function searchLocalPages(
 export function availablePages(pages: LocalPage[]): LocalPage[] {
   const index = new Map(pages.map((page) => [page.id, page]));
   return pages.filter((page) => {
-    if (page.accessLost || page.deletedAt) return false;
+    if (page.accessLost || page.deletedAt || page.ancestorTrashed) return false;
     let parent = page.parentId;
     const seen = new Set([page.id]);
     while (parent) {
       if (seen.has(parent)) return false;
       seen.add(parent);
       const ancestor = index.get(parent);
-      if (ancestor?.deletedAt) return false;
+      if (
+        ancestor?.deletedAt ||
+        ancestor?.ancestorTrashed ||
+        ancestor?.accessLost
+      )
+        return false;
       parent = ancestor?.parentId ?? null;
     }
     return true;

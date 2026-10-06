@@ -77,10 +77,10 @@ jobs:
           export AGE_IDENTITY_FILE="$RUNNER_TEMP/backup.agekey"
           export BACKUP_FILE="$(find "$BACKUP_DIRECTORY" -name 'zeronote-*.age' -print -quit)"
           bash scripts/restore.sh
-          DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atc 'SELECT count(*) FROM schema_migrations' | grep -Ex '7'
-          node scripts/postgres-client.mjs psql -Atc 'SELECT EXISTS(SELECT 1 FROM pages) AND EXISTS(SELECT 1 FROM document_checkpoints)' | grep -Ex 't'
+          DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atc 'SELECT count(*) FROM schema_migrations' | grep -Ex '8'
+          node scripts/postgres-client.mjs psql -Atc 'SELECT EXISTS(SELECT 1 FROM pages) AND EXISTS(SELECT 1 FROM document_checkpoints) AND EXISTS(SELECT 1 FROM search_documents)' | grep -Ex 't'
           DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atc 'SELECT count(*) FROM attachments' | grep -Ex '1'
-          for table in workspaces pages document_checkpoints document_operations document_snapshots memberships grants comments beta_codes beta_devices attachments attachment_operations public_shares public_share_pages public_sessions; do
+          for table in workspaces pages document_checkpoints document_operations document_snapshots memberships grants comments beta_codes beta_devices attachments attachment_operations public_shares public_share_pages public_sessions search_documents; do
             query="SELECT count(*)::text || ':' || md5(COALESCE(jsonb_agg(to_jsonb(data) ORDER BY to_jsonb(data)::text)::text, '[]')) FROM $table data"
             source_fingerprint="$(node scripts/postgres-client.mjs psql -Atqc "$query")"
             restored_fingerprint="$(DATABASE_URL="$RESTORE_DATABASE_URL" node scripts/postgres-client.mjs psql -Atqc "$query")"
