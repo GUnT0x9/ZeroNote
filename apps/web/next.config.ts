@@ -24,6 +24,12 @@ const config: NextConfig = {
         ],
       },
       {
+        source: "/s/:path*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, max-age=0" },
+        ],
+      },
+      {
         source: "/v1/:path*",
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },

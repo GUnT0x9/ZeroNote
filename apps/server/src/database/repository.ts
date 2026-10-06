@@ -6,6 +6,7 @@ import { migrateDatabase } from "./migrations";
 import { DocumentStore } from "./document-store";
 import { BetaStore } from "./beta-store";
 import { SnapshotStore } from "./snapshot-store";
+import { PublicShareStore } from "./public-share-store";
 import { AttachmentStore } from "./attachment-store";
 import type { Page, Workspace, Role, PageComment } from "@zeronote/shared";
 
@@ -51,6 +52,7 @@ export class Repository {
   readonly beta: BetaStore;
   readonly snapshots: SnapshotStore;
   readonly attachments: AttachmentStore;
+  readonly publicShares: PublicShareStore;
   constructor(url: string) {
     this.pool = new Pool({
       connectionString: url,
@@ -63,6 +65,7 @@ export class Repository {
     this.beta = new BetaStore(this);
     this.snapshots = new SnapshotStore(this);
     this.attachments = new AttachmentStore(this);
+    this.publicShares = new PublicShareStore(this);
   }
   async query<T>(
     statement: SQL,

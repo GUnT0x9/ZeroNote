@@ -36,6 +36,7 @@ import { requestSync } from "@/lib/sync";
 import { changePageStructure } from "@/lib/workspace";
 import { DatabaseRowProperties } from "./database-property";
 
+import { PublicShareManager } from "./public-share-manager";
 import { HistoryPanel } from "./history-panel";
 
 const PANEL_NAMES = {
@@ -465,6 +466,10 @@ function SharePanel({ page }: { page: LocalPage }) {
             </div>
           ))}
       </div>
+      <details className="panel-section public-share-disclosure">
+        <summary>웹에 게시 · 공개 링크</summary>
+        <PublicShareManager workspaceId={page.workspaceId} currentPage={page} />
+      </details>
     </div>
   );
 }

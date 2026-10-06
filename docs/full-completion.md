@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 33개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md)에 남긴다. 나머지 115개는 계속 구현 대상이다.
+현재 33개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md)에 남긴다. Public 공유 7개 항목을 추가 구현·로컬 검증하고 CI/배포를 준비한다. 배포 검증 전이므로 완료 수에는 포함하지 않는다. 나머지 115개는 계속 구현 대상이다.
 
 ## 항목별 완료 증거
 
@@ -103,13 +103,13 @@
 | 82   | Export / Import          | Notion Import                         | 구현·배포 / portable-archive.test.ts, workspace.spec.ts / Markdown & CSV·Row 본문                              |
 | 83   | Export / Import          | Obsidian Import                       | 구현·배포 / portable-archive.test.ts, workspace.spec.ts / Vault ZIP·Wiki 링크·첨부                             |
 | 84   | Export / Import          | Notion Export 호환                    | 구현·배포 / portable-archive.test.ts / Markdown·CSV·첨부·Row 본문 출력                                         |
-| 85   | Sharing                  | Public Page Share                     | 미구현                                                                                                         |
-| 86   | Sharing                  | Password Share                        | 미구현                                                                                                         |
-| 87   | Sharing                  | Temporary Share                       | 미구현                                                                                                         |
-| 88   | Sharing                  | Burn-after-read Share                 | 미구현                                                                                                         |
-| 89   | Sharing                  | Expiring Public Link                  | 미구현                                                                                                         |
-| 90   | Sharing                  | Public Workspace                      | 미구현                                                                                                         |
-| 91   | Sharing                  | SEO Page                              | 미구현                                                                                                         |
+| 85   | Sharing                  | Public Page Share                     | 구현·로컬 검증 / [Public Sharing 기록](public-sharing-release.md) / CI·배포 전                                 |
+| 86   | Sharing                  | Password Share                        | 구현·로컬 검증 / [Public Sharing 기록](public-sharing-release.md) / CI·배포 전                                 |
+| 87   | Sharing                  | Temporary Share                       | 구현·로컬 검증 / [Public Sharing 기록](public-sharing-release.md) / CI·배포 전                                 |
+| 88   | Sharing                  | Burn-after-read Share                 | 구현·로컬 검증 / [Public Sharing 기록](public-sharing-release.md) / CI·배포 전                                 |
+| 89   | Sharing                  | Expiring Public Link                  | 구현·로컬 검증 / [Public Sharing 기록](public-sharing-release.md) / CI·배포 전                                 |
+| 90   | Sharing                  | Public Workspace                      | 구현·로컬 검증 / [Public Sharing 기록](public-sharing-release.md) / CI·배포 전                                 |
+| 91   | Sharing                  | SEO Page                              | 구현·로컬 검증 / [Public Sharing 기록](public-sharing-release.md) / CI·배포 전                                 |
 | 92   | Version 관리             | Version Compare                       | 미구현                                                                                                         |
 | 93   | Version 관리             | Diff Viewer                           | 미구현                                                                                                         |
 | 94   | Version 관리             | Branch 생성                           | 미구현                                                                                                         |

@@ -20,6 +20,7 @@ import {
 import { createRecoveryKey } from "@zeronote/shared";
 import { Dialog } from "./primitives";
 import { TransferDialog } from "./transfer-dialog";
+import { PublicWorkspaceDialog } from "./public-share-manager";
 import { StorageDialog } from "./storage-dialog";
 import { useUiStore } from "@/lib/ui-store";
 import type { WorkspaceData } from "@/lib/hooks";
@@ -32,7 +33,7 @@ import {
   downloadJson,
   createLocalPage,
 } from "@/lib/workspace";
-import { searchLocalPages } from "@/lib/search";
+import { availablePages, searchLocalPages } from "@/lib/search";
 import { deleteLocalWorkspace } from "@/lib/workspace";
 import { api, authenticate, getDevice } from "@/lib/api";
 import { requestSync, synchronize } from "@/lib/sync";
@@ -623,6 +624,7 @@ export function SettingsDialog({
     [confirmDelete, setConfirmDelete] = useState(false),
     [transferOpen, setTransferOpen] = useState(false),
     [storageOpen, setStorageOpen] = useState(false),
+    [publicOpen, setPublicOpen] = useState(false),
     [deleteName, setDeleteName] = useState("");
   const owner =
     !!workspace &&
@@ -666,6 +668,21 @@ export function SettingsDialog({
       settingsOpen: false,
     });
   };
+  if (publicOpen && workspace)
+    return (
+      <PublicWorkspaceDialog
+        key={workspace.id}
+        workspaceId={workspace.id}
+        pages={availablePages(data.pages).filter(
+          (page) =>
+            page.workspaceId === workspace.id &&
+            !page.deletedAt &&
+            !page.accessLost &&
+            page.role === "owner",
+        )}
+        onClose={() => setPublicOpen(false)}
+      />
+    );
   if (storageOpen && workspace)
     return (
       <StorageDialog
@@ -726,6 +743,21 @@ export function SettingsDialog({
               </button>
             </div>
           </div>
+          {owner && workspace && (
+            <div className="settings-row">
+              <div>
+                <strong>Workspace 공개 공유</strong>
+                <p>게시할 Page를 직접 고르고 링크를 관리합니다.</p>
+              </div>
+              <button
+                className="button button-small"
+                disabled={workspace.pendingCreation}
+                onClick={() => setPublicOpen(true)}
+              >
+                공개 공유
+              </button>
+            </div>
+          )}
           {owner && workspace && (
             <div className="settings-row">
               <div>

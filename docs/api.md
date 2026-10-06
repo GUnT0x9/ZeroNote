@@ -89,3 +89,13 @@ Snapshot 복구는 참조된 파일 bytes를 새 Page의 새 Attachment ID로 �
 `DELETE /v1/workspaces/:id/attachments/:fileId/content`는 Owner와 정확한 `{name}` 확인을 요구한다. PostgreSQL의 문서 Commit/Snapshot/파일 저장과 같은 Lock을 사용해 현재 문서(Trash 포함)와 보관 중인 Snapshot에 참조가 없을 때만 bytes를 제거한다. 성공은 `{id,purged:true}`이며 같은 파일의 재시도는 같은 응답을 반환한다. 참조는 409, 이름 불일치는 400, 권한 없음은 403, 다른 Workspace/없는 ID는 404다. 일반 `DELETE /v1/attachments/:id`는 계속 soft delete다.
 
 Migration 005는 파일 ID·원래 Hash/크기·Operation 기록을 유지하고 Payload만 제거한다. 정리된 파일 읽기/동일 Upload 재시도는 410, 다른 Payload를 같은 ID로 보내면 409다. 현재 문서는 자기 Page의 저장된 파일만 참조할 수 있다. 누락/다른 Page/영구 정리된 파일 참조는 REST와 WebSocket Commit을 422로 거절하며 서버 저장 완료로 표시하지 않는다. 로컬 변경과 파일 bytes는 남는다. 기기의 사본 제거는 미전송/보존/접근 철회/Trash 파일을 제외한다.
+
+## Public 공유
+
+Owner 전용 `GET/POST /v1/workspaces/:id/public-shares`, `DELETE /v1/workspaces/:id/public-shares/:shareId`를 추가한다. POST는 Operation ID, 공유 제목, 명시적 Page ID 목록(1–1,000), `public/temporary/burn`, UTC 만료 시각, 선택형 비밀번호(8–128자), 보호된 링크의 256bit Secret, SEO 허용을 받는다. Workspace Owner·Page 소속·Trash·중복·한도(활성 링크 100개)를 검사하며 같은 Operation/입력의 재시도는 같은 링크를 반환한다. 다른 입력/Workspace는 409다. 보호된 링크의 Secret은 브라우저가 발급해 URL Fragment로 전달하고 서버에는 Hash만 보관한다. 비밀번호는 새 Salt와 scrypt Hash로 보관한다. 만료는 최대 90일이다. 보호된 링크는 SEO를 허용하지 않는다.
+
+익명 `GET /v1/public/:id`는 접근 게이트 정보만 제공한다. 보호된 링크의 문서 제목·목록·본문은 제공하지 않는다. `POST /v1/public/:id/open`은 Secret/선택형 비밀번호와 Operation ID/256bit Reader Secret을 확인한 뒤 해당 링크 경로에 Secure·HttpOnly·SameSite=Strict 읽기 Cookie를 발급한다(Production Secure). 10회/분 요청 제한을 적용한다. Secret/비밀번호/Reader Secret은 URL Query에 넣지 않는다. GET으로 Burn을 소모하지 않는다. Burn의 첫 POST만 Transaction으로 승인하고 승인 시점의 안전한 문서 Projection과 참조 파일 목록을 고정한다. 같은 Operation/Reader의 재시도는 같은 Session이며 다른 Reader와 Operation 충돌은 거절한다. Burn 읽기는 최대 1시간, 일반 보호된 공유는 최대 24시간이며 링크 만료/해제가 먼저면 접근을 종료한다.
+
+`GET /v1/public/:id/content[/:key]`는 불투명 공개 Page Key·제목·안전한 읽기 HTML과 선택한 공개 목록, Canonical을 제공한다. CRDT Update/삭제된 과거 내용/Comments/멤버 Identity/Recovery/비공개 Page ID나 자동 제목을 포함하지 않는다. Database는 모든 활성 Row/일반 Property/Row 본문을 게시하며 Person Property는 Identity 노출을 피하기 위해 제외한다. Workspace의 새 Page나 하위 Page는 자동 게시하지 않는다. Parent Trash도 검사한다.
+
+`GET /v1/public/:id/files/:fileId`는 활성 공개 Page에서 현재 참조하는 파일, 또는 승인된 Burn Session에서 고정한 파일만 제공한다. 다른 Page의 파일·미참조·삭제·영구 정리 파일은 거절하며 Range/Download/보안 Header는 기존 파일 응답과 동일하다. Burn Session의 유효한 참조 파일은 Storage 정리에서 보호하며 링크 해제/만료 후 정리할 수 있다. 모든 API 응답은 no-store, 모든 쓰기는 고정된 Web Origin 검사 대상이다. 익명 공유는 개인 REST/Realtime 접근 권한을 부여하지 않는다.

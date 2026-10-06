@@ -89,3 +89,11 @@ Accepted: 새 Block을 이해하지 못하는 구버전 Yjs Editor의 삭제를 
 사용자가 Confirmed한 Storage 관리 요구를 Settings의 저장 공간 화면에서 제공한다. 서버의 전체 파일 사용량과 이 기기의 사본·미전송/보존 파일을 구분한다. 서버 파일 정리는 Online Workspace Owner만 수행하며 현재 문서·Trash·유효 Snapshot의 참조가 있으면 거절한다. 정리 성공 후에도 ID·Hash·Operation은 Tombstone으로 유지해 중복 Upload로 파일이 살아나지 않게 한다. 파일 사본 제거는 접근 철회·Trash·미전송/보존 파일을 유지한다. REST/WS Commit은 정리된 파일을 참조한 내용을 수락하지 않고 로컬 변경을 보존한다.
 
 Migration 005 이후 Server rollback은 Tombstone과 422 문서 검증을 이해하는 버전을 사용한다. DB를 되감거나 영구 정리한 bytes를 자동 복원하지 않는다. 일반 파일 삭제는 계속 Snapshot용 bytes를 보존한다.
+
+### DEC-044 — 선택형 Public 게시와 첫 Session 내용 고정
+
+Confirmed: 기존 체크리스트의 미완료 Public Page/Password/Temporary/Burn/Expiring/Public Workspace/SEO를 실제 UI·서버 저장·배포까지 구현한다. Workspace Owner가 고른 Page만 게시하며 Parent/새 Page/Comments/권한/Identity/과거 삭제 내용은 자동 공개하지 않는다. 원본 CRDT 대신 현재 내용의 Allowlist HTML Projection과 불투명 Page Key를 제공한다. Database는 활성 Row와 일반 Property/본문을 공개하고 Person Property는 제외한다.
+
+Adopted: 기본 noindex이며 보호되지 않은 Public 링크에서만 SEO를 opt-in한다. 보호된 링크의 256bit Secret은 URL Fragment에 담고 Hash만 저장한다. 비밀번호는 Salt/scrypt Hash, 읽기 권한은 별도 Cookie Session으로 관리한다. Burn은 명시적 POST의 첫 Session만 Transaction으로 승인하고 최초 내용/파일 참조를 고정한다. 같은 Operation/Reader의 재시도는 같은 Session을 받는다. 읽기 시간은 Burn 최대 1시간, 다른 보호된 링크 최대 24시간이며 링크의 만료/해제/Trash/파일 삭제가 이후 접근을 제한한다. 전달된 사본을 회수한다고 설명하지 않는다. 현재 참조 또는 유효한 Burn 읽기가 필요한 파일은 Storage 정리에서 보존한다. 주기적인 서버/DB Keep-alive는 추가하지 않는다.
+
+기존 Alpha/Beta API와 Editor Protocol 2를 유지하는 Migration 006 추가로 배포한다. 익명 `/s/` 화면은 Device·개인 Workspace·IndexedDB·Editor·WebSocket을 만들지 않는다. Scope·권한·Race·과거 내용 비노출·브라우저와 실제 HTTPS 결과를 출시 기록에 남긴 뒤 완료 항목에 반영한다.

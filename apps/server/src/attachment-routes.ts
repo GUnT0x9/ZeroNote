@@ -44,7 +44,7 @@ export function registerAttachmentRoutes(
     return sendAttachment(request, reply, record);
   });
 }
-function sendAttachment(
+export function sendAttachment(
   request: FastifyRequest,
   reply: FastifyReply,
   record: Awaited<ReturnType<AttachmentService["read"]>>,

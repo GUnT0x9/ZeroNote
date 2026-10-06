@@ -577,7 +577,7 @@ async function openWorkspaceTool(
 async function createInvite(page: Page, role = "editor"): Promise<string> {
   await page.getByRole("button", { name: "Share", exact: true }).click();
   const panel = page.getByRole("complementary", { name: "Share" });
-  await panel.getByRole("combobox").selectOption(role);
+  await panel.getByLabel("초대 권한").selectOption(role);
   await panel.getByRole("button", { name: "초대 링크 만들기" }).click();
   await expect(panel.getByLabel("초대 링크")).toBeVisible();
   return panel.getByLabel("초대 링크").inputValue();
@@ -885,7 +885,7 @@ async function createInviteFromOpenPanel(
   role: string,
 ): Promise<string> {
   const panel = page.getByRole("complementary", { name: "Share" });
-  await panel.getByRole("combobox").selectOption(role);
+  await panel.getByLabel("초대 권한").selectOption(role);
   const previous = (await panel.getByLabel("초대 링크").count())
     ? await panel.getByLabel("초대 링크").inputValue()
     : "";
@@ -1419,13 +1419,11 @@ test("Storage UI protects active files, purges unused bytes and retains Offline 
   const name = `Storage ${Date.now()}`;
   try {
     await createWorkspace(page, name);
-    await page
-      .getByLabel("첨부 파일 선택")
-      .setInputFiles({
-        name: "keep-qa.txt",
-        mimeType: "text/plain",
-        buffer: Buffer.from("keep bytes"),
-      });
+    await page.getByLabel("첨부 파일 선택").setInputFiles({
+      name: "keep-qa.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("keep bytes"),
+    });
     await expect(
       page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
     ).toBeVisible();
@@ -1482,13 +1480,11 @@ test("Storage UI protects active files, purges unused bytes and retains Offline 
       .getByRole("button", { name: "닫기", exact: true })
       .click();
     await context.setOffline(true);
-    await page
-      .getByLabel("첨부 파일 선택")
-      .setInputFiles({
-        name: "pending-qa.txt",
-        mimeType: "text/plain",
-        buffer: Buffer.from("pending bytes"),
-      });
+    await page.getByLabel("첨부 파일 선택").setInputFiles({
+      name: "pending-qa.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("pending bytes"),
+    });
     await expect(
       page.getByText("pending-qa.txt", { exact: true }),
     ).toBeVisible();
@@ -1520,6 +1516,354 @@ test("Storage UI protects active files, purges unused bytes and retains Offline 
     expect((await readFile(path)).toString()).toBe("pending bytes");
   } finally {
     await context.setOffline(false);
+    await cleanup(page, name);
+  }
+});
+
+test("Public Page reads without a Device, serves referenced images, applies SEO opt-in and revoke", async ({
+  page,
+  browser,
+}) => {
+  const name = `Public Page ${Date.now()}`,
+    visitorContext = await browser.newContext(),
+    visitor = await visitorContext.newPage();
+  try {
+    await createWorkspace(page, name);
+    await page.getByLabel("Page 제목").fill("Published guide");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Public content for a visitor");
+    await page.getByLabel("첨부 파일 선택").setInputFiles({
+      name: "public.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5WQAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    });
+    await expect(page.locator(".attachment-caption small")).toContainText(
+      "서버 저장됨",
+    );
+    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await page.getByText("웹에 게시 · 공개 링크", { exact: true }).click();
+    const manager = page.locator(".public-share-manager");
+    await manager
+      .getByRole("button", { name: "공개 링크 만들기", exact: true })
+      .click();
+    await expect(
+      manager.getByLabel("공개 링크", { exact: true }),
+    ).toBeVisible();
+    let url = await manager
+      .getByLabel("공개 링크", { exact: true })
+      .inputValue();
+    const privateRequests: string[] = [];
+    visitor.on("websocket", (socket) => privateRequests.push(socket.url()));
+    visitor.on("request", (request) => {
+      if (/\/v1\/(devices|auth|workspaces)|\/collaboration/.test(request.url()))
+        privateRequests.push(request.url());
+    });
+    await visitor.goto(url);
+    await expect(
+      visitor.getByRole("heading", { name: "Published guide", exact: true }),
+    ).toBeVisible();
+    await expect(visitor.locator(".public-document")).toContainText(
+      "Public content for a visitor",
+    );
+    await expect
+      .poll(() =>
+        visitor
+          .getByAltText("public.png")
+          .evaluate((element) => (element as HTMLImageElement).naturalWidth),
+      )
+      .toBe(1);
+    expect(privateRequests).toEqual([]);
+    expect(
+      await visitor.evaluate(async () => (await indexedDB.databases()).length),
+    ).toBe(0);
+    await expect(visitor.locator('meta[name="robots"]')).toHaveAttribute(
+      "content",
+      "noindex, nofollow",
+    );
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    const controlledPublic = await page.context().newPage();
+    try {
+      await controlledPublic.goto(url);
+      await expect(controlledPublic.locator(".public-document")).toContainText(
+        "Public content for a visitor",
+      );
+      const cachedPublicRequests = await page.evaluate(async () => {
+        let count = 0;
+        for (const name of await caches.keys()) {
+          const cache = await caches.open(name);
+          count += (await cache.keys()).filter((request) => {
+            const path = new URL(request.url).pathname;
+            return path.startsWith("/s/") || path.startsWith("/v1/public/");
+          }).length;
+        }
+        return count;
+      });
+      expect(cachedPublicRequests).toBe(0);
+      await page.context().setOffline(true);
+      await expect(controlledPublic.reload()).rejects.toThrow();
+      await expect(controlledPublic.getByLabel("Page 제목")).toHaveCount(0);
+    } finally {
+      await page.context().setOffline(false);
+      await controlledPublic.close();
+    }
+    expect(await visitorContext.cookies()).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "zn_session" })]),
+    );
+    await manager
+      .getByRole("checkbox", { name: "검색 엔진에 등록 허용" })
+      .check();
+    await manager
+      .getByRole("button", { name: "공개 링크 만들기", exact: true })
+      .click();
+    await expect(
+      manager.getByLabel("공개 링크", { exact: true }),
+    ).not.toHaveValue(url);
+    url = await manager.getByLabel("공개 링크", { exact: true }).inputValue();
+    await visitor.goto(url);
+    await expect(visitor.locator('meta[name="robots"]')).toHaveAttribute(
+      "content",
+      "index, follow",
+    );
+    await expect(visitor.locator('link[rel="canonical"]')).toHaveAttribute(
+      "href",
+      new RegExp(`/s/${new URL(url).pathname.split("/")[2]}/`),
+    );
+    const source = await visitor.request.get(url);
+    expect(source.headers()["cache-control"]).toContain("no-store");
+    expect(await source.text()).toContain("Public content for a visitor");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Changed published body");
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await visitor
+      .getByRole("button", { name: "새로고침", exact: true })
+      .click();
+    await expect(visitor.locator(".public-document")).toContainText(
+      "Changed published body",
+    );
+    await manager
+      .getByRole("button", { name: "게시 해제", exact: true })
+      .first()
+      .click();
+    await manager
+      .getByRole("button", { name: "게시 해제 확인", exact: true })
+      .click();
+    await expect(
+      manager.getByText("게시 해제됨", { exact: true }),
+    ).toBeVisible();
+    await visitor
+      .getByRole("button", { name: "새로고침", exact: true })
+      .click();
+    await expect(
+      visitor.locator(".public-shell").getByRole("alert"),
+    ).toContainText("만료");
+    await expect(visitor.locator(".public-document")).toHaveCount(0);
+  } finally {
+    await visitorContext.close();
+    await cleanup(page, name);
+  }
+});
+
+test("Password, Temporary and Burn links gate opening, resume scoped cookies and allow exactly one browser", async ({
+  page,
+  browser,
+}) => {
+  const name = `Protected Public ${Date.now()}`,
+    firstContext = await browser.newContext(),
+    secondContext = await browser.newContext(),
+    first = await firstContext.newPage(),
+    second = await secondContext.newPage();
+  try {
+    await createWorkspace(page, name);
+    await page.getByLabel("Page 제목").fill("Protected body title");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("First frozen body");
+    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await page.getByText("웹에 게시 · 공개 링크", { exact: true }).click();
+    const manager = page.locator(".public-share-manager");
+    await manager.getByRole("checkbox", { name: "비밀번호 필요" }).check();
+    await manager.getByLabel("공유 비밀번호").fill("correct password");
+    await expect(
+      manager.getByRole("checkbox", { name: "검색 엔진에 등록 허용" }),
+    ).toBeDisabled();
+    await manager
+      .getByRole("button", { name: "공개 링크 만들기", exact: true })
+      .click();
+    await expect(
+      manager.getByLabel("공개 링크", { exact: true }),
+    ).toBeVisible();
+    let url = await manager
+      .getByLabel("공개 링크", { exact: true })
+      .inputValue();
+    expect(new URL(url).hash).toMatch(/^#[a-f0-9]{64}$/);
+    await first.goto(url);
+    await expect(
+      first.getByRole("heading", { name: "보호된 문서" }),
+    ).toBeVisible();
+    await expect(
+      first.getByText("First frozen body", { exact: true }),
+    ).toHaveCount(0);
+    await first.getByLabel("문서 비밀번호").fill("wrong");
+    await first.getByRole("button", { name: "문서 열기" }).click();
+    await expect(
+      first.locator(".public-shell").getByRole("alert"),
+    ).toContainText("올바르지");
+    await first.getByLabel("문서 비밀번호").fill("correct password");
+    await first.getByRole("button", { name: "문서 열기" }).click();
+    await expect(
+      first.getByRole("heading", { name: "Protected body title" }),
+    ).toBeVisible();
+    expect(new URL(first.url()).hash).toBe("");
+    const session = (await firstContext.cookies()).find((cookie) =>
+      cookie.name.startsWith("zn_public_"),
+    );
+    expect(session).toMatchObject({
+      httpOnly: true,
+      sameSite: "Strict",
+      secure: ORIGIN.startsWith("https://"),
+      path: `/v1/public/${new URL(url).pathname.split("/")[2]}`,
+    });
+    await first.reload();
+    await expect(first.locator(".public-document")).toContainText(
+      "First frozen body",
+    );
+    await manager.getByRole("checkbox", { name: "비밀번호 필요" }).uncheck();
+    await manager.getByLabel("공유 방식").selectOption("temporary");
+    await manager
+      .getByRole("button", { name: "공개 링크 만들기", exact: true })
+      .click();
+    await expect(
+      manager.getByLabel("공개 링크", { exact: true }),
+    ).not.toHaveValue(url);
+    url = await manager.getByLabel("공개 링크", { exact: true }).inputValue();
+    await second.goto(url);
+    await second.getByRole("button", { name: "문서 열기" }).click();
+    await expect(second.locator(".public-document")).toContainText(
+      "First frozen body",
+    );
+    await manager.getByLabel("공유 방식").selectOption("burn");
+    await manager
+      .getByRole("button", { name: "공개 링크 만들기", exact: true })
+      .click();
+    await expect(
+      manager.getByLabel("공개 링크", { exact: true }),
+    ).not.toHaveValue(url);
+    url = await manager.getByLabel("공개 링크", { exact: true }).inputValue();
+    await second.request.get(
+      `${ORIGIN}/v1/public/${new URL(url).pathname.split("/")[2]}`,
+    );
+    await first.goto(url);
+    await first.getByRole("button", { name: "문서 열기" }).click();
+    await expect(first.locator(".public-document")).toContainText(
+      "First frozen body",
+    );
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Later private edits");
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await first.reload();
+    await expect(first.locator(".public-document")).toContainText(
+      "First frozen body",
+    );
+    await expect(first.locator(".public-document")).not.toContainText(
+      "Later private edits",
+    );
+    await second.goto(url);
+    await second.getByRole("button", { name: "문서 열기" }).click();
+    await expect(
+      second.locator(".public-shell").getByRole("alert"),
+    ).toContainText("이미 열린");
+    await expect(second.locator(".public-document")).toHaveCount(0);
+    await expect(second.locator('meta[name="robots"]')).toHaveAttribute(
+      "content",
+      "noindex, nofollow",
+    );
+  } finally {
+    await firstContext.close();
+    await secondContext.close();
+    await cleanup(page, name);
+  }
+});
+
+test("Public Workspace lists only selected Pages and publishes Database rows read-only", async ({
+  page,
+  browser,
+}) => {
+  const name = `Public Workspace ${Date.now()}`,
+    context = await browser.newContext(),
+    visitor = await context.newPage();
+  try {
+    await createWorkspace(page, name);
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Workspace public guide");
+    await page.getByRole("button", { name: "To-Do", exact: true }).click();
+    await page.getByRole("button", { name: "새 Task", exact: true }).click();
+    await page.getByLabel("새 Task 제목").fill("Published task");
+    await page.getByRole("button", { name: "추가", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Published task 열기", exact: true })
+      .click();
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Published task body");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "공개 공유", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Workspace 공개 공유" });
+    await dialog
+      .getByRole("checkbox", { name: "시작하기", exact: true })
+      .check();
+    await dialog.getByRole("checkbox", { name: "To-Do", exact: true }).check();
+    await dialog
+      .getByRole("button", { name: "공개 링크 만들기", exact: true })
+      .click();
+    await expect(dialog.getByLabel("공개 링크", { exact: true })).toBeVisible();
+    await visitor.goto(
+      await dialog.getByLabel("공개 링크", { exact: true }).inputValue(),
+    );
+    await expect(
+      visitor.getByRole("navigation", { name: "공개 Page" }).getByRole("link"),
+    ).toHaveCount(2);
+    await expect(visitor.locator(".public-document")).toContainText(
+      "Workspace public guide",
+    );
+    await visitor
+      .getByRole("navigation", { name: "공개 Page" })
+      .getByRole("link", { name: "To-Do", exact: true })
+      .click();
+    await expect(visitor.locator(".public-table")).toContainText(
+      "Published task",
+    );
+    await expect(visitor.locator(".public-table")).not.toContainText(
+      "Assignee",
+    );
+    await visitor
+      .locator(".public-document summary")
+      .getByText("Published task", { exact: true })
+      .click();
+    await expect(
+      visitor.getByText("Published task body", { exact: true }),
+    ).toBeVisible();
+    await expect(visitor.locator('[contenteditable="true"]')).toHaveCount(0);
+    await expect(
+      visitor.getByRole("navigation", { name: "공개 Page" }),
+    ).not.toContainText("Inbox");
+    expect(
+      await visitor.evaluate(async () => (await indexedDB.databases()).length),
+    ).toBe(0);
+  } finally {
+    await context.close();
     await cleanup(page, name);
   }
 });

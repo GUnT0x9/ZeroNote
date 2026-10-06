@@ -471,3 +471,4 @@ export * from "./database";
 export * from "./attachments";
 export * from "./templates";
 export * from "./editor-protocol";
+export * from "./public-sharing";

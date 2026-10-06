@@ -35,6 +35,9 @@ import * as Y from "yjs";
 import { AttachmentService } from "./attachment-service";
 import { registerAttachmentRoutes } from "./attachment-routes";
 
+import { PublicShareService } from "./public-share-service";
+import { registerPublicShareRoutes } from "./public-share-routes";
+
 type Handler = (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -59,6 +62,11 @@ export function registerRoutes(
     app,
     auth,
     new AttachmentService(repository, access),
+  );
+  registerPublicShareRoutes(
+    app,
+    auth,
+    new PublicShareService(repository, access),
   );
   const authenticated =
     (handler: Handler) =>

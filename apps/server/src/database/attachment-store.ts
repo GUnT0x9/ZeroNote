@@ -101,6 +101,15 @@ export class AttachmentStore {
           409,
           "기록에서 보관 중인 파일입니다. 필요 없는 기록을 먼저 삭제해주세요.",
         );
+      const publicReaders = await this.repository.query(
+        sql`SELECT 1 FROM public_sessions s JOIN public_shares sh ON sh.id=s.share_id WHERE s.expires_at>now() AND sh.revoked_at IS NULL AND (sh.expires_at IS NULL OR sh.expires_at>now()) AND ${id}::uuid=ANY(s.frozen_files) LIMIT 1`,
+        tx,
+      );
+      if (publicReaders.length)
+        throw new DomainError(
+          409,
+          "1회 열람 공유에서 보관 중인 파일입니다. 공유를 해제하거나 읽기 시간이 끝난 뒤 정리해주세요.",
+        );
       await tx.execute(
         sql`UPDATE attachments SET data=decode('','hex'),deleted_at=COALESCE(deleted_at,now()),purged_at=now() WHERE id=${id}`,
       );
