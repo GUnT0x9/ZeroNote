@@ -39,6 +39,7 @@ import { DatabaseRowProperties } from "./database-property";
 import { PublicShareManager } from "./public-share-manager";
 import { HistoryPanel } from "./history-panel";
 import { PageTags } from "./page-tags";
+import { availablePages } from "@/lib/search";
 
 const PANEL_NAMES = {
   history: "기록",
@@ -481,23 +482,25 @@ function BacklinksPanel({
   page: LocalPage;
   data: WorkspaceData;
 }) {
+  const accessible = new Map(
+    availablePages(data.pages).map((source) => [source.id, source]),
+  );
   const ui = useUiStore(),
     linked = data.documents
       .filter((document) => document.references.includes(page.id))
       .flatMap((document) => {
-        const source = data.pages.find(
-          (item) =>
-            item.id === document.id && !item.deletedAt && !item.accessLost,
-        );
+        const source = accessible.get(document.id);
         return source ? [source] : [];
       });
   return (
     <div className="context-content">
-      <div className="panel-description">이 Page를 연결한 문서입니다.</div>
+      <div className="panel-description">
+        이 기기에 저장된 문서에서 이 Page를 연결한 기록입니다.
+      </div>
       {!linked.length ? (
         <div className="panel-empty">
           <Link2 size={25} />
-          <p>아직 연결된 Page가 없습니다.</p>
+          <p>이 기기의 문서에서 연결을 찾지 못했습니다.</p>
           <small>문서에서 [[ 를 입력해 연결하세요.</small>
         </div>
       ) : (

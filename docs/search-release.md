@@ -6,6 +6,7 @@
 
 - Search는 현재 Workspace에서 시작하며 전체 Workspace를 선택할 수 있다. 접근 가능한 Page 제목·본문·Tag, Database Row 제목·본문·속성 값과 계산 결과를 검색한다. Row를 선택하면 상세 화면으로 이동한다.
 - 같은 공유 엔진을 Offline 로컬 source와 서버의 Commit된 source Index에 적용한다. 미열람 문서의 본문 전체를 내려받지 않고 서버 검색 결과를 받는다. 문서를 열 때 본문을 저장하며, Offline에서는 이미 저장된 본문과 Metadata 제목을 검색한다.
+- 기존 Backlinks도 저장된 문서 기준임을 표시하고 상위 Trash/철회된 source를 제외한다. 전체 연결 조회는 다음 Knowledge/Graph 묶음에서 source Index와 연결한다.
 - 따옴표 구문·제외어·type/tag/workspace/database/after/before와 typed prop 조건을 공유 AST로 검증한다. 알 수 없는 연산자, 실제 날짜가 아닌 값, 미닫힌 따옴표는 요청 전에 표시한다. 모든 조건은 AND다. before는 UTC 수정일 미만, after는 UTC 수정일 이상이다.
 - 정확/접두/부분 일치를 우선한다. 3–64자 문자 단어에서 한 번의 삽입·삭제·치환·인접 교환을 허용하고 오타 후보로 표시한다. 숫자·따옴표 구문·제외어는 오타를 확장하지 않는다. 오타 비교는 각 결과의 앞 32KiB·최대 2,048단어에 한정하고 정확한 본문 검색은 이 제한을 사용하지 않는다.
 - 속성은 Database/Property ID로 선택한다. 연산자 입력의 동일 이름 속성이 여러 개면 매칭하지 않는다. Table의 typed 비교 함수를 재사용하며, Formula/Rollup·Relation·File 이름을 요청자 범위에서 계산한다. 삭제·철회·상위 Trash·다른 Workspace의 의존성을 제외하고 알 수 없는 값을 0/빈 값/부정 조건의 참으로 취급하지 않는다.

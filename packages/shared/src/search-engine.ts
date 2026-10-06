@@ -69,7 +69,6 @@ interface SearchCell {
 }
 interface Candidate {
   hit: SearchHit;
-  text: string;
   body: string;
   normalized: string;
   title: string;
@@ -310,7 +309,6 @@ export function createSearchEngine(
     ].join(" ");
     return {
       hit,
-      text,
       body,
       normalized: normalizeSearchText(text),
       title: normalizeSearchText(hit.title),
