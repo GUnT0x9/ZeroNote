@@ -5,10 +5,13 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { BetaRequestBudget } from "./helpers/beta-request-budget";
 const execute = promisify(execFile);
 const serverRequire = createRequire(resolve("apps/server/package.json"));
+const betaRequestBudget = new BetaRequestBudget();
 /** Operator-side test setup only; no public code-issuance endpoint. */
 export async function createBrowserBetaCode(): Promise<string> {
+  await betaRequestBudget.reserve();
   const directory = await mkdtemp(join(tmpdir(), "zeronote-beta-test-"));
   const output = join(directory, "codes.txt");
   try {

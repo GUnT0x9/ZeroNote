@@ -6,6 +6,7 @@ export default defineConfig({
       "apps/server/**/*.test.ts",
       "apps/web/**/*.test.ts",
       "scripts/**/*.test.mjs",
+      "tests/helpers/**/*.test.ts",
     ],
     testTimeout: 15000,
   },

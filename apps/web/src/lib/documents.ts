@@ -336,6 +336,14 @@ async function createProvider(
         useUiStore.getState().patch({ notice: errorMessage(error) }),
       );
     },
+    onClose: () => {
+      // Revocation can close just this document while its WebSocket stays open.
+      // Confirm access with REST; an ordinary disconnect must not discard data.
+      if (!navigator.onLine) return;
+      void markAccessFailure(page.id).catch((error) =>
+        useUiStore.getState().patch({ notice: errorMessage(error) }),
+      );
+    },
   });
   session.provider = provider;
   return provider;

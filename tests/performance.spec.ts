@@ -1,5 +1,4 @@
-import { expect } from "@playwright/test";
-import { test } from "./browser-fixtures";
+import { test, expect } from "@playwright/test";
 import * as Y from "yjs";
 import { writeFile } from "node:fs/promises";
 import {
