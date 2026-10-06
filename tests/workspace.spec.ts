@@ -1212,7 +1212,7 @@ test("Page Tags converge across devices, survive Offline reload and restore from
     await expect(
       tags(page).getByText("Offline", { exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.keyboard.press("Control+k");
     await page
       .getByRole("dialog", { name: "Search", exact: true })
       .getByRole("textbox")
