@@ -47,3 +47,12 @@ Graph는 현재 Page를 중심으로 열고 한 화면에 최대 200개 Node를 
 공유 `search-query.ts`에 512자/32조건 제한, 따옴표·제외어·type/tag/workspace/before/after와 typed Property 연산자 AST, Unicode 정규화와 요청 Schema를 작성했다. 실행 코드를 만들지 않으며 지원하지 않은 구문·잘못된 날짜·비유한 숫자·추가 AST 필드를 거절한다. 집중 33 Tests와 lint·type-check가 통과했다. 아직 Index/API/UI에 연결하지 않았으며 기능 완료 수는 계속 44/148이다.
 
 첫 전체 검증은 368개 통과 후 Realtime 서버 초기화 Hook이 기본 10초 제한을 넘어 8개가 실행되지 못했다. 반복된 로컬 병렬 초기화 지연에 맞춰 해당 Hook의 대기를 30초로 명시한 뒤 전체 376 Tests가 통과했다. Production 배포 소스 `f7b4c00`의 343 Tests/23 E2E/실제 HTTPS 검증은 별도 출시 기록에 유지한다.
+
+`49f85c5`의 [CI 37421627184](https://github.com/GUnT0x9/ZeroNote/actions/runs/37421627184)도 통과했다. 아직 검색 API/UI와 새 데이터 형식이 없는 기반 모듈이며 Production은 검증한 `f7b4c00`을 유지한다.
+
+| 파일 | 변경 이유 |
+| --- | --- |
+| `packages/shared/src/search-query.ts` | UI·서버가 사용할 제한된 검색 AST/정규화/구문 파서 |
+| `packages/shared/src/search-query.test.ts` | 정상/오류 구문·날짜·형·길이·요청 AST 33개 회귀 |
+| `apps/server/src/realtime.test.ts` | 반복된 로컬 초기화 지연에 맞춘 Hook 대기 |
+| `docs/knowledge-search-plan.md` | 9개 기능의 저장·권한·Offline·UI·검증 계약 |
