@@ -6,6 +6,8 @@ import {
   writeDatabaseValue,
   getTaskRows,
   getDatabaseProperties,
+  compileFormula,
+  createDatabaseValueReader,
 } from "@zeronote/shared";
 import {
   createPublicPage,
@@ -25,6 +27,97 @@ const links: PublicProjectionLinks = {
       ? { title: "Allowed", href: "/s/share/allowed" }
       : undefined,
 };
+it("publishes scoped computed values and never exposes private Relation/Person dependencies", () => {
+  const doc = new Y.Doc(),
+    target = new Y.Doc(),
+    id = crypto.randomUUID(),
+    targetId = crypto.randomUUID();
+  const row = createTaskRow(doc, "Visible"),
+    related = createTaskRow(target, "Allowed related");
+  const points = addDatabaseProperty(target, "Points", "number");
+  writeDatabaseValue(target, related, points, 9);
+  const relation = addDatabaseProperty(
+    doc,
+    "Related",
+    "relation",
+    [],
+    crypto.randomUUID(),
+    { relation: { databaseId: targetId } },
+  );
+  writeDatabaseValue(doc, row, relation, [related]);
+  addDatabaseProperty(doc, "Total", "rollup", [], crypto.randomUUID(), {
+    rollup: {
+      relationPropertyId: relation,
+      targetPropertyId: points,
+      operation: "sum",
+    },
+  });
+  const person = addDatabaseProperty(doc, "Person", "person");
+  writeDatabaseValue(doc, row, person, crypto.randomUUID());
+  addDatabaseProperty(
+    doc,
+    "Hidden formula",
+    "formula",
+    [],
+    crypto.randomUUID(),
+    {
+      formula: {
+        source: 'if(false, prop("Person"), "hidden fallback")',
+        ast: compileFormula(
+          'if(false, prop("Person"), "hidden fallback")',
+          getDatabaseProperties(doc),
+        ),
+      },
+    },
+  );
+  const file = addDatabaseProperty(doc, "File", "file"),
+    fileId = crypto.randomUUID();
+  writeDatabaseValue(doc, row, file, [fileId]);
+  const publicLinks: PublicProjectionLinks = {
+    ...links,
+    file: (key) =>
+      key === fileId
+        ? { name: "guide.txt", href: "/file/allowed", mime: "text/plain" }
+        : undefined,
+    task: (databaseId, rowId) =>
+      databaseId === targetId && rowId === related
+        ? { title: "Allowed related", href: "/s/share/target#row" }
+        : undefined,
+  };
+  const scope = {
+    publicOnly: true,
+    fileName: (databaseId: string, key: string) =>
+      databaseId === id && key === fileId ? "guide.txt" : undefined,
+  };
+  const hidden = createPublicPage(
+    doc,
+    "source",
+    "Visible",
+    "database",
+    publicLinks,
+    createDatabaseValueReader(id, doc, scope),
+  );
+  expect(hidden.html).not.toContain("Allowed related");
+  expect(hidden.html).not.toContain("hidden fallback");
+  expect(hidden.html).not.toContain(targetId);
+  const visible = createPublicPage(
+    doc,
+    "source",
+    "Visible",
+    "database",
+    publicLinks,
+    createDatabaseValueReader(id, doc, {
+      ...scope,
+      database: (key) => (key === targetId ? target : undefined),
+    }),
+  );
+  expect(visible.html).toContain("Allowed related");
+  expect(visible.html).toContain("<td>9</td>");
+  expect(visible.html).toContain("guide.txt");
+  expect(visible.html).not.toContain("hidden fallback");
+  doc.destroy();
+  target.destroy();
+});
 it("publishes live whitelisted content without deleted history, unsafe URLs, private IDs or attrs", () => {
   const doc = new Y.Doc({ gc: false });
   doc.getText("title").insert(0, "Visible");

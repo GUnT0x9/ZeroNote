@@ -11,6 +11,17 @@ import {
   type Identity,
 } from "@zeronote/shared";
 import { errorMessage } from "@/lib/database";
+import type { LocalPage } from "@/lib/database";
+import type { WorkspaceData } from "@/lib/hooks";
+import {
+  useDatabaseEditorContext,
+  type DatabaseEditorContext,
+} from "@/lib/database-context";
+import {
+  DatabaseComputedCell,
+  DatabaseRelationCell,
+  DatabaseFileCell,
+} from "./database-advanced-cell";
 
 export const PROPERTY_TYPE_LABELS = {
   text: "Text",
@@ -26,6 +37,10 @@ export const PROPERTY_TYPE_LABELS = {
   phone: "Phone",
   created_time: "Created time",
   updated_time: "Updated time",
+  file: "File",
+  formula: "Formula",
+  relation: "Relation",
+  rollup: "Rollup",
 };
 export function DatabasePropertyCell({
   document,
@@ -34,6 +49,7 @@ export function DatabasePropertyCell({
   editable,
   identities,
   label,
+  context,
 }: {
   document: Y.Doc;
   row: TaskRow;
@@ -41,6 +57,7 @@ export function DatabasePropertyCell({
   editable: boolean;
   identities: Identity[];
   label?: string;
+  context?: DatabaseEditorContext | null;
 }) {
   const value = readDatabaseValue(document, row, property),
     ariaLabel = label ?? `${row.title} ${property.name}`;
@@ -60,7 +77,20 @@ export function DatabasePropertyCell({
     }
   };
   let control;
-  if (["created_time", "updated_time"].includes(property.type)) {
+  if (["file", "formula", "relation", "rollup"].includes(property.type)) {
+    const props = context
+      ? { document, row, property, editable, context, label: ariaLabel }
+      : null;
+    control = !props ? (
+      <span className="muted">정보 불러오는 중…</span>
+    ) : property.type === "file" ? (
+      <DatabaseFileCell {...props} />
+    ) : property.type === "relation" ? (
+      <DatabaseRelationCell {...props} />
+    ) : (
+      <DatabaseComputedCell {...props} />
+    );
+  } else if (["created_time", "updated_time"].includes(property.type)) {
     const timestamp =
       property.type === "created_time" ? row.createdAt : row.updatedAt;
     control = (
@@ -193,16 +223,29 @@ export function DatabaseRowProperties(props: {
   row: TaskRow;
   editable: boolean;
   identities: Identity[];
+  page: LocalPage;
+  data: WorkspaceData;
+  historical?: boolean;
 }) {
+  const context = useDatabaseEditorContext(
+    props.document,
+    props.page,
+    props.data,
+    props.historical,
+  );
   return (
     <div className="database-row-properties">
       {getDatabaseProperties(props.document)
         .filter((property) => property.id !== "title")
         .map((property) => (
-          <label className="field-label" key={property.id}>
-            {property.name}
-            <DatabasePropertyCell {...props} property={property} />
-          </label>
+          <div className="field-label" key={property.id}>
+            <span>{property.name}</span>
+            <DatabasePropertyCell
+              {...props}
+              property={property}
+              context={context}
+            />
+          </div>
         ))}
     </div>
   );

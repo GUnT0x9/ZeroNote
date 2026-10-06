@@ -19,11 +19,11 @@ it("accepts legacy text, headings and marks, including decoded documents", () =>
   doc.destroy();
   copy.destroy();
 });
-it("requires the current protocol for unknown blocks, task bodies and marks", () => {
+it("preserves protocol 2 for attachment bodies and requires the current protocol for unknown marks", () => {
   for (const fragment of ["content", "task:row"]) {
     const doc = new Y.Doc();
     doc.getXmlFragment(fragment).insert(0, [new Y.XmlElement("attachment")]);
-    expect(getDocumentEditorProtocol(doc)).toBe(EDITOR_PROTOCOL);
+    expect(getDocumentEditorProtocol(doc)).toBe(2);
     doc.destroy();
   }
   const doc = new Y.Doc(),
@@ -32,4 +32,25 @@ it("requires the current protocol for unknown blocks, task bodies and marks", ()
   text.insert(0, "Marked", { highlight: {} });
   expect(getDocumentEditorProtocol(doc)).toBe(EDITOR_PROTOCOL);
   doc.destroy();
+});
+it("requires protocol 3 for new Property definitions, including decoded and deleted definitions", () => {
+  for (const type of ["file", "formula", "relation", "rollup"]) {
+    const document = new Y.Doc(),
+      property = new Y.Map<unknown>();
+    document
+      .getMap<Y.Map<unknown>>("databaseProperties")
+      .set("field", property);
+    property.set("type", type);
+    property.set("deleted", true);
+    const decoded = new Y.Doc();
+    Y.applyUpdate(decoded, Y.encodeStateAsUpdate(document));
+    expect(getDocumentEditorProtocol(decoded)).toBe(3);
+    decoded.destroy();
+    document.destroy();
+  }
+  const document = new Y.Doc();
+  document
+    .getMap<Y.Map<unknown>>("databaseProperties")
+    .set("field", new Y.Map([["type", "number"]]));
+  expect(getDocumentEditorProtocol(document)).toBe(1);
 });

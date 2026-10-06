@@ -41,3 +41,16 @@ Accepted. 기존 `tasks` Y.Map Row 저장 형식을 재사용한다. 일반 Data
 | Export/Snapshot 복구 | Schema/View/값/Row 본문 복사          | Export는 Local | Snapshot은 Commit 완료 후 | 기존 실패 보존 정책              | 새 비공유 문서와 원본 독립     |
 
 File Property, 선택 옵션 편집, 타입 변환, Formula/Relation/Rollup은 Deferred다. 전체 계약과 검증은 `docs/database-release.md`를 따른다.
+
+## 전체 체크리스트 Database 확장 (2026-10-06)
+
+File/Formula/Relation/Rollup을 구현 대상으로 채택했고 현재 통합·브라우저 검증 중이다. 앞선 Alpha/P0의 Deferred 기록은 당시 출시 범위이며 현재는 [Database 확장 기준](../database-advanced-plan.md)을 따른다. Production 배포 완료까지 전체 체크리스트의 완료 수에는 포함하지 않는다.
+
+| Trigger       | Behavior                                                             | Offline                       | Sync                          | Error                            | Acceptance Criteria                                    |
+| ------------- | -------------------------------------------------------------------- | ----------------------------- | ----------------------------- | -------------------------------- | ------------------------------------------------------ |
+| File Cell     | Page 파일 UUID를 선택·업로드·미리보기·연결 해제                      | 로컬 bytes와 이름, 기존 Queue | 파일 저장 후 문서 Commit      | 한도/권한/Hash 오류 시 보존      | Snapshot 새 파일 ID와 원본 bytes 일치, 정리 참조 보호  |
+| Relation Cell | 접근 가능한 같은 Workspace Database의 활성 Row 선택·이동             | Cache된 대상                  | ID 링크와 대상 문서 변경 구독 | 미접근/미저장/삭제는 명시적 오류 | 이름 변경 후 연결 유지, 권한 전파 없음                 |
+| Formula 설정  | 속성 이름을 ID AST로 변환, 미리보기·정의 수정                        | 로컬 계산                     | 정의만 CRDT 저장              | 문법/형/참조/순환/계산량 오류    | Table/Board/상세/검색/Filter/Sort/Export 결과 일치     |
+| Rollup 설정   | Relation의 대상 속성에 count/count_values/unique/sum/average/min/max | Cache된 대상                  | 정의와 각 Row의 원본 값       | 접근 불가와 빈 관계를 구분       | 대상 변경 시 재계산, 비공개·Person 파생 값 Public 제외 |
+
+Relation 대상 변경은 기존 해당 속성의 연결 해제를 UI에서 확인하고 적용한다. Row별 Share를 만들지 않는다. Snapshot은 원래 Row와 외부 관계를 유지하고 자기 Database 참조는 복구한 새 Page ID로 연결한다. Workspace Import는 포함된 Database ID를 재매핑한다. Formula/Rollup은 읽기 전용이며 계산된 Group에 Drag로 값을 쓰지 않는다.

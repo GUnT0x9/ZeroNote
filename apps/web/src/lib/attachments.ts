@@ -13,6 +13,7 @@ import {
 import { database, errorMessage, type LocalAttachment } from "./database";
 import { api, ApiError } from "./api";
 import { pauseDocumentForAttachmentUpload } from "./documents";
+import { cacheAttachmentMetadata } from "./attachment-metadata";
 
 export async function attachmentDigest(data: Uint8Array): Promise<string> {
   const hash = await crypto.subtle.digest("SHA-256", Uint8Array.from(data));
@@ -56,19 +57,27 @@ export async function stageAttachment(
     operationId: crypto.randomUUID(),
     status: "pending",
   };
-  await database.transaction("rw", database.attachments, async () => {
-    const files = await database.attachments
-      .where("workspaceId")
-      .equals(page.workspaceId)
-      .toArray();
-    if (
-      files.length >= MAX_WORKSPACE_ATTACHMENTS ||
-      files.reduce((sum, file) => sum + file.size, 0) + data.length >
-        WORKSPACE_ATTACHMENT_BYTES
-    )
-      throw new Error("Workspace 파일 저장 한도를 초과했습니다.");
-    await database.attachments.add(record);
-  });
+  await database.transaction(
+    "rw",
+    database.attachments,
+    database.preferences,
+    async () => {
+      const files = await database.attachments
+        .where("workspaceId")
+        .equals(page.workspaceId)
+        .toArray();
+      if (
+        files.length >= MAX_WORKSPACE_ATTACHMENTS ||
+        files.reduce((sum, file) => sum + file.size, 0) + data.length >
+          WORKSPACE_ATTACHMENT_BYTES
+      )
+        throw new Error("Workspace 파일 저장 한도를 초과했습니다.");
+      await database.attachments.add(record);
+      await cacheAttachmentMetadata(pageId, [
+        AttachmentMetadataSchema.parse(record),
+      ]);
+    },
+  );
   pauseDocumentForAttachmentUpload(pageId, record.id);
   return record;
 }
@@ -77,7 +86,12 @@ export async function loadAttachment(
   pageId: string,
 ): Promise<LocalAttachment> {
   const cached = await database.attachments.get(id);
-  if (cached && cached.pageId === pageId) return cached;
+  if (cached && cached.pageId === pageId) {
+    await cacheAttachmentMetadata(pageId, [
+      AttachmentMetadataSchema.parse(cached),
+    ]);
+    return cached;
+  }
   const page = await database.pages.get(pageId);
   if (!page || page.accessLost) throw new Error("파일에 접근할 수 없습니다.");
   const result = ExportAttachmentSchema.parse(await api(`/attachments/${id}`));
@@ -97,6 +111,9 @@ export async function loadAttachment(
     status: "uploaded",
   };
   await database.attachments.put(record);
+  await cacheAttachmentMetadata(pageId, [
+    AttachmentMetadataSchema.parse(record),
+  ]);
   return record;
 }
 export async function syncAttachments(): Promise<void> {
@@ -135,6 +152,7 @@ export async function syncAttachments(): Promise<void> {
         status: "uploaded",
         error: undefined,
       });
+      await cacheAttachmentMetadata(file.pageId, [metadata]);
     } catch (error) {
       const preserved =
         error instanceof ApiError && [403, 409, 410].includes(error.status);

@@ -11,9 +11,14 @@ export class AttachmentService {
     readonly repository: Repository,
     readonly access: AccessService,
   ) {}
-  async list(deviceId: string, pageId: string) {
-    await this.access.page(deviceId, pageId);
-    return this.repository.attachments.list(pageId);
+  async list(deviceId: string, pageId: string, retained = false) {
+    const permission = await this.access.page(deviceId, pageId, retained);
+    if (retained && permission.role !== "owner")
+      throw new DomainError(
+        403,
+        "보존된 파일 정보는 Workspace Owner만 조회할 수 있습니다.",
+      );
+    return this.repository.attachments.list(pageId, retained);
   }
   async upload(deviceId: string, pageId: string, input: unknown) {
     const permission = await this.access.editor(deviceId, pageId);

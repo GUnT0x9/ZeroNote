@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 40개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md)에 남긴다. 나머지 108개는 계속 구현 대상이다. 다음 File Property/Relation/Rollup/Formula 묶음은 [Database 확장 기준](database-advanced-plan.md)을 따른다. Formula 파서·계산 모듈은 집중 테스트 단계이며 UI·저장·배포가 남아 완료 수에 포함하지 않는다.
+현재 40개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md)에 남긴다. 나머지 108개는 계속 구현 대상이다. 다음 File Property/Relation/Rollup/Formula 묶음은 [Database 확장 기준](database-advanced-plan.md)을 따른다. 4개 Property의 공유 Schema·계산·UI·Export/Public/Snapshot 연결, 전체 335 Tests와 권한 철회·Snapshot 복구 브라우저 검증을 통과했다. 전체 CI·Production 검증이 남아 완료 수에 포함하지 않는다.
 
 ## 항목별 완료 증거
 

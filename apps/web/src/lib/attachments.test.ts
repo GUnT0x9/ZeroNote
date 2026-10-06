@@ -9,6 +9,7 @@ import {
   stageAttachmentFile,
 } from "./attachments";
 import { api } from "./api";
+import { attachmentMetadataKey } from "./attachment-metadata";
 import {
   bytesToBase64,
   MAX_ATTACHMENT_BYTES,
@@ -48,6 +49,7 @@ afterEach(async () => {
   for (const id of ids.splice(0)) {
     await database.pages.delete(id);
     await database.attachments.where("pageId").equals(id).delete();
+    await database.preferences.delete(attachmentMetadataKey(id));
   }
 });
 it("checks a selected File size before allocating bytes and stages a valid file", async () => {

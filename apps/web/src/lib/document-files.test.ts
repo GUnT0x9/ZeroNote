@@ -11,9 +11,26 @@ import {
   removeLocalDocument,
 } from "./documents";
 import { stageAttachment } from "./attachments";
-vi.mock("./api", () => ({ api: vi.fn(), ApiError: class extends Error {} }));
+import { api, ApiError } from "./api";
+const providerEvents = vi.hoisted(() => ({
+  authenticationFailed: undefined as (() => void) | undefined,
+}));
+vi.mock("./api", () => ({
+  api: vi.fn(),
+  ApiError: class extends Error {
+    constructor(
+      readonly status: number,
+      message: string,
+    ) {
+      super(message);
+    }
+  },
+}));
 vi.mock("@hocuspocus/provider", () => ({
   HocuspocusProvider: class {
+    constructor(options: { onAuthenticationFailed?: () => void }) {
+      providerEvents.authenticationFailed = options.onAuthenticationFailed;
+    }
     connect = vi.fn(async () => undefined);
     disconnect = vi.fn(async () => undefined);
     destroy = vi.fn();
@@ -22,6 +39,7 @@ vi.mock("@hocuspocus/provider", () => ({
 const pages: string[] = [];
 async function fixture() {
   vi.stubGlobal("navigator", { onLine: true });
+  vi.stubGlobal("window", { location: { origin: "http://localhost:3000" } });
   const page: LocalPage = {
     id: crypto.randomUUID(),
     workspaceId: crypto.randomUUID(),
@@ -64,7 +82,8 @@ afterEach(async () => {
     await database.attachments.where("pageId").equals(id).delete();
   }
   vi.unstubAllGlobals();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  providerEvents.authenticationFailed = undefined;
 });
 it("pauses realtime while a referenced file is pending and resumes only after its upload", async () => {
   const { session, provider, page } = await fixture();
@@ -110,4 +129,31 @@ it("does not block a remote file without a local cache and keeps inaccessible Pa
   ).toBeUndefined();
   pauseDocumentForAttachmentUpload("missing");
   expect(provider.connect).toHaveBeenCalledOnce();
+});
+
+it.each([403, 410])(
+  "removes a cached dependency from accessible Pages after confirmed %s and preserves unsent edits",
+  async (status) => {
+    const { session, page } = await fixture();
+    session.provider = undefined;
+    await database.documents.update(page.id, { generation: 1 });
+    vi.mocked(api).mockRejectedValue(new ApiError(status, "Access removed"));
+    expect(await connectDocument(session, page)).toBeUndefined();
+    expect((await database.pages.get(page.id))?.accessLost).toBe(true);
+    expect((await database.documents.get(page.id))?.state).toBe("preserved");
+  },
+);
+it("updates Page access after realtime authentication fails without treating temporary outages as revocation", async () => {
+  const { session, page } = await fixture();
+  session.provider = undefined;
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(503, "Unavailable"));
+  expect(await connectDocument(session, page)).toBeUndefined();
+  expect((await database.pages.get(page.id))?.accessLost).not.toBe(true);
+  vi.mocked(api).mockResolvedValueOnce(undefined);
+  expect(await connectDocument(session, page)).toBeDefined();
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(403, "Revoked"));
+  providerEvents.authenticationFailed!();
+  await vi.waitFor(async () =>
+    expect((await database.pages.get(page.id))?.accessLost).toBe(true),
+  );
 });

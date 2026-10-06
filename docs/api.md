@@ -65,14 +65,14 @@ Beta 코드는 Hash만 저장한다. Recovery/Page Invite는 Beta 자격을 요�
 
 기기 Cookie 인증과 Page Role을 기존 문서 API와 동일하게 적용한다. 모든 응답은 `no-store`이며 Service Worker가 인증 응답을 Cache하지 않는다.
 
-| Method | Path                                     | 권한 / 응답                                                                                             |
-| ------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| GET    | `/v1/pages/:id/attachments`              | Page 접근자. 삭제되지 않은 파일 Metadata 목록                                                           |
-| POST   | `/v1/pages/:id/attachments`              | Editor/Owner. `{ operationId, id, name, data }`, data는 canonical base64. PostgreSQL Commit 후 Metadata |
-| GET    | `/v1/attachments/:id`                    | Page 접근자. Metadata + base64 data. Owner는 Trash/보존 파일도 조회                                     |
-| GET    | `/v1/attachments/:id/content`            | Page 접근자. 원본 bytes와 Range 지원(206/416), `nosniff`/강제 다운로드                                  |
-| DELETE | `/v1/attachments/:id`                    | Editor/Owner. 목록에서 삭제. Snapshot용 bytes는 참조가 없어질 때까지 유지                               |
-| GET    | `/v1/workspaces/:id/attachments/storage` | Owner. bytes/count/retained/limit/fileLimit/files                                                       |
+| Method | Path                                     | 권한 / 응답                                                                                                                               |
+| ------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/v1/pages/:id/attachments`              | Page 접근자. 삭제되지 않은 파일 Metadata 목록. `?retained=1`은 Owner만 사용하며 Trash/보존 파일 이름을 포함한다. bytes는 반환하지 않는다. |
+| POST   | `/v1/pages/:id/attachments`              | Editor/Owner. `{ operationId, id, name, data }`, data는 canonical base64. PostgreSQL Commit 후 Metadata                                   |
+| GET    | `/v1/attachments/:id`                    | Page 접근자. Metadata + base64 data. Owner는 Trash/보존 파일도 조회                                                                       |
+| GET    | `/v1/attachments/:id/content`            | Page 접근자. 원본 bytes와 Range 지원(206/416), `nosniff`/강제 다운로드                                                                    |
+| DELETE | `/v1/attachments/:id`                    | Editor/Owner. 목록에서 삭제. Snapshot용 bytes는 참조가 없어질 때까지 유지                                                                 |
+| GET    | `/v1/workspaces/:id/attachments/storage` | Owner. bytes/count/retained/limit/fileLimit/files                                                                                         |
 
 Beta 파일 제한: 파일당 4MiB, Workspace당 25MiB/200개. 동일 Operation ID/파일 ID의 같은 요청은 중복 저장하지 않는다. 다른 Payload로 재사용하면 409, 저장 한도는 507이며 로컬 bytes/재시도 Operation ID를 보존한다. MIME은 서버가 signature로 판별하며 SVG/HTML 실행은 제공하지 않는다.
 
@@ -80,7 +80,9 @@ Snapshot 복구는 참조된 파일 bytes를 새 Page의 새 Attachment ID로 �
 
 ## Editor 호환성
 
-문서 read/commit/realtime-token과 Snapshot read는 `X-ZeroNote-Editor-Protocol: 2`를 사용한다. Header가 없으면 기존 Editor 1이다. 새 Block/Mark가 있는 문서는 최소 버전 2이며 서버 Checkpoint에 최소 버전을 유지한다. 미지원 버전의 읽기·쓰기·Token/미리보기는 426, 잘못된 Header는 400이다. 새 기능 방송 전에 활성 구버전 연결을 종료하고 WebSocket 인증·Sync에서도 검사한다. 로컬 변경은 유지하며 앱 새로고침을 안내한다. 버전 Header는 Role 권한을 부여하지 않는다.
+현재 Web은 `X-ZeroNote-Editor-Protocol: 3`을 사용한다. Header가 없으면 기존 Editor 1이다. 기존 문서는 최소 버전 1, Attachment Block은 2, File/Formula/Relation/Rollup 속성이나 미지원 Block/Mark는 3이다. 서버 Checkpoint에 필요한 최소 버전을 유지하며 삭제된 속성 정의에도 호환성 경계를 적용한다. 미지원 버전의 읽기·쓰기·Token/미리보기는 426, 잘못된 Header는 400이다. 새 기능 방송 전에 활성 구버전 연결을 종료하고 WebSocket 인증·Sync에서도 검사한다. 로컬 변경은 유지하며 앱 새로고침을 안내한다. 버전 Header는 Role 권한을 부여하지 않는다. Migration 007은 기존 Checkpoint와 Update를 보존하며 Protocol 허용 범위를 1–3으로 확장한다.
+
+Database의 File/Relation 값은 중복 없는 UUID 배열(최대 50개), Formula는 길이/노드/깊이를 제한한 속성 ID AST, Rollup은 Relation/대상 속성 ID/집계 연산 정의다. 계산 결과를 서버의 별도 편집 원본으로 저장하지 않는다. Commit 전에 공유 Schema와 File/Relation 값 형식을 검증하고 잘못된 정의는 422로 거절한다. Relation은 대상 접근 권한을 추가하지 않는다. Public Projection은 게시 범위 밖 Relation과 Person에서 파생한 결과를 반환하지 않는다.
 
 ## Storage 관리
 

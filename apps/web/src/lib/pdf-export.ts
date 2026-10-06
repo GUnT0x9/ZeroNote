@@ -1,14 +1,13 @@
 import { PDFDocument, rgb, type PDFPage, type PDFFont } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import * as Y from "yjs";
+import { createExportDatabaseReader } from "./database-export";
 import {
   base64ToBytes,
   readPortableContent,
   portablePlainText,
   getTaskRows,
   getDatabaseProperties,
-  readDatabaseValue,
-  databaseValueLabel,
   type WorkspaceExport,
   type PortableNode,
   type PortableLinks,
@@ -229,25 +228,30 @@ export async function createPagePdf(
       links,
       input,
     );
-    if (source.kind === "database")
-      for (const row of getTaskRows(document)) {
-        writeText(writer, row.title, 16);
-        for (const property of getDatabaseProperties(document).filter(
-          (value) => value.id !== "title",
-        ))
-          writeText(
+    const computed = createExportDatabaseReader(input, pageId, document);
+    try {
+      if (source.kind === "database")
+        for (const row of getTaskRows(document)) {
+          writeText(writer, row.title, 16);
+          for (const property of getDatabaseProperties(document).filter(
+            (value) => value.id !== "title",
+          ))
+            writeText(
+              writer,
+              `${property.name}: ${computed.reader.cell(row, property).error?.message ?? computed.reader.label(row, property)}`,
+            );
+          await writeNodes(
             writer,
-            `${property.name}: ${databaseValueLabel(property, readDatabaseValue(document, row, property))}`,
+            readPortableContent(document.getXmlFragment(`task:${row.id}`)),
+            links,
+            input,
           );
-        await writeNodes(
-          writer,
-          readPortableContent(document.getXmlFragment(`task:${row.id}`)),
-          links,
-          input,
-        );
-        writer.top -= 12;
-      }
-    return await pdf.save();
+          writer.top -= 12;
+        }
+      return await pdf.save();
+    } finally {
+      computed.dispose();
+    }
   } finally {
     document.destroy();
   }

@@ -8,6 +8,26 @@ export type FormulaNode =
 export const MAX_FORMULA_LENGTH = 2000;
 export const MAX_FORMULA_NODES = 256;
 export const MAX_FORMULA_DEPTH = 32;
+export function formatFormula(
+  node: unknown,
+  properties: { id: string; name: string }[],
+): string {
+  assertFormulaNode(node);
+  const names = new Map(
+    properties.map((property) => [property.id, property.name]),
+  );
+  const format = (current: FormulaNode): string => {
+    if (current.type === "literal") return JSON.stringify(current.value);
+    if (current.type === "property")
+      return `prop(${JSON.stringify(names.get(current.propertyId) ?? `삭제된 속성 ${current.propertyId}`)})`;
+    if (current.type === "unary")
+      return `${current.operator}(${format(current.operand)})`;
+    if (current.type === "binary")
+      return `(${format(current.left)} ${current.operator} ${format(current.right)})`;
+    return `${current.name}(${current.arguments.map(format).join(", ")})`;
+  };
+  return format(node);
+}
 const MAX_FORMULA_ARGUMENTS = 16;
 const MAX_FORMULA_STRING_LENGTH = 10000;
 const FORMULA_FUNCTIONS = new Set([

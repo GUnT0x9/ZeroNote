@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { z } from "zod";
 import { zipDirectoryChecksums, crc32 } from "./zip-integrity";
+import { createExportDatabaseReader } from "./database-export";
 import { unzipSync, zipSync, strToU8, strFromU8 } from "fflate";
 import {
   base64ToBytes,
@@ -20,8 +21,6 @@ import {
   importMarkdownContent,
   getTaskRows,
   getDatabaseProperties,
-  readDatabaseValue,
-  databaseValueLabel,
   createTaskRow,
   initializeGenericDatabase,
   addDatabaseProperty,
@@ -246,20 +245,31 @@ export function parseCsv(source: string): string[][] {
 function htmlDocument(title: string, body: string, fontCss = ""): string {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; media-src data:; style-src 'unsafe-inline' 'self' file:; font-src data:"><title>${escapeHtml(title)}</title><style>${fontCss}${EXPORT_STYLE}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
 }
-function databaseCells(document: Y.Doc): string[][] {
+function databaseCells(
+  input: WorkspaceExport,
+  pageId: string,
+  document: Y.Doc,
+): string[][] {
   const properties = getDatabaseProperties(document);
-  return [
-    properties.map((property) => property.name),
-    ...getTaskRows(document).map((row) =>
-      properties.map((property) => {
-        const value = readDatabaseValue(document, row, property);
-        if (value === null) return "";
-        if (typeof value === "boolean") return String(value);
-        if (property.type === "person") return String(value);
-        return databaseValueLabel(property, value, []);
-      }),
-    ),
-  ];
+  const computed = createExportDatabaseReader(input, pageId, document);
+  try {
+    return [
+      properties.map((property) => property.name),
+      ...getTaskRows(document).map((row) =>
+        properties.map((property) => {
+          const result = computed.reader.cell(row, property);
+          if (result.error) return `오류: ${result.error.message}`;
+          const value = result.value;
+          if (value === null) return "";
+          if (typeof value === "boolean") return String(value);
+          if (property.type === "person") return String(value);
+          return computed.reader.label(row, property);
+        }),
+      ),
+    ];
+  } finally {
+    computed.dispose();
+  }
 }
 export function renderPageHtml(
   input: WorkspaceExport,
@@ -280,7 +290,7 @@ export function renderPageHtml(
     if (page.kind === "database")
       body +=
         "<table>" +
-        databaseCells(document)
+        databaseCells(input, pageId, document)
           .map(
             (row, index) =>
               `<tr>${row.map((cell) => `<${index ? "td" : "th"}>${escapeHtml(cell)}</${index ? "td" : "th"}>`).join("")}</tr>`,
@@ -302,12 +312,26 @@ export function renderPageMarkdown(
   try {
     Y.applyUpdate(document, base64ToBytes(page.document));
     const paths = exportPaths(input.pages, ".md");
-    return (
+    const body =
       `# ${page.title.replace(/\n/g, " ")}\n\n` +
       portableMarkdown(
         readPortableContent(document.getXmlFragment("content")),
         linksFor(input, paths, paths.get(pageId)!),
-      )
+      );
+    if (page.kind !== "database") return body;
+    const cells = databaseCells(input, pageId, document);
+    const escapeCell = (cell: string) =>
+      cell
+        .replaceAll("\\", "\\\\")
+        .replaceAll("|", "\\|")
+        .replace(/\r?\n/g, "<br>");
+    return (
+      body +
+      "\n\n" +
+      [cells[0], cells[0]!.map(() => "---"), ...cells.slice(1)]
+        .map((row) => `| ${row!.map(escapeCell).join(" | ")} |`)
+        .join("\n") +
+      "\n"
     );
   } finally {
     document.destroy();
@@ -338,7 +362,7 @@ export function portableWorkspaceFiles(
       );
       if (page.kind !== "database") continue;
       files[path.replace(/\.[^.]+$/, ".csv")] = strToU8(
-        csvText(databaseCells(document)),
+        csvText(databaseCells(input, page.id, document)),
       );
       const rows = getTaskRows(document);
       for (const row of rows) {

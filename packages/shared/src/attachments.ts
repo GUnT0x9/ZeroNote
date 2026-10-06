@@ -33,6 +33,9 @@ export const AttachmentMetadataSchema = z.object({
   createdAt: z.string(),
 });
 export type AttachmentMetadata = z.infer<typeof AttachmentMetadataSchema>;
+export const AttachmentListQuerySchema = z
+  .object({ retained: z.literal("1").optional() })
+  .strict();
 export const AttachmentStorageSchema = z.object({
   bytes: z.number().int().nonnegative(),
   count: z.number().int().nonnegative(),
@@ -144,6 +147,45 @@ export function getAttachmentIds(document: Y.Doc): string[] {
   walk(document.getXmlFragment("content"));
   for (const name of [...document.share.keys()])
     if (name.startsWith("task:")) walk(document.getXmlFragment(name));
+  for (const id of propertyAttachmentIds(document)) ids.add(id);
+  return [...ids];
+}
+function propertyAttachmentIds(document: Y.Doc): string[] {
+  const properties = [...document.getMap<Y.Map<unknown>>("databaseProperties")]
+    .filter(
+      ([, property]) =>
+        property instanceof Y.Map &&
+        property.get("type") === "file" &&
+        property.get("deleted") !== true,
+    )
+    .map(([id]) => id);
+  const ids = new Set<string>();
+  for (const row of document.getMap<Y.Map<unknown>>("tasks").values()) {
+    if (!(row instanceof Y.Map) || row.get("deleted") === true) continue;
+    for (const id of properties) {
+      const files = row.get(`property:${id}`);
+      if (Array.isArray(files))
+        for (const file of files)
+          if (z.uuid().safeParse(file).success) ids.add(file as string);
+    }
+  }
+  return [...ids];
+}
+/** Public publication covers visible Row bodies, excluding deleted Row fragments. */
+export function getLiveAttachmentIds(document: Y.Doc): string[] {
+  const ids = new Set(propertyAttachmentIds(document));
+  const walk = (fragment: Y.XmlFragment | Y.XmlElement) => {
+    for (const node of fragment.toArray())
+      if (node instanceof Y.XmlElement) {
+        const id = node.getAttribute("attachmentId");
+        if (z.uuid().safeParse(id).success) ids.add(id as string);
+        walk(node);
+      }
+  };
+  walk(document.getXmlFragment("content"));
+  for (const [id, row] of document.getMap<Y.Map<unknown>>("tasks"))
+    if (row instanceof Y.Map && row.get("deleted") !== true)
+      walk(document.getXmlFragment(`task:${id}`));
   return [...ids];
 }
 export function remapAttachmentIds(
@@ -163,6 +205,23 @@ export function remapAttachmentIds(
     walk(document.getXmlFragment("content"));
     for (const name of [...document.share.keys()])
       if (name.startsWith("task:")) walk(document.getXmlFragment(name));
+    for (const [propertyId, property] of document.getMap<Y.Map<unknown>>(
+      "databaseProperties",
+    )) {
+      if (!(property instanceof Y.Map) || property.get("type") !== "file")
+        continue;
+      for (const row of document.getMap<Y.Map<unknown>>("tasks").values()) {
+        if (!(row instanceof Y.Map)) continue;
+        const values = row.get(`property:${propertyId}`);
+        if (Array.isArray(values))
+          row.set(
+            `property:${propertyId}`,
+            values.map((id: unknown) =>
+              typeof id === "string" ? (ids.get(id) ?? id) : id,
+            ),
+          );
+      }
+    }
   });
 }
 export function parseAttachmentRange(

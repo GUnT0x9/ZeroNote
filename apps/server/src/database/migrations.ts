@@ -7,6 +7,7 @@ const MIGRATIONS = [
   "004-editor-protocol.sql",
   "005-attachment-purge.sql",
   "006-public-sharing.sql",
+  "007-database-properties.sql",
 ] as const;
 export async function migrateDatabase(pool: Pool): Promise<void> {
   const client = await pool.connect();

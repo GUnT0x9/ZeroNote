@@ -25,9 +25,9 @@ export interface AttachmentRecord extends AttachmentMetadata {
 }
 export class AttachmentStore {
   constructor(readonly repository: Repository) {}
-  async list(pageId: string): Promise<AttachmentMetadata[]> {
+  async list(pageId: string, retained = false): Promise<AttachmentMetadata[]> {
     return this.repository.query<AttachmentMetadata>(
-      sql`SELECT ${METADATA} FROM attachments WHERE page_id=${pageId} AND deleted_at IS NULL AND purged_at IS NULL ORDER BY created_at,id`,
+      sql`SELECT ${METADATA} FROM attachments WHERE page_id=${pageId} AND (${retained} OR deleted_at IS NULL) AND purged_at IS NULL ORDER BY created_at,id`,
     );
   }
   async get(

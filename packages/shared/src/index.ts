@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { remapDatabasePageIds } from "./database";
 import * as Y from "yjs";
 import { isCanonicalBase64 } from "./attachments";
 import { ExportAttachmentSchema } from "./attachments";
@@ -464,6 +465,7 @@ export function cloneDocumentContent(
       target.getMap<Y.Map<unknown>>("tasks").set(row.id, original.clone());
     copyFragment(`task:${row.id}`);
   }
+  remapDatabasePageIds(target, new Map([[oldPageId, newPageId]]));
   return target;
 }
 
@@ -472,3 +474,5 @@ export * from "./attachments";
 export * from "./templates";
 export * from "./editor-protocol";
 export * from "./public-sharing";
+export * from "./formula";
+export * from "./database-computation";

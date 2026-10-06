@@ -14,18 +14,33 @@ import {
 import { Dialog } from "./primitives";
 import { PROPERTY_TYPE_LABELS } from "./database-property";
 import { errorMessage } from "@/lib/database";
+import {
+  initialPropertyDefinition,
+  compilePropertyDefinition,
+} from "@/lib/database-definitions";
+import type { DatabaseEditorContext } from "@/lib/database-context";
+import {
+  PropertyDefinitionFields,
+  EditPropertyDefinition,
+} from "./database-property-definition";
 export function DatabasePropertyDialog({
   document,
   onClose,
+  context,
 }: {
   document: Y.Doc;
   onClose: () => void;
+  context: DatabaseEditorContext;
 }) {
   const [name, setName] = useState(""),
     [type, setType] = useState<PropertyType>("text"),
     [options, setOptions] = useState(""),
     [error, setError] = useState<string | null>(null),
     [, refresh] = useState(0);
+  const [definition, setDefinition] = useState(() =>
+      initialPropertyDefinition(),
+    ),
+    [editing, setEditing] = useState<string | null>(null);
   const run = (action: () => void) => {
     try {
       action();
@@ -57,30 +72,67 @@ export function DatabasePropertyDialog({
               }}
             />
             {!property.builtin && (
-              <button
-                className="text-button danger-text"
-                aria-label={`${property.name} 속성 삭제`}
-                onClick={() =>
-                  run(() =>
-                    changeDatabaseProperty(document, property.id, {
-                      deleted: true,
-                    }),
-                  )
-                }
-              >
-                삭제
-              </button>
+              <>
+                {["formula", "relation", "rollup"].includes(property.type) && (
+                  <button
+                    className="text-button"
+                    aria-label={`${property.name} 속성 설정`}
+                    onClick={() =>
+                      setEditing(editing === property.id ? null : property.id)
+                    }
+                  >
+                    설정
+                  </button>
+                )}
+                <button
+                  className="text-button danger-text"
+                  aria-label={`${property.name} 속성 삭제`}
+                  onClick={() =>
+                    run(() =>
+                      changeDatabaseProperty(document, property.id, {
+                        deleted: true,
+                      }),
+                    )
+                  }
+                >
+                  삭제
+                </button>
+              </>
             )}
           </div>
         ))}
       </div>
+      {getDatabaseProperties(document)
+        .filter((property) => property.id === editing)
+        .map((property) => (
+          <EditPropertyDefinition
+            key={property.id}
+            document={document}
+            property={property}
+            context={context}
+            onClose={() => setEditing(null)}
+            onSaved={() => refresh((value) => value + 1)}
+          />
+        ))}
       <form
         onSubmit={(event) => {
           event.preventDefault();
           run(() => {
-            addDatabaseProperty(document, name, type, options.split(","));
+            addDatabaseProperty(
+              document,
+              name,
+              type,
+              options.split(","),
+              crypto.randomUUID(),
+              compilePropertyDefinition(
+                type,
+                definition,
+                getDatabaseProperties(document),
+              ),
+            );
             setName("");
             setOptions("");
+            setDefinition(initialPropertyDefinition());
           });
         }}
       >
@@ -120,6 +172,13 @@ export function DatabasePropertyDialog({
             />
           </label>
         )}
+        <PropertyDefinitionFields
+          document={document}
+          type={type}
+          draft={definition}
+          onChange={setDefinition}
+          context={context}
+        />
         {error && (
           <div className="inline-warning" role="alert">
             {error}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   compileFormula,
+  formatFormula,
   assertFormulaNode,
   evaluateFormula,
   FormulaError,
@@ -19,6 +20,18 @@ const run = (source: string, values: Record<string, FormulaValue> = {}) =>
   );
 
 describe("Formula compiler and bounded interpreter", () => {
+  it("formats renamed and escaped properties without changing stable expression references", () => {
+    const node = compileFormula(
+      'if(prop("점수") > 2, -prop("점수") + 4, 0)',
+      properties,
+    );
+    const renamed = [{ id: "points", name: '새 "점수"' }];
+    const formatted = formatFormula(node, renamed);
+    expect(formatted).toContain('새 \\"점수\\"');
+    expect(compileFormula(formatted, renamed)).toEqual(node);
+    expect(() => formatFormula({ type: "unknown" }, properties)).toThrow();
+    expect(formatFormula(node, [])).toContain("삭제된 속성 points");
+  });
   it.each([
     ["2 + 3 * 4", 14],
     ["(2 + 3) * 4", 20],

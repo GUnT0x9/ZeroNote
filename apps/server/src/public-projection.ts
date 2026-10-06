@@ -3,7 +3,8 @@ import {
   escapeHtml,
   getDatabaseProperties,
   getTaskRows,
-  readDatabaseValue,
+  createDatabaseValueReader,
+  type DatabaseValueReader,
   portableHtml,
   portablePlainText,
   readPortableContent,
@@ -108,13 +109,19 @@ export function createPublicPage(
   title: string,
   kind: PublicPage["kind"],
   links: PublicProjectionLinks,
+  reader?: DatabaseValueReader,
 ): PublicPage {
   const nodes = sanitizePublicNodes(
     readPortableContent(document.getXmlFragment("content")),
     links,
   );
   let html = portableHtml(nodes, links);
-  if (kind === "database") html += databaseHtml(document, links);
+  if (kind === "database")
+    html += databaseHtml(
+      document,
+      links,
+      reader ?? createDatabaseValueReader(key, document, { publicOnly: true }),
+    );
   const result = {
     key,
     title: document.getText("title").toString() || title,
@@ -129,7 +136,11 @@ export function createPublicPage(
     throw new DomainError(413, "공개 문서 크기 제한을 초과했습니다.");
   return result;
 }
-function databaseHtml(document: Y.Doc, links: PublicProjectionLinks): string {
+function databaseHtml(
+  document: Y.Doc,
+  links: PublicProjectionLinks,
+  reader: DatabaseValueReader,
+): string {
   const properties = getDatabaseProperties(document).filter(
     (property) => property.type !== "person",
   );
@@ -139,21 +150,40 @@ function databaseHtml(document: Y.Doc, links: PublicProjectionLinks): string {
       (row) =>
         `<tr>${properties
           .map((property) => {
-            const value = readDatabaseValue(document, row, property);
-            const text = Array.isArray(value)
-              ? value
-                  .map(
-                    (id) =>
-                      property.options.find((entry) => entry.id === id)?.name ??
-                      "",
-                  )
-                  .join(", ")
-              : ["select", "status"].includes(property.type)
-                ? (property.options.find((entry) => entry.id === value)?.name ??
-                  "")
-                : value === null
-                  ? ""
-                  : String(value);
+            const result = reader.cell(row, property);
+            if (result.error) return "<td>—</td>";
+            if (property.type === "file" && Array.isArray(result.value))
+              return `<td>${result.value
+                .flatMap((id) => {
+                  const file = links.file(id);
+                  return file
+                    ? [
+                        `<a href="${escapeHtml(file.href)}" download>${escapeHtml(file.name)}</a>`,
+                      ]
+                    : [];
+                })
+                .join(", ")}</td>`;
+            if (
+              property.type === "relation" &&
+              property.relation &&
+              Array.isArray(result.value)
+            )
+              return `<td>${result.value
+                .flatMap((id) => {
+                  const link = links.task?.(property.relation!.databaseId, id);
+                  return link
+                    ? [
+                        `<a href="${escapeHtml(link.href)}">${escapeHtml(link.title)}</a>`,
+                      ]
+                    : [];
+                })
+                .join(", ")}</td>`;
+            const text =
+              result.value === null
+                ? ""
+                : typeof result.value === "boolean"
+                  ? String(result.value)
+                  : reader.label(row, property);
             return `<td>${escapeHtml(text)}</td>`;
           })
           .join("")}</tr>`,

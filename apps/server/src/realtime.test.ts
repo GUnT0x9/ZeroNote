@@ -12,6 +12,7 @@ import {
   createRecoveryKey,
   EDITOR_PROTOCOL,
   EDITOR_PROTOCOL_HEADER,
+  addDatabaseProperty,
 } from "@zeronote/shared";
 import { createApp } from "./app";
 import { Repository } from "./database/repository";
@@ -329,6 +330,48 @@ it.each(["rest", "websocket"])(
       Y.applyUpdate(loaded, update);
     expect(loaded.getXmlFragment("content").length).toBe(1);
     loaded.destroy();
+  },
+);
+it.each(["rest", "websocket"])(
+  "disconnects Protocol 2 before advanced Property broadcast via %s",
+  async (transport) => {
+    const { owner, pageId } = await setup(),
+      member = await collaborator(owner, pageId);
+    const old = await connect(member.cookie, pageId, 2),
+      current = await connect(owner.cookie, pageId, 3);
+    await vi.waitFor(() =>
+      expect(current.provider.hasUnsyncedChanges).toBe(false),
+    );
+    let delivered = false;
+    old.document.on("update", () => {
+      if (old.document.getMap("databaseProperties").size) delivered = true;
+    });
+    if (transport === "websocket")
+      addDatabaseProperty(current.document, "File", "file");
+    else {
+      const doc = new Y.Doc();
+      addDatabaseProperty(doc, "File", "file");
+      await call(
+        `/documents/${pageId}/commit`,
+        "POST",
+        {
+          operationId: crypto.randomUUID(),
+          update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+        },
+        owner.cookie,
+        3,
+      );
+      doc.destroy();
+    }
+    await vi.waitFor(() => {
+      expect(current.document.getMap("databaseProperties").size).toBe(1);
+      expect(
+        application.realtime.documents.get(pageId)?.getConnectionsCount(),
+      ).toBe(1);
+    });
+    expect(delivered).toBe(false);
+    expect(old.document.getMap("databaseProperties").size).toBe(0);
+    await expect(connect(member.cookie, pageId, 2)).rejects.toThrow();
   },
 );
 afterAll(async () => {

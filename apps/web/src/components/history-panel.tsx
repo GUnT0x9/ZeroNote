@@ -18,7 +18,14 @@ import { flushDocuments } from "@/lib/documents";
 import { synchronize } from "@/lib/sync";
 import { BlockEditor } from "./block-editor";
 import { DatabaseRowProperties } from "./database-property";
-export function HistoryPanel({ page }: { page: LocalPage }) {
+import type { WorkspaceData } from "@/lib/hooks";
+export function HistoryPanel({
+  page,
+  data,
+}: {
+  page: LocalPage;
+  data: WorkspaceData;
+}) {
   const ui = useUiStore();
   const [records, setRecords] = useState<DocumentSnapshot[]>([]),
     [detail, setDetail] = useState<z.infer<typeof SnapshotDetailSchema> | null>(
@@ -160,7 +167,12 @@ export function HistoryPanel({ page }: { page: LocalPage }) {
       {detail && (
         <section className="snapshot-preview">
           <h3>미리보기 · 읽기 전용</h3>
-          <SnapshotPreview key={detail.id} detail={detail} />
+          <SnapshotPreview
+            key={detail.id}
+            detail={detail}
+            page={page}
+            data={data}
+          />
           <button
             className="button button-primary full-width"
             disabled={busy || !online}
@@ -196,8 +208,12 @@ export function HistoryPanel({ page }: { page: LocalPage }) {
 }
 function SnapshotPreview({
   detail,
+  page,
+  data,
 }: {
   detail: z.infer<typeof SnapshotDetailSchema>;
+  page: LocalPage;
+  data: WorkspaceData;
 }) {
   const [session, setSession] = useState<{
       id: string;
@@ -248,6 +264,9 @@ function SnapshotPreview({
           {taskId && (
             <>
               <DatabaseRowProperties
+                page={page}
+                data={data}
+                historical
                 document={session.document}
                 row={rows.find((row) => row.id === taskId)!}
                 editable={false}

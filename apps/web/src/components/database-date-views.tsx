@@ -7,12 +7,11 @@ import {
   shiftCalendarMonth,
   databaseRowDateRange,
   groupDatabaseRows,
-  databaseValueLabel,
-  readDatabaseValue,
   getDatabaseProperties,
   type DatabaseView,
   type TaskRow,
   type Identity,
+  type DatabaseValueReader,
 } from "@zeronote/shared";
 export function DatabaseDateView({
   document,
@@ -192,12 +191,14 @@ export function DatabaseCards({
   view,
   identities,
   openRow,
+  reader,
 }: {
   document: Y.Doc;
   rows: TaskRow[];
   view: DatabaseView;
   identities: Identity[];
   openRow: (id: string) => void;
+  reader: DatabaseValueReader;
 }) {
   const properties = getDatabaseProperties(document).filter(
     (property) =>
@@ -205,7 +206,7 @@ export function DatabaseCards({
   );
   return (
     <div>
-      {groupDatabaseRows(document, rows, view.groupBy, identities).map(
+      {groupDatabaseRows(document, rows, view.groupBy, identities, reader).map(
         (group) => (
           <section className="database-card-group" key={group.key}>
             {view.groupBy && (
@@ -229,12 +230,8 @@ export function DatabaseCards({
                     {properties.map((property) => (
                       <div key={property.id}>
                         <dt>{property.name}</dt>
-                        <dd>
-                          {databaseValueLabel(
-                            property,
-                            readDatabaseValue(document, row, property),
-                            identities,
-                          )}
+                        <dd title={reader.cell(row, property).error?.message}>
+                          {reader.label(row, property) || "—"}
                         </dd>
                       </div>
                     ))}

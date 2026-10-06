@@ -50,7 +50,11 @@ import {
 } from "@zeronote/shared";
 import type { DocumentSession } from "@/lib/documents";
 import type { LocalPage } from "@/lib/database";
-import { useDocumentRevision } from "@/lib/hooks";
+import type { WorkspaceData } from "@/lib/hooks";
+import {
+  useDatabaseEditorContext,
+  type DatabaseEditorContext,
+} from "@/lib/database-context";
 import { useUiStore } from "@/lib/ui-store";
 import { DesignIcon } from "./design-icon";
 import { Dialog } from "./primitives";
@@ -72,13 +76,15 @@ export function TaskDatabase({
   page,
   editable,
   identities,
+  data,
 }: {
   session: DocumentSession;
   page: LocalPage;
   editable: boolean;
   identities: Identity[];
+  data: WorkspaceData;
 }) {
-  useDocumentRevision(session.document);
+  const context = useDatabaseEditorContext(session.document, page, data)!;
   const [viewId, setViewId] = useState("default-table"),
     [drafts, setDrafts] = useState<Record<string, DatabaseView>>({}),
     [query, setQuery] = useState(""),
@@ -121,7 +127,13 @@ export function TaskDatabase({
         ? baseView.endDatePropertyId
         : null,
   };
-  const rows = queryDatabaseRows(session.document, view, query, identities);
+  const rows = queryDatabaseRows(
+    session.document,
+    view,
+    query,
+    identities,
+    context.reader,
+  );
   const openRow = (id: string) =>
     useUiStore.getState().select(page.workspaceId, page.id, id);
   const changeView = (next: DatabaseView) =>
@@ -260,6 +272,7 @@ export function TaskDatabase({
       </div>
       {propertyDialog && editable && (
         <DatabasePropertyDialog
+          context={context}
           document={session.document}
           onClose={() => setPropertyDialog(false)}
         />
@@ -365,6 +378,7 @@ export function TaskDatabase({
       )}
       {view.kind === "table" ? (
         <TaskTable
+          context={context}
           rows={rows}
           session={session}
           page={page}
@@ -380,6 +394,7 @@ export function TaskDatabase({
         />
       ) : view.kind === "board" ? (
         <TaskBoard
+          context={context}
           rows={rows}
           page={page}
           editable={editable}
@@ -398,6 +413,7 @@ export function TaskDatabase({
         />
       ) : (
         <DatabaseCards
+          reader={context.reader}
           document={session.document}
           rows={rows}
           view={view}
@@ -468,6 +484,7 @@ function TaskTable({
   properties,
   groupBy,
   generic,
+  context,
 }: {
   rows: TaskRow[];
   session: DocumentSession;
@@ -477,6 +494,7 @@ function TaskTable({
   properties: DatabaseProperty[];
   groupBy: string | null;
   generic: boolean;
+  context: DatabaseEditorContext;
 }) {
   const columns = useMemo<ColumnDef<TaskRow>[]>(
     () =>
@@ -518,6 +536,7 @@ function TaskTable({
               table.getRowModel().rows.map((row) => row.original),
               groupBy,
               identities,
+              context.reader,
             ).map((group) => (
               <Fragment key={group.key}>
                 {groupBy && (
@@ -536,6 +555,7 @@ function TaskTable({
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id}>
                           <DatabaseTableCell
+                            context={context}
                             document={session.document}
                             row={row.original}
                             property={properties.find(
@@ -599,6 +619,7 @@ function TaskBoard({
   update,
   session,
   view,
+  context,
 }: {
   rows: TaskRow[];
   page: LocalPage;
@@ -607,6 +628,7 @@ function TaskBoard({
   update: UpdateTask;
   session: DocumentSession;
   view: DatabaseView;
+  context: DatabaseEditorContext;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -618,6 +640,7 @@ function TaskBoard({
       rows,
       view.groupBy,
       identities,
+      context.reader,
     ),
     property = getDatabaseProperties(session.document).find(
       (entry) => entry.id === view.groupBy,
@@ -648,6 +671,12 @@ function TaskBoard({
       <div className="kanban-board">
         {groups.map((group) => (
           <BoardColumn
+            context={context}
+            properties={getDatabaseProperties(session.document).filter(
+              (property) =>
+                !property.builtin &&
+                !view.hiddenPropertyIds.includes(property.id),
+            )}
             key={group.key}
             group={group}
             generic={generic}
@@ -670,6 +699,8 @@ function BoardColumn({
   draggable,
   identities,
   update,
+  context,
+  properties,
 }: {
   group: { key: string; label: string; value: PropertyValue; rows: TaskRow[] };
   generic: boolean;
@@ -678,6 +709,8 @@ function BoardColumn({
   draggable: boolean;
   identities: Identity[];
   update: UpdateTask;
+  context: DatabaseEditorContext;
+  properties: DatabaseProperty[];
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: group.key,
@@ -695,6 +728,8 @@ function BoardColumn({
       </div>
       {group.rows.map((row) => (
         <BoardCard
+          context={context}
+          properties={properties}
           key={row.id}
           row={row}
           generic={generic}
@@ -719,6 +754,8 @@ function BoardCard({
   update,
   draggable,
   generic,
+  context,
+  properties,
 }: {
   row: TaskRow;
   generic: boolean;
@@ -727,6 +764,8 @@ function BoardCard({
   editable: boolean;
   identities: Identity[];
   update: UpdateTask;
+  context: DatabaseEditorContext;
+  properties: DatabaseProperty[];
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: row.id, disabled: !draggable });
@@ -779,6 +818,18 @@ function BoardCard({
           </span>
         )}
       </div>
+      {!!properties.length && (
+        <dl className="database-board-properties">
+          {properties.map((property) => (
+            <div key={property.id}>
+              <dt>{property.name}</dt>
+              <dd title={context.reader.cell(row, property).error?.message}>
+                {context.reader.label(row, property) || "—"}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
       {editable && !generic && (
         <select
           className="board-status"

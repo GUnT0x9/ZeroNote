@@ -35,4 +35,10 @@ Public Sharing은 게시 범위 안의 Database/Row와 파일만 읽는다. 공�
 
 집중 65 Tests, lint·type-check 및 전체 277 Tests가 통과했다. 최초 병렬 검증에서 Realtime `beforeAll`의 10초 초기화 제한을 넘겼으며 해당 6개를 단독 확인한 뒤 `pnpm test --maxWorkers=4`로 전체를 다시 통과했다. Production 코드는 변경하지 않았다.
 
-이 모듈은 아직 Property Schema·UI·Offline 대상 조회·Export/Public/Snapshot 모델에 연결하지 않았다. Migration/Editor Protocol 변경과 기능 배포가 남아 Formula를 완료로 체크하지 않는다. 현재 Production은 Public Sharing 소스 `0b25956`이며 전체 완료 수는 계속 40/148이다.
+이후 공유 Property Schema/의존 계산기와 File/Relation/Formula/Rollup UI를 연결했다. 접근 가능한 대상 문서 구독과 가벼운 파일 Metadata Cache, Owner 보존 파일 조회, Markdown/HTML/CSV/PDF 계산 결과, 게시 Scope에 제한된 Public Projection, 파일·관계 ID 재매핑과 Snapshot 참조 보호를 추가했다. Protocol 3과 Migration 007을 추가하되 기존 Attachment 문서의 Protocol 2 접근을 유지한다.
+
+2026-10-06 집중 139 Tests, 데이터 이전·공개 Projection 16 Tests, HTTP/계산 28 Tests를 통과했다(서로 중복되어 합계로 사용하지 않는다). 최초 전체 326개 중 325개 통과 후 HTTP 테스트의 고정 Protocol 기대값을 현재 상수로 수정했다. 추가 서버 시험의 인증 실패는 독립된 시나리오가 같은 IP의 등록 제한을 소모한 것이며 시나리오별 주소를 분리해 27개를 재통과했다. 같은 IP의 실제 요청 제한도 별도로 검사한다. Production 제한은 변경하지 않았다.
+
+전체 329 Tests를 통과했다. 브라우저 검증에서 공유받은 Viewer Page의 파일명 로딩이 멈추는 오류를 확인했다. 서버에 등록된 Page도 Metadata revision 0부터 시작하므로 revision으로 미등록 여부를 판단하던 코드를 생성 Queue 기준으로 수정했다. Viewer의 revision 0 조회와 생성 대기/승인 후 조회를 확인하는 회귀를 포함해 파일 Metadata·접근 범위 10 Tests를 통과했다. 수정 후 실제 브라우저에서 File/Formula/Relation/Rollup 생성, 속성/Row 이름 변경, Offline Reload, Viewer 파일 Preview/권한 차단 및 Snapshot 새 Page 복구 흐름을 통과했다. 추가로 Snapshot 파일명이 현재 파일 조회에 의해 지워지는 Cache 경쟁을 막고, Realtime/Token 실패 시 서버가 확인한 권한 철회·삭제를 로컬 Page에 반영하도록 수정했다. 이 변경의 정상·실패/일시 장애 경로 16 Tests를 통과했다. 최종 lint·type-check·전체 335 Tests가 통과했고, 실제 브라우저에서 추가 공유 수락 → 계산 값 표시 → 권한 철회 → 관계 이름/계산 숨김 → Owner Snapshot 새 Page 복구를 포함한 전체 시나리오도 통과했다(29.6초). 중간 브라우저 실패는 항목 열기 버튼의 접근성 이름과 재로딩 후 이미 닫힌 패널을 닫으려던 테스트 경로를 수정해 해결했다.
+
+Web Production build와 집중 브라우저 검증을 통과했으며, CI 전체 브라우저/Server build/Docker·백업 복원·HTTPS 검증과 기능 배포가 남아 이 4개를 완료로 체크하지 않는다. 현재 Production은 Public Sharing 소스 `0b25956`이며 전체 완료 수는 계속 40/148이다.

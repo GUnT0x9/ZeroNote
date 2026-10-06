@@ -2,15 +2,79 @@ import { describe, it, expect } from "vitest";
 import * as Y from "yjs";
 import { base64ToBytes, bytesToBase64 } from "./index";
 import {
+  addDatabaseProperty,
+  createTaskRow,
+  writeDatabaseValue,
+  cloneDocumentContent,
+  getDatabaseProperties,
+  remapDatabasePageIds,
+} from "./index";
+import {
   AttachmentUploadSchema,
   detectAttachmentMime,
   safeAttachmentName,
   parseAttachmentRange,
   getAttachmentIds,
+  getLiveAttachmentIds,
   remapAttachmentIds,
   MAX_ATTACHMENT_BYTES,
   isCanonicalBase64,
 } from "./attachments";
+it("retains and remaps active File Property references and excludes deleted Row bodies from publication", () => {
+  const document = new Y.Doc(),
+    rowId = createTaskRow(document, "Files"),
+    id = crypto.randomUUID(),
+    next = crypto.randomUUID();
+  const property = addDatabaseProperty(document, "Files", "file");
+  writeDatabaseValue(document, rowId, property, [id]);
+  const copy = new Y.Doc();
+  Y.applyUpdate(copy, Y.encodeStateAsUpdate(document));
+  expect(getAttachmentIds(copy)).toEqual([id]);
+  expect(getLiveAttachmentIds(copy)).toEqual([id]);
+  remapAttachmentIds(copy, new Map([[id, next]]));
+  expect(getAttachmentIds(copy)).toEqual([next]);
+  const node = new Y.XmlElement("attachment");
+  node.setAttribute("attachmentId", next);
+  copy.getXmlFragment(`task:${rowId}`).insert(0, [node]);
+  copy.getMap<Y.Map<unknown>>("tasks").get(rowId)!.set("deleted", true);
+  expect(getLiveAttachmentIds(copy)).toEqual([]);
+  expect(getAttachmentIds(copy)).toEqual([next]);
+  document.destroy();
+  copy.destroy();
+});
+it("remaps self and included Database references without changing external targets or Row IDs", () => {
+  const document = new Y.Doc(),
+    oldId = crypto.randomUUID(),
+    newId = crypto.randomUUID(),
+    externalId = crypto.randomUUID(),
+    importedExternalId = crypto.randomUUID();
+  const self = addDatabaseProperty(
+    document,
+    "Self",
+    "relation",
+    [],
+    crypto.randomUUID(),
+    { relation: { databaseId: oldId } },
+  );
+  const external = addDatabaseProperty(
+    document,
+    "Other",
+    "relation",
+    [],
+    crypto.randomUUID(),
+    { relation: { databaseId: externalId } },
+  );
+  const copy = cloneDocumentContent(document, oldId, newId);
+  const target = (id: string) =>
+    getDatabaseProperties(copy).find((property) => property.id === id)!
+      .relation!.databaseId;
+  expect(target(self)).toBe(newId);
+  expect(target(external)).toBe(externalId);
+  remapDatabasePageIds(copy, new Map([[externalId, importedExternalId]]));
+  expect(target(external)).toBe(importedExternalId);
+  document.destroy();
+  copy.destroy();
+});
 
 describe("attachment transport and rendering safety", () => {
   it("validates the full 4MiB boundary without a RegExp stack overflow", () => {

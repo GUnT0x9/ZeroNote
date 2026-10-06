@@ -1,5 +1,11 @@
 import { z } from "zod";
 import * as Y from "yjs";
+import type { DatabaseValueReader } from "./database-computation";
+import {
+  assertFormulaNode,
+  MAX_FORMULA_LENGTH,
+  type FormulaNode,
+} from "./formula";
 import {
   getTaskRows,
   replaceSharedText,
@@ -10,6 +16,7 @@ import {
 } from "./index";
 
 export const MAX_DATABASE_PROPERTIES = 64;
+export const MAX_DATABASE_LINKS = 50;
 export const MAX_DATABASE_VIEWS = 20;
 export const PropertyTypes = [
   "text",
@@ -25,6 +32,10 @@ export const PropertyTypes = [
   "phone",
   "created_time",
   "updated_time",
+  "file",
+  "formula",
+  "relation",
+  "rollup",
 ] as const;
 export const PropertyTypeSchema = z.enum(PropertyTypes);
 export type PropertyType = z.infer<typeof PropertyTypeSchema>;
@@ -34,6 +45,46 @@ export const PropertyOptionSchema = z
     name: z.string().trim().min(1).max(80),
   })
   .strict();
+export const RollupOperations = [
+  "count",
+  "count_values",
+  "unique",
+  "sum",
+  "average",
+  "min",
+  "max",
+] as const;
+export const FormulaDefinitionSchema = z
+  .object({
+    source: z.string().min(1).max(MAX_FORMULA_LENGTH),
+    ast: z.custom<FormulaNode>((value) => {
+      try {
+        assertFormulaNode(value);
+        return true;
+      } catch {
+        return false;
+      }
+    }, "수식 형식이 올바르지 않습니다."),
+  })
+  .strict();
+export const RelationDefinitionSchema = z
+  .object({ databaseId: z.uuid() })
+  .strict();
+export const RollupDefinitionSchema = z
+  .object({
+    relationPropertyId: z.string().min(1).max(80),
+    targetPropertyId: z.string().min(1).max(80),
+    operation: z.enum(RollupOperations),
+  })
+  .strict();
+export type FormulaDefinition = z.infer<typeof FormulaDefinitionSchema>;
+export type RelationDefinition = z.infer<typeof RelationDefinitionSchema>;
+export type RollupDefinition = z.infer<typeof RollupDefinitionSchema>;
+export interface DatabasePropertyConfiguration {
+  formula?: FormulaDefinition;
+  relation?: RelationDefinition;
+  rollup?: RollupDefinition;
+}
 export const DatabasePropertySchema = z
   .object({
     id: z.string().min(1).max(80),
@@ -42,6 +93,9 @@ export const DatabasePropertySchema = z
     options: z.array(PropertyOptionSchema).max(50).default([]),
     builtin: z.boolean().default(false),
     deleted: z.boolean().default(false),
+    formula: FormulaDefinitionSchema.optional(),
+    relation: RelationDefinitionSchema.optional(),
+    rollup: RollupDefinitionSchema.optional(),
   })
   .strict()
   .refine(
@@ -49,6 +103,15 @@ export const DatabasePropertySchema = z
       new Set(value.options.map((option) => option.id)).size ===
       value.options.length,
     "Duplicate option IDs",
+  )
+  .refine(
+    (value) =>
+      ["formula", "relation", "rollup"].every(
+        (kind) =>
+          (value.type === kind) ===
+          !!value[kind as keyof DatabasePropertyConfiguration],
+      ),
+    "속성 종류와 설정이 일치해야 합니다.",
   );
 export type DatabaseProperty = z.infer<typeof DatabasePropertySchema>;
 export type PropertyValue = string | number | boolean | string[] | null;
@@ -191,6 +254,7 @@ export function addDatabaseProperty(
   type: PropertyType,
   names: string[] = [],
   id: string = crypto.randomUUID(),
+  configuration: DatabasePropertyConfiguration = {},
 ): string {
   if (
     getDatabaseProperties(document).filter((property) => !property.builtin)
@@ -211,6 +275,7 @@ export function addDatabaseProperty(
     options,
     builtin: false,
     deleted: false,
+    ...configuration,
   });
   const row = new Y.Map<unknown>();
   document.transact(() => {
@@ -222,7 +287,10 @@ export function addDatabaseProperty(
 export function changeDatabaseProperty(
   document: Y.Doc,
   id: string,
-  change: { name?: string; deleted?: boolean },
+  change: { name?: string; deleted?: boolean } & Pick<
+    DatabasePropertyConfiguration,
+    "formula" | "rollup" | "relation"
+  >,
 ): void {
   const property = getDatabaseProperties(document).find(
     (entry) => entry.id === id,
@@ -234,6 +302,12 @@ export function changeDatabaseProperty(
     const map = document.getMap<Y.Map<unknown>>("databaseProperties").get(id)!;
     for (const key of Object.keys(change) as (keyof typeof change)[])
       map.set(key, parsed[key]);
+    if (
+      change.relation &&
+      property.relation?.databaseId !== change.relation.databaseId
+    )
+      for (const row of document.getMap<Y.Map<unknown>>("tasks").values())
+        if (row instanceof Y.Map) row.delete(`property:${id}`);
   });
 }
 export function readDatabaseValue(
@@ -241,6 +315,7 @@ export function readDatabaseValue(
   row: TaskRow,
   property: DatabaseProperty,
 ): PropertyValue {
+  if (["formula", "rollup"].includes(property.type)) return null;
   if (property.type === "created_time") return row.createdAt;
   if (property.type === "updated_time") return row.updatedAt;
   const value: unknown = property.builtin
@@ -261,10 +336,16 @@ export function validateDatabaseValue(
   if (value === null || value === "") return null;
   if (property.type === "number") return z.number().finite().parse(value);
   if (property.type === "checkbox") return z.boolean().parse(value);
+  if (["file", "relation"].includes(property.type))
+    return z
+      .array(z.uuid())
+      .max(MAX_DATABASE_LINKS)
+      .refine((ids) => new Set(ids).size === ids.length, "중복 항목입니다.")
+      .parse(value);
   if (property.type === "multi_select")
     return z
       .array(z.enum(property.options.map((entry) => entry.id)))
-      .max(50)
+      .max(MAX_DATABASE_LINKS)
       .parse(value);
   const text = z.string().max(10000).parse(value);
   if (property.type === "date" && !isValidDateOnly(text))
@@ -295,7 +376,11 @@ export function writeDatabaseValue(
   const row = document.getMap<Y.Map<unknown>>("tasks").get(rowId);
   if (!property || !row || row.get("deleted") === true)
     throw new Error("속성 또는 항목을 찾을 수 없습니다.");
-  if (["created_time", "updated_time"].includes(property.type))
+  if (
+    ["created_time", "updated_time", "formula", "rollup"].includes(
+      property.type,
+    )
+  )
     throw new Error("자동 기록 속성은 수정할 수 없습니다.");
   const parsed = validateDatabaseValue(property, value);
   if (property.builtin && property.id !== "title") {
@@ -412,6 +497,52 @@ export function saveDatabaseView(document: Y.Doc, view: DatabaseView): void {
 export function deleteDatabaseView(document: Y.Doc, id: string): void {
   document.getMap("databaseViews").delete(id);
 }
+export function remapDatabasePageIds(
+  document: Y.Doc,
+  ids: Map<string, string>,
+): void {
+  document.transact(() => {
+    for (const property of document
+      .getMap<Y.Map<unknown>>("databaseProperties")
+      .values()) {
+      if (!(property instanceof Y.Map)) continue;
+      const relation = RelationDefinitionSchema.safeParse(
+        property.get("relation"),
+      );
+      if (relation.success && ids.has(relation.data.databaseId))
+        property.set("relation", {
+          ...relation.data,
+          databaseId: ids.get(relation.data.databaseId)!,
+        });
+    }
+  });
+}
+export function assertDatabaseState(document: Y.Doc): void {
+  const custom = document.getMap<Y.Map<unknown>>("databaseProperties");
+  const builtinIds = new Set(
+    getDatabaseProperties(document)
+      .filter((property) => property.builtin)
+      .map((property) => property.id),
+  );
+  let active = 0;
+  for (const [id, value] of custom) {
+    if (!(value instanceof Y.Map))
+      throw new Error("속성 정의 형식이 올바르지 않습니다.");
+    if (value.get("deleted") === true) continue;
+    if (++active > MAX_DATABASE_PROPERTIES || builtinIds.has(id))
+      throw new Error("속성 개수 또는 ID가 올바르지 않습니다.");
+    const parsed = DatabasePropertySchema.safeParse({
+      ...value.toJSON(),
+      id,
+      builtin: false,
+    });
+    if (!parsed.success) throw new Error("속성 정의 형식이 올바르지 않습니다.");
+    if (["file", "relation"].includes(parsed.data.type))
+      for (const row of document.getMap<Y.Map<unknown>>("tasks").values())
+        if (row instanceof Y.Map && row.get("deleted") !== true)
+          validateDatabaseValue(parsed.data, row.get(`property:${id}`) ?? null);
+  }
+}
 function isEmpty(value: PropertyValue): boolean {
   return (
     value === null ||
@@ -452,20 +583,50 @@ export function queryDatabaseRows(
   view: DatabaseView,
   query = "",
   identities: Identity[] = [],
+  reader?: DatabaseValueReader,
 ): TaskRow[] {
   const properties = getDatabaseProperties(document),
     lookup = new Map(properties.map((property) => [property.id, property]));
   const rows = getTaskRows(document).filter(
     (row) =>
-      row.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()) &&
+      (row.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()) ||
+        (!!reader &&
+          properties.some(
+            (property) =>
+              !reader.cell(row, property).error &&
+              reader
+                .label(row, property)
+                .toLocaleLowerCase()
+                .includes(query.toLocaleLowerCase()),
+          ))) &&
       view.filters.every((filter) => {
         const property = lookup.get(filter.propertyId);
-        return (
-          !property ||
-          matchesDatabaseFilter(
-            readDatabaseValue(document, row, property),
-            filter,
-          )
+        if (!property) return true;
+        const result = reader?.cell(row, property);
+        if (result?.error) return false;
+        const value = reader
+          ? result!.value
+          : readDatabaseValue(document, row, property);
+        const useLabel =
+          reader &&
+          ["file", "relation"].includes(property.type) &&
+          !["empty", "not_empty"].includes(filter.operator);
+        const computed = ["formula", "rollup"].includes(property.type);
+        const typedFilter =
+          computed &&
+          typeof filter.value === "string" &&
+          typeof value === "number" &&
+          filter.value.trim() !== "" &&
+          Number.isFinite(Number(filter.value))
+            ? { ...filter, value: Number(filter.value) }
+            : computed &&
+                typeof value === "boolean" &&
+                ["true", "false"].includes(String(filter.value))
+              ? { ...filter, value: filter.value === "true" }
+              : filter;
+        return matchesDatabaseFilter(
+          useLabel ? reader.label(row, property) : value,
+          typedFilter,
         );
       }),
   );
@@ -473,8 +634,12 @@ export function queryDatabaseRows(
     for (const sort of view.sorts) {
       const property = lookup.get(sort.propertyId);
       if (!property) continue;
-      const left = readDatabaseValue(document, a, property),
-        right = readDatabaseValue(document, b, property);
+      const left = reader
+          ? reader.cell(a, property).value
+          : readDatabaseValue(document, a, property),
+        right = reader
+          ? reader.cell(b, property).value
+          : readDatabaseValue(document, b, property);
       if (isEmpty(left) || isEmpty(right)) {
         if (isEmpty(left) !== isEmpty(right)) return isEmpty(left) ? 1 : -1;
         continue;
@@ -488,8 +653,13 @@ export function queryDatabaseRows(
           ? left - right
           : ["select", "status"].includes(property.type)
             ? choiceRank(left) - choiceRank(right)
-            : databaseValueLabel(property, left, identities).localeCompare(
-                databaseValueLabel(property, right, identities),
+            : (reader
+                ? reader.label(a, property)
+                : databaseValueLabel(property, left, identities)
+              ).localeCompare(
+                reader
+                  ? reader.label(b, property)
+                  : databaseValueLabel(property, right, identities),
                 "ko",
                 { numeric: true },
               );
@@ -510,6 +680,7 @@ export function groupDatabaseRows(
   rows: TaskRow[],
   propertyId: string | null,
   identities: Identity[] = [],
+  reader?: DatabaseValueReader,
 ): DatabaseGroup[] {
   const property = getDatabaseProperties(document).find(
     (entry) => entry.id === propertyId,
@@ -540,12 +711,17 @@ export function groupDatabaseRows(
         rows: [],
       });
   for (const row of rows) {
-    const value = readDatabaseValue(document, row, property),
-      key = JSON.stringify(value);
+    const result = reader?.cell(row, property);
+    const value = reader
+        ? result!.value
+        : readDatabaseValue(document, row, property),
+      key = result?.error ? "computation-error" : JSON.stringify(value);
     if (!groups.has(key))
       groups.set(key, {
         key,
-        label: databaseValueLabel(property, value, identities),
+        label: reader
+          ? reader.label(row, property)
+          : databaseValueLabel(property, value, identities),
         value,
         rows: [],
       });

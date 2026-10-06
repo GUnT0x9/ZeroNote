@@ -1,4 +1,12 @@
-import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
+import {
+  beforeAll,
+  beforeEach,
+  afterAll,
+  describe,
+  it,
+  expect,
+  vi,
+} from "vitest";
 import { createApp } from "./app";
 import { sql } from "drizzle-orm";
 import { Repository } from "./database/repository";
@@ -13,10 +21,24 @@ import {
   EDITOR_PROTOCOL,
   EDITOR_PROTOCOL_HEADER,
   MAX_ATTACHMENT_BYTES,
+  addDatabaseProperty,
+  compileFormula,
+  createTaskRow,
+  writeDatabaseValue,
+  getTaskRows,
+  getDatabaseProperties,
+  readDatabaseValue,
+  base64ToBytes,
 } from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
 const created: string[] = [];
+let addressSequence = 0,
+  testAddress = "2001:db8::1";
+// Keep per-IP limits real within each scenario without sharing counters across independent tests.
+beforeEach(() => {
+  testAddress = `2001:db8::${(++addressSequence).toString(16)}`;
+});
 interface Actor {
   id: string;
   cookie: string;
@@ -30,6 +52,7 @@ async function request(
   editorProtocol = EDITOR_PROTOCOL,
 ) {
   return app.inject({
+    remoteAddress: testAddress,
     method,
     url,
     payload: payload === undefined ? undefined : JSON.stringify(payload),
@@ -148,6 +171,289 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const id of created) await repository.deleteWorkspace(id);
   await app.close();
+});
+it("enforces the same-IP registration rate limit within an isolated scenario", async () => {
+  const keys = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign", "verify"],
+  );
+  const publicKey = await crypto.subtle.exportKey("jwk", keys.publicKey);
+  for (let index = 0; index < 30; index++)
+    expect(
+      (
+        await request("POST", "/v1/devices", {
+          id: crypto.randomUUID(),
+          name: "Rate test",
+          publicKey,
+        })
+      ).statusCode,
+    ).toBe(200);
+  expect(
+    (
+      await request("POST", "/v1/devices", {
+        id: crypto.randomUUID(),
+        name: "Limited",
+        publicKey,
+      })
+    ).statusCode,
+  ).toBe(429);
+});
+it.each(["file", "formula", "relation", "rollup"] as const)(
+  "requires Protocol 3 for %s Properties while retaining operation retry protection",
+  async (type) => {
+    const owner = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id),
+      doc = new Y.Doc();
+    const configuration =
+      type === "formula"
+        ? { formula: { source: "1 + 2", ast: compileFormula("1 + 2", []) } }
+        : type === "relation"
+          ? { relation: { databaseId: crypto.randomUUID() } }
+          : type === "rollup"
+            ? {
+                rollup: {
+                  relationPropertyId: "relation",
+                  targetPropertyId: "points",
+                  operation: "sum" as const,
+                },
+              }
+            : {};
+    addDatabaseProperty(
+      doc,
+      "Advanced",
+      type,
+      [],
+      crypto.randomUUID(),
+      configuration,
+    );
+    const endpoint = `/v1/documents/${target.id}`,
+      payload = {
+        operationId: crypto.randomUUID(),
+        update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+      };
+    expect(
+      (await request("POST", `${endpoint}/commit`, payload, owner.cookie, 2))
+        .statusCode,
+    ).toBe(426);
+    expect(
+      (await request("POST", `${endpoint}/commit`, payload, owner.cookie, 3))
+        .statusCode,
+    ).toBe(200);
+    expect(
+      (await request("POST", `${endpoint}/commit`, payload, owner.cookie, 3))
+        .statusCode,
+    ).toBe(200);
+    expect(
+      (await request("POST", `${endpoint}/commit`, payload, owner.cookie, 2))
+        .statusCode,
+    ).toBe(426);
+    expect(
+      (await request("GET", endpoint, undefined, owner.cookie, 2)).statusCode,
+    ).toBe(426);
+    expect(
+      (await request("GET", endpoint, undefined, owner.cookie, 3)).statusCode,
+    ).toBe(200);
+    doc.destroy();
+  },
+);
+it("rejects malformed advanced definitions without committing and keeps media readable by Protocol 2", async () => {
+  const owner = await actor(),
+    space = await workspace(owner),
+    target = await page(owner, space.id);
+  const doc = new Y.Doc(),
+    map = new Y.Map<unknown>();
+  doc.getMap<Y.Map<unknown>>("databaseProperties").set("bad", map);
+  map.set("name", "Bad");
+  map.set("type", "formula");
+  map.set("formula", {
+    source: "eval(1)",
+    ast: { type: "call", name: "eval", arguments: [] },
+  });
+  const endpoint = `/v1/documents/${target.id}`;
+  expect(
+    (
+      await request(
+        "POST",
+        `${endpoint}/commit`,
+        {
+          operationId: crypto.randomUUID(),
+          update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+        },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(422);
+  const media = new Y.Doc();
+  media.getXmlFragment("content").insert(0, [new Y.XmlElement("attachment")]);
+  expect(
+    (
+      await request(
+        "POST",
+        `${endpoint}/commit`,
+        {
+          operationId: crypto.randomUUID(),
+          update: bytesToBase64(Y.encodeStateAsUpdate(media)),
+        },
+        owner.cookie,
+        2,
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (await request("GET", endpoint, undefined, owner.cookie, 2)).statusCode,
+  ).toBe(200);
+  doc.destroy();
+  media.destroy();
+});
+it("lists retained file names only for Owner, including Trash, without returning bytes", async () => {
+  const owner = await actor(),
+    viewer = await actor(),
+    space = await workspace(owner),
+    target = await page(owner, space.id);
+  const code = await invite(owner, target.id, "viewer");
+  await request(
+    "POST",
+    "/v1/invites/accept",
+    { id: code.id, secret: code.secret },
+    viewer.cookie,
+  );
+  const file = {
+    id: crypto.randomUUID(),
+    operationId: crypto.randomUUID(),
+    name: "history.txt",
+    data: bytesToBase64(new TextEncoder().encode("historical bytes")),
+  };
+  await request(
+    "POST",
+    `/v1/pages/${target.id}/attachments`,
+    file,
+    owner.cookie,
+  );
+  await request(
+    "DELETE",
+    `/v1/attachments/${file.id}`,
+    undefined,
+    owner.cookie,
+  );
+  const endpoint = `/v1/pages/${target.id}/attachments`;
+  expect(
+    (await request("GET", endpoint, undefined, owner.cookie)).json(),
+  ).toEqual([]);
+  const retained = await request(
+    "GET",
+    `${endpoint}?retained=1`,
+    undefined,
+    owner.cookie,
+  );
+  expect(retained.statusCode).toBe(200);
+  expect(retained.json()).toHaveLength(1);
+  expect(retained.body).not.toContain("historical bytes");
+  expect(retained.json()[0]).not.toHaveProperty("data");
+  expect(
+    (await request("GET", `${endpoint}?retained=1`, undefined, viewer.cookie))
+      .statusCode,
+  ).toBe(403);
+  await repository.query(
+    sql`UPDATE pages SET deleted_at=now() WHERE id=${target.id}`,
+  );
+  expect(
+    (await request("GET", `${endpoint}?retained=1`, undefined, owner.cookie))
+      .statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await request(
+        "GET",
+        `${endpoint}?retained=unexpected`,
+        undefined,
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(400);
+});
+it("protects File Property references from purge and copies bytes with new Snapshot-scoped IDs", async () => {
+  const owner = await actor(),
+    space = await workspace(owner),
+    target = await page(owner, space.id);
+  const file = {
+    id: crypto.randomUUID(),
+    operationId: crypto.randomUUID(),
+    name: "property.txt",
+    data: "QQ==",
+  };
+  await request(
+    "POST",
+    `/v1/pages/${target.id}/attachments`,
+    file,
+    owner.cookie,
+  );
+  const doc = new Y.Doc(),
+    rowId = createTaskRow(doc, "File Row"),
+    propertyId = addDatabaseProperty(doc, "File", "file");
+  writeDatabaseValue(doc, rowId, propertyId, [file.id]);
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/documents/${target.id}/commit`,
+        {
+          operationId: crypto.randomUUID(),
+          update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+        },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await request(
+        "DELETE",
+        `/v1/workspaces/${space.id}/attachments/${file.id}/content`,
+        { name: file.name },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(409);
+  const snapshot = (
+    await request(
+      "POST",
+      `/v1/pages/${target.id}/snapshots`,
+      { operationId: crypto.randomUUID(), name: "File Property" },
+      owner.cookie,
+    )
+  ).json<{ id: string }>();
+  const restored = await request(
+    "POST",
+    `/v1/snapshots/${snapshot.id}/restore-copy`,
+    { operationId: crypto.randomUUID() },
+    owner.cookie,
+  );
+  expect(restored.statusCode).toBe(200);
+  const newId = restored.json<{ id: string }>().id;
+  const update = (
+    await request("GET", `/v1/documents/${newId}`, undefined, owner.cookie)
+  ).json<{ update: string }>();
+  const copy = new Y.Doc();
+  Y.applyUpdate(copy, base64ToBytes(update.update));
+  const files = readDatabaseValue(
+    copy,
+    getTaskRows(copy)[0]!,
+    getDatabaseProperties(copy).find((property) => property.id === propertyId)!,
+  );
+  expect(Array.isArray(files)).toBe(true);
+  expect(files).not.toContain(file.id);
+  const copied = await request(
+    "GET",
+    `/v1/attachments/${(files as string[])[0]}`,
+    undefined,
+    owner.cookie,
+  );
+  expect(copied.statusCode).toBe(200);
+  expect(copied.json()).toMatchObject({ pageId: newId, data: file.data });
+  doc.destroy();
+  copy.destroy();
 });
 
 it("protects new blocks from legacy reads, offline deletions, retries and Snapshot previews", async () => {

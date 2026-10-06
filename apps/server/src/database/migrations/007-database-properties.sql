@@ -1,0 +1,2 @@
+ALTER TABLE document_checkpoints DROP CONSTRAINT document_checkpoints_editor_protocol_check;
+ALTER TABLE document_checkpoints ADD CONSTRAINT document_checkpoints_editor_protocol_check CHECK (editor_protocol BETWEEN 1 AND 3);

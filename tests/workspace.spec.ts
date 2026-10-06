@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type Locator } from "@playwright/test";
 import { createBrowserBetaCode } from "./beta-helpers";
 import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1145,6 +1145,286 @@ test("Snapshot preview is read-only and restores a new Page while retaining the 
   await cleanup(page, name);
 });
 
+test("File Formula Relation and Rollup stay consistent through rename Offline reload and Snapshot copy", async ({
+  page,
+  context,
+  browser,
+}) => {
+  test.setTimeout(180000);
+  const name = `Advanced Database ${Date.now()}`;
+  try {
+    await createWorkspace(page, name);
+    const newDatabase = async (title: string) => {
+      await page
+        .getByRole("button", { name: "새 Page 만들기", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "일반 Database", exact: true })
+        .click();
+      await expect(page.getByLabel("Page 제목")).toHaveValue("새 Database");
+      await page.getByLabel("Page 제목").fill(title);
+    };
+    const addProperty = async (
+      title: string,
+      type: string,
+      configure?: (dialog: Locator) => Promise<void>,
+    ) => {
+      await page.getByRole("button", { name: "속성", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Database 속성" });
+      await dialog.getByLabel("새 속성 이름").fill(title);
+      await dialog.getByLabel("새 속성 종류").selectOption(type);
+      if (configure) await configure(dialog);
+      await dialog
+        .getByRole("button", { name: "속성 추가", exact: true })
+        .click();
+      await expect(dialog.getByLabel(`${title} 속성 이름`)).toBeVisible();
+      await dialog
+        .getByRole("button", { name: "닫기", exact: true })
+        .last()
+        .click();
+    };
+    const addRow = async (title: string) => {
+      await page.getByRole("button", { name: "새 항목", exact: true }).click();
+      await page.getByLabel("새 항목 제목").fill(title);
+      await page.getByRole("button", { name: "추가", exact: true }).click();
+    };
+    await newDatabase("자료 DB");
+    await addProperty("점수", "number");
+    await addRow("Alpha");
+    await page.getByLabel("Alpha 점수", { exact: true }).fill("6");
+    await page.getByLabel("Alpha 점수", { exact: true }).press("Tab");
+    const targetId = new URL(page.url()).searchParams.get("page")!;
+    await newDatabase("계획 DB");
+    await addRow("Project");
+    const sourceUrl = page.url();
+    await addProperty("자료", "relation", async (dialog) => {
+      await dialog
+        .getByLabel("Relation 대상 Database")
+        .selectOption({ label: "자료 DB" });
+    });
+    await page.getByRole("button", { name: "Project 자료 연결 선택" }).click();
+    await page
+      .getByRole("group", { name: "Project 자료 연결 항목" })
+      .getByRole("checkbox", { name: "Alpha", exact: true })
+      .check();
+    await page
+      .getByRole("group", { name: "Project 자료 연결 항목" })
+      .getByRole("button", { name: "닫기", exact: true })
+      .click();
+    await addProperty("집계", "rollup", async (dialog) => {
+      await dialog
+        .getByLabel("Rollup Relation")
+        .selectOption({ label: "자료" });
+      await dialog
+        .getByLabel("Rollup 집계 속성")
+        .selectOption({ label: "점수" });
+      await dialog.getByLabel("Rollup 계산").selectOption("sum");
+    });
+    await addProperty("두 배", "formula", async (dialog) => {
+      await dialog.getByLabel("Formula 수식").fill('prop("집계") * 2');
+      await expect(dialog.getByLabel("Formula 미리보기")).toContainText("12");
+    });
+    await addProperty("첨부", "file");
+    await page.getByLabel("Project 첨부 파일 추가").setInputFiles({
+      name: "field.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Property file bytes"),
+    });
+    await expect(page.getByLabel("Project 집계", { exact: true })).toHaveText(
+      "6",
+    );
+    await expect(page.getByLabel("Project 두 배", { exact: true })).toHaveText(
+      "12",
+    );
+    await page
+      .getByRole("button", { name: "field.txt 미리보기", exact: true })
+      .click();
+    const preview = page.getByRole("dialog", { name: "field.txt" });
+    await expect(preview.locator("pre")).toHaveText("Property file bytes");
+    const download = page.waitForEvent("download");
+    await preview.getByRole("link", { name: "다운로드" }).click();
+    expect((await readFile((await (await download).path())!)).toString()).toBe(
+      "Property file bytes",
+    );
+    await preview.getByRole("button", { name: "닫기", exact: true }).click();
+    await page.getByRole("button", { name: "속성", exact: true }).click();
+    const properties = page.getByRole("dialog", { name: "Database 속성" });
+    await properties.getByLabel("집계 속성 이름").fill("합계");
+    await properties.getByLabel("집계 속성 이름").press("Tab");
+    await properties.getByRole("button", { name: "두 배 속성 설정" }).click();
+    await expect(properties.getByLabel("Formula 수식").first()).toHaveValue(
+      /합계/,
+    );
+    await properties.getByRole("button", { name: "취소", exact: true }).click();
+    await properties
+      .getByRole("button", { name: "닫기", exact: true })
+      .last()
+      .click();
+    await expect(page.getByLabel("Project 두 배", { exact: true })).toHaveText(
+      "12",
+    );
+    await page.getByRole("button", { name: "Alpha", exact: true }).click();
+    await page.getByLabel("Page 제목").fill("Renamed Alpha");
+    await page.getByLabel("Renamed Alpha 점수", { exact: true }).fill("7");
+    await page.getByLabel("Renamed Alpha 점수", { exact: true }).press("Tab");
+    await page.goto(sourceUrl);
+    await expect(
+      page.getByRole("button", { name: "Renamed Alpha", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Project 두 배", { exact: true })).toHaveText(
+      "14",
+    );
+    await expect(
+      page.locator(".sidebar").getByTestId("sync-status"),
+    ).toHaveAttribute("data-state", "saved");
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByLabel("Project 두 배", { exact: true })).toHaveText(
+      "14",
+    );
+    await expect(
+      page.getByRole("button", { name: "field.txt 미리보기", exact: true }),
+    ).toBeVisible();
+    await context.setOffline(false);
+    await expect(
+      page.locator(".sidebar").getByTestId("sync-status"),
+    ).toHaveAttribute("data-state", "saved");
+    await page.screenshot({
+      path: ".local/database-advanced/table.png",
+      fullPage: true,
+    });
+    const viewerContext = await browser.newContext();
+    try {
+      const invite = await createInvite(page, "viewer"),
+        viewer = await viewerContext.newPage();
+      await viewer.goto(invite);
+      await expect(
+        viewer.getByLabel("Project 두 배", { exact: true }),
+      ).toContainText("대상 Database");
+      await expect(viewer.getByLabel("Project 첨부 파일 추가")).toHaveCount(0);
+      await expect(
+        viewer.getByRole("button", { name: "Renamed Alpha", exact: true }),
+      ).toHaveCount(0);
+      expect(
+        (
+          await viewer.request.get(`${ORIGIN}/v1/documents/${targetId}`, {
+            headers: { "X-ZeroNote-Editor-Protocol": "3" },
+          })
+        ).status(),
+      ).toBe(403);
+      const sourceId = new URL(sourceUrl).searchParams.get("page")!;
+      const state = await viewer.request.get(
+        `${ORIGIN}/v1/documents/${sourceId}`,
+        { headers: { "X-ZeroNote-Editor-Protocol": "3" } },
+      );
+      expect(state.status()).toBe(200);
+      const current = (await state.json()) as { update: string };
+      expect(
+        (
+          await viewer.request.post(
+            `${ORIGIN}/v1/documents/${sourceId}/commit`,
+            {
+              headers: { origin: ORIGIN, "X-ZeroNote-Editor-Protocol": "3" },
+              data: {
+                operationId: crypto.randomUUID(),
+                update: current.update,
+              },
+            },
+          )
+        ).status(),
+      ).toBe(403);
+      await expect(
+        viewer.getByRole("button", { name: "field.txt 미리보기", exact: true }),
+      ).toBeVisible();
+      await viewer
+        .getByRole("button", { name: "field.txt 미리보기", exact: true })
+        .click();
+      await expect(
+        viewer.getByRole("dialog", { name: "field.txt" }).locator("pre"),
+      ).toHaveText("Property file bytes");
+      await viewer
+        .getByRole("dialog", { name: "field.txt" })
+        .getByRole("button", { name: "닫기", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Context Panel 닫기" }).click();
+      const targetUrl = new URL(sourceUrl);
+      targetUrl.searchParams.set("page", targetId);
+      await page.goto(targetUrl.toString());
+      const targetInvite = await createInvite(page, "viewer");
+      await viewer.goto(targetInvite);
+      await expect(
+        viewer.getByRole("button", { name: "Renamed Alpha 열기", exact: true }),
+      ).toBeVisible();
+      await viewer.goto(sourceUrl);
+      await expect(
+        viewer.getByLabel("Project 두 배", { exact: true }),
+      ).toHaveText("14");
+      // Refresh the grant list after the other Device has accepted it.
+      await page.getByRole("button", { name: "Context Panel 닫기" }).click();
+      await page.getByRole("button", { name: "Share", exact: true }).click();
+      await page
+        .getByRole("complementary", { name: "Share" })
+        .getByRole("button", { name: "철회", exact: true })
+        .click();
+      await expect(
+        viewer.getByLabel("Project 두 배", { exact: true }),
+      ).toContainText("대상 Database");
+      await expect(
+        viewer.getByRole("button", { name: "Renamed Alpha", exact: true }),
+      ).toHaveCount(0);
+      expect(
+        (
+          await viewer.request.get(`${ORIGIN}/v1/documents/${targetId}`, {
+            headers: { "X-ZeroNote-Editor-Protocol": "3" },
+          })
+        ).status(),
+      ).toBe(403);
+      await page.goto(sourceUrl);
+    } finally {
+      await viewerContext.close();
+    }
+    const closeContextPanel = page.getByRole("button", {
+      name: "Context Panel 닫기",
+    });
+    if (await closeContextPanel.isVisible()) await closeContextPanel.click();
+    await openPageTool(page, "기록");
+    const panel = page.getByRole("complementary", { name: "기록" });
+    await panel.getByLabel("기록 이름").fill("Properties checkpoint");
+    await panel.getByRole("button", { name: "현재 상태 기록하기" }).click();
+    await panel.getByRole("button", { name: /Properties checkpoint/ }).click();
+    await panel
+      .getByLabel("기록 Task")
+      .selectOption(
+        (await panel
+          .getByLabel("기록 Task")
+          .locator("option")
+          .filter({ hasText: "Project" })
+          .getAttribute("value"))!,
+      );
+    await expect(panel.getByLabel("Project 두 배", { exact: true })).toHaveText(
+      "14",
+    );
+    await expect(panel.getByLabel("Project 첨부 파일 추가")).toHaveCount(0);
+    await panel.getByRole("button", { name: "새 Page로 복구" }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue(/^계획 DB \(복구/);
+    await expect(page.getByLabel("Project 두 배", { exact: true })).toHaveText(
+      "14",
+    );
+    await page
+      .getByRole("button", { name: "field.txt 미리보기", exact: true })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: "field.txt" }).locator("pre"),
+    ).toHaveText("Property file bytes");
+    await page
+      .getByRole("dialog", { name: "field.txt" })
+      .getByRole("button", { name: "닫기", exact: true })
+      .click();
+  } finally {
+    await context.setOffline(false);
+    await cleanup(page, name);
+  }
+});
 test("Generic properties, saved filters and date/card views survive Offline reload", async ({
   page,
   context,

@@ -2547,6 +2547,130 @@ small,
   border: 0;
   padding: 0;
 }
+.database-linked-cell {
+  min-width: 160px;
+  max-width: 360px;
+}
+.database-linked-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.database-relation-link,
+.database-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  font-size: 12px;
+}
+.database-relation-link {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  padding: 3px 0;
+  text-align: left;
+}
+.database-file-chip .text-button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.database-relation-picker {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.database-relation-picker > input {
+  width: 100%;
+}
+.database-relation-options {
+  max-height: 180px;
+  overflow: auto;
+  margin: 8px 0;
+}
+.database-file-add {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+.database-file-add:focus-within {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+.database-file-add input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.database-computed-value {
+  display: block;
+  padding: 6px 0;
+  overflow-wrap: anywhere;
+}
+.database-definition-fields {
+  display: grid;
+  gap: 6px;
+}
+.database-definition-fields textarea {
+  width: 100%;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+.database-formula-preview {
+  display: block;
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.database-edit-definition {
+  padding: 12px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.database-file-preview img,
+.database-file-preview video {
+  display: block;
+  max-width: 100%;
+  max-height: 55vh;
+  margin: 0 auto;
+}
+.database-file-preview audio {
+  width: 100%;
+}
+.database-file-preview .source-preview {
+  max-height: 55vh;
+  overflow: auto;
+}
+.database-board-properties {
+  margin: 10px 0;
+  font-size: 12px;
+}
+.database-board-properties > div {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0;
+}
+.database-board-properties dt {
+  color: var(--muted);
+  flex: 0 0 72px;
+}
+.database-board-properties dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .kanban-board {
   grid-template-columns: none;
   grid-auto-flow: column;

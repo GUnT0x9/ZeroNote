@@ -1,5 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { parseAttachmentRange } from "@zeronote/shared";
+import {
+  parseAttachmentRange,
+  AttachmentListQuerySchema,
+} from "@zeronote/shared";
 import { parameter } from "./routes";
 import type { AuthService } from "./services";
 import type { AttachmentService } from "./attachment-service";
@@ -12,7 +15,11 @@ export function registerAttachmentRoutes(
   const device = (request: FastifyRequest) =>
     auth.deviceForToken(request.cookies.zn_session);
   app.get("/v1/pages/:id/attachments", async (request) =>
-    files.list(await device(request), parameter(request, "id")),
+    files.list(
+      await device(request),
+      parameter(request, "id"),
+      AttachmentListQuerySchema.parse(request.query).retained === "1",
+    ),
   );
   app.post("/v1/pages/:id/attachments", async (request) =>
     files.upload(await device(request), parameter(request, "id"), request.body),

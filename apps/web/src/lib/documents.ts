@@ -295,6 +295,8 @@ async function createProvider(
   try {
     await api(`/documents/${page.id}/realtime-token`, "POST");
   } catch (error) {
+    if (error instanceof ApiError && [403, 410].includes(error.status))
+      await markAccessFailure(page.id);
     useUiStore.getState().patch({ syncError: errorMessage(error) });
     return undefined;
   }
@@ -343,6 +345,9 @@ async function markAccessFailure(pageId: string): Promise<void> {
     await api(`/documents/${pageId}`);
   } catch (error) {
     if (error instanceof ApiError && [403, 410].includes(error.status)) {
+      // Dependency readers must stop resolving the cached Page as soon as the
+      // server confirms revocation/deletion, without waiting for another sync.
+      await database.pages.update(pageId, { accessLost: true });
       const current = await database.documents.get(pageId);
       if (current && current.generation > current.committedGeneration)
         await database.documents.update(pageId, {

@@ -81,7 +81,7 @@ export function ContextPanel({
         </button>
       </div>
       {ui.panel === "history" ? (
-        <HistoryPanel key={page.id} page={page} />
+        <HistoryPanel key={page.id} page={page} data={data} />
       ) : ui.panel === "comments" ? (
         <CommentsPanel key={page.id} page={page} />
       ) : ui.panel === "share" ? (
@@ -539,6 +539,8 @@ function PropertiesPanel({
     <div className="context-content">
       {row && session ? (
         <DatabaseRowProperties
+          page={page}
+          data={data}
           document={session.document}
           row={row}
           editable={editable}

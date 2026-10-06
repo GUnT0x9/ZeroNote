@@ -544,6 +544,8 @@ export function DocumentView({
             <>
               {row && (
                 <DatabaseRowProperties
+                  page={page}
+                  data={data}
                   document={session.document}
                   row={row}
                   editable={editable}
@@ -554,6 +556,7 @@ export function DocumentView({
               )}
               {page.kind === "database" && !row ? (
                 <TaskDatabase
+                  data={data}
                   session={session}
                   page={page}
                   editable={editable}

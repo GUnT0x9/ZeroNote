@@ -5,7 +5,13 @@ import { Repository } from "./database/repository";
 import { env } from "./env";
 import { bytesToBase64, createRecoveryKey, sha256Hex } from "@zeronote/shared";
 import * as Y from "yjs";
-import { createTaskRow } from "@zeronote/shared";
+import {
+  createTaskRow,
+  addDatabaseProperty,
+  writeDatabaseValue,
+  getDatabaseProperties,
+  compileFormula,
+} from "@zeronote/shared";
 import type { OwnedPublicShare, PublicContent } from "@zeronote/shared";
 import { publicCookieName } from "./public-share-routes";
 import type { FastifyInstance } from "fastify";
@@ -208,6 +214,95 @@ function docWithText(value: string) {
   return { doc, text };
 }
 describe("Public Page and explicitly selected Workspace sharing", () => {
+  it("resolves only published Database dependencies and serves active File Properties without deleted Row files", async () => {
+    const owner = await actor(),
+      space = await workspace(owner),
+      source = await page(owner, space.id),
+      target = await page(owner, space.id);
+    await repository.query(
+      sql`UPDATE pages SET kind='database' WHERE id IN (${source.id},${target.id})`,
+    );
+    const doc = new Y.Doc(),
+      linked = new Y.Doc(),
+      rowId = createTaskRow(doc, "Source"),
+      targetRowId = createTaskRow(linked, "Published linked row");
+    const points = addDatabaseProperty(linked, "Points", "number");
+    writeDatabaseValue(linked, targetRowId, points, 17);
+    await commit(owner, target.id, linked);
+    const relation = addDatabaseProperty(
+      doc,
+      "Relation",
+      "relation",
+      [],
+      crypto.randomUUID(),
+      { relation: { databaseId: target.id } },
+    );
+    writeDatabaseValue(doc, rowId, relation, [targetRowId]);
+    addDatabaseProperty(doc, "Sum", "rollup", [], crypto.randomUUID(), {
+      rollup: {
+        relationPropertyId: relation,
+        targetPropertyId: points,
+        operation: "sum",
+      },
+    });
+    addDatabaseProperty(doc, "Formula", "formula", [], crypto.randomUUID(), {
+      formula: {
+        source: 'prop("Sum") * 2',
+        ast: compileFormula('prop("Sum") * 2', getDatabaseProperties(doc)),
+      },
+    });
+    const fileProperty = addDatabaseProperty(doc, "Files", "file"),
+      visibleId = crypto.randomUUID(),
+      hiddenId = crypto.randomUUID();
+    for (const id of [visibleId, hiddenId])
+      expect(
+        (
+          await request(
+            "POST",
+            `/v1/pages/${source.id}/attachments`,
+            {
+              id,
+              operationId: crypto.randomUUID(),
+              name: id === visibleId ? "visible.txt" : "deleted.txt",
+              data: "QQ==",
+            },
+            owner.cookie,
+          )
+        ).statusCode,
+      ).toBe(200);
+    writeDatabaseValue(doc, rowId, fileProperty, [visibleId]);
+    const deleted = createTaskRow(doc, "Deleted Row");
+    writeDatabaseValue(doc, deleted, fileProperty, [hiddenId]);
+    doc.getMap<Y.Map<unknown>>("tasks").get(deleted)!.set("deleted", true);
+    await commit(owner, source.id, doc);
+    const single = (await publish(owner, space.id, [source.id])).share;
+    const hidden = (
+      await request("GET", `/v1/public/${single.id}/content`)
+    ).json<PublicContent>();
+    expect(hidden.page.html).not.toContain("Published linked row");
+    expect(hidden.page.html).not.toContain(target.id);
+    expect(hidden.page.html).not.toContain("<td>17</td>");
+    expect(hidden.page.html).toContain("visible.txt");
+    expect(hidden.page.html).not.toContain("deleted.txt");
+    expect(
+      (await request("GET", `/v1/public/${single.id}/files/${visibleId}`))
+        .statusCode,
+    ).toBe(200);
+    expect(
+      (await request("GET", `/v1/public/${single.id}/files/${hiddenId}`))
+        .statusCode,
+    ).toBe(404);
+    const both = (await publish(owner, space.id, [source.id, target.id])).share;
+    const result = (
+      await request("GET", `/v1/public/${both.id}/content`)
+    ).json<PublicContent>();
+    const html = result.page.html;
+    expect(html).toContain("Published linked row");
+    expect(html).toContain("<td>17</td>");
+    expect(html).toContain("<td>34</td>");
+    doc.destroy();
+    linked.destroy();
+  });
   it("publishes current content with opaque Page keys, keeps private/new Pages out and applies Trash and revoke immediately", async () => {
     const owner = await actor(),
       space = await workspace(owner),

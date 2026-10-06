@@ -10,6 +10,7 @@ import {
   getDocumentProjection,
   getAttachmentIds,
   remapAttachmentIds,
+  remapDatabasePageIds,
   MAX_WORKSPACE_ATTACHMENTS,
   WORKSPACE_ATTACHMENT_BYTES,
   detectAttachmentMime,
@@ -30,6 +31,7 @@ import { availablePages } from "./search";
 import { useUiStore } from "./ui-store";
 import { requireBetaAccess } from "./beta";
 import { attachmentDigest, loadAttachment } from "./attachments";
+import { attachmentMetadataKey } from "./attachment-metadata";
 let sequence = 0;
 export async function enqueuePageOperation(
   payload: PageOperation,
@@ -444,6 +446,7 @@ export async function importWorkspace(
   }
 }
 function remapReferences(document: Y.Doc, ids: Map<string, string>): void {
+  remapDatabasePageIds(document, ids);
   const walk = (fragment: Y.XmlFragment | Y.XmlElement) => {
     for (const node of fragment.toArray()) {
       if (node instanceof Y.XmlElement) {
@@ -545,11 +548,13 @@ export async function deleteLocalWorkspace(workspaceId: string): Promise<void> {
       database.comments,
       database.pendingComments,
       database.attachments,
+      database.preferences,
     ],
     async () => {
       await database.workspaces.delete(workspaceId);
       await database.pages.bulkDelete(ids);
       await database.documents.bulkDelete(ids);
+      await database.preferences.bulkDelete(ids.map(attachmentMetadataKey));
       await database.attachments
         .where("workspaceId")
         .equals(workspaceId)

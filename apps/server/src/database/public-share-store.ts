@@ -7,8 +7,10 @@ import {
   PUBLIC_SESSION_MS,
   BURN_SESSION_MS,
   MAX_PUBLIC_BYTES,
-  getAttachmentIds,
+  getLiveAttachmentIds,
   getTaskRows,
+  getDatabaseProperties,
+  createDatabaseValueReader,
   type Page,
   type PublicShare,
   type OwnedPublicShare,
@@ -52,6 +54,7 @@ interface SessionRecord {
   frozenFiles: string[];
 }
 const SHARE_COLUMNS = sql`id,workspace_id AS "workspaceId",operation_id AS "operationId",payload_hash AS "payloadHash",title,mode,secret_hash AS "secretHash",password_hash AS "passwordHash",expires_at::text AS "expiresAt",seo,created_at::text AS "createdAt",revoked_at::text AS "revokedAt",burned_token_hash AS "burnedTokenHash"`;
+const MAX_PUBLIC_DATABASE_DEPENDENCIES = 32;
 export const publicHash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 export class PublicShareStore {
@@ -381,13 +384,14 @@ export class PublicShareStore {
     executor: Executor,
   ): Promise<{ page: PublicPage; fileIds: string[] }> {
     const document = new Y.Doc();
+    const relatedDocuments = new Map<string, Y.Doc>();
     try {
       for (const state of await this.repository.documents.load(
         source.id,
         executor,
       ))
         Y.applyUpdate(document, state);
-      const ids = new Set(getAttachmentIds(document));
+      const ids = new Set(getLiveAttachmentIds(document));
       const files = await this.repository.query<{
         id: string;
         name: string;
@@ -409,6 +413,26 @@ export class PublicShareStore {
         pages,
         executor,
       );
+      relatedDocuments.set(source.id, document);
+      const fileNames = new Map(
+        visibleFiles.map((file) => [`${source.id}:${file.id}`, file.name]),
+      );
+      await this.loadPublicDatabaseDependencies(
+        relatedDocuments,
+        fileNames,
+        pages,
+        executor,
+      );
+      for (const [id, target] of relatedDocuments)
+        taskLinks.set(
+          id,
+          new Map(getTaskRows(target).map((row) => [row.id, row.title])),
+        );
+      const reader = createDatabaseValueReader(source.id, document, {
+        publicOnly: true,
+        database: (id) => relatedDocuments.get(id),
+        fileName: (id, fileId) => fileNames.get(`${id}:${fileId}`),
+      });
       const links: PublicProjectionLinks = {
         page: pageLink,
         file: (id) => {
@@ -445,11 +469,51 @@ export class PublicShareStore {
           source.title,
           source.kind,
           links,
+          reader,
         ),
         fileIds: visibleFiles.map((file) => file.id),
       };
     } finally {
+      for (const target of relatedDocuments.values())
+        if (target !== document) target.destroy();
       document.destroy();
+    }
+  }
+  private async loadPublicDatabaseDependencies(
+    documents: Map<string, Y.Doc>,
+    fileNames: Map<string, string>,
+    pages: PublishedPage[],
+    executor: Executor,
+  ): Promise<void> {
+    const published = new Map(
+      pages
+        .filter((page) => page.kind === "database")
+        .map((page) => [page.id, page]),
+    );
+    const pending = [...documents.values()];
+    while (
+      pending.length &&
+      documents.size <= MAX_PUBLIC_DATABASE_DEPENDENCIES
+    ) {
+      for (const property of getDatabaseProperties(pending.shift()!)) {
+        const id = property.relation?.databaseId;
+        if (!id || documents.has(id) || !published.has(id)) continue;
+        if (documents.size > MAX_PUBLIC_DATABASE_DEPENDENCIES) break;
+        const target = new Y.Doc();
+        documents.set(id, target);
+        for (const state of await this.repository.documents.load(id, executor))
+          Y.applyUpdate(target, state);
+        pending.push(target);
+        const ids = new Set(getLiveAttachmentIds(target));
+        for (const file of await this.repository.query<{
+          id: string;
+          name: string;
+        }>(
+          sql`SELECT id,name FROM attachments WHERE page_id=${id} AND deleted_at IS NULL AND purged_at IS NULL`,
+          executor,
+        ))
+          if (ids.has(file.id)) fileNames.set(`${id}:${file.id}`, file.name);
+      }
     }
   }
   private async publicTaskLinks(
@@ -512,7 +576,7 @@ export class PublicShareStore {
             tx,
           ))
             Y.applyUpdate(document, state);
-          if (!getAttachmentIds(document).includes(fileId))
+          if (!getLiveAttachmentIds(document).includes(fileId))
             throw new DomainError(404, "공개된 파일이 아닙니다.");
         } finally {
           document.destroy();

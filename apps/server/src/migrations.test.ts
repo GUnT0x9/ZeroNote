@@ -43,7 +43,7 @@ it("upgrades Alpha data once and rebuilds checkpoints from committed logs", asyn
     await legacy.migrate();
     expect(
       await legacy.query(sql`SELECT version FROM schema_migrations`),
-    ).toHaveLength(6);
+    ).toHaveLength(7);
     const loaded = new Y.Doc();
     for (const update of await legacy.loadDocument(pageId))
       Y.applyUpdate(loaded, update);

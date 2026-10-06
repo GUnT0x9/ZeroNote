@@ -1,5 +1,6 @@
 import { afterEach, it, expect, vi } from "vitest";
 import { requestJson, ApiError, WAKE_TIMEOUT_MS } from "./http";
+import { EDITOR_PROTOCOL, EDITOR_PROTOCOL_HEADER } from "@zeronote/shared";
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -18,7 +19,7 @@ it("returns JSON with same-origin credentials and retries only reads or operatio
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(fetch.mock.calls[0]?.[1]).toMatchObject({
     credentials: "same-origin",
-    headers: { "X-ZeroNote-Editor-Protocol": "2" },
+    headers: { [EDITOR_PROTOCOL_HEADER]: String(EDITOR_PROTOCOL) },
   });
 });
 it("turns cold-start HTML errors into a usable error without retrying unsafe posts", async () => {
