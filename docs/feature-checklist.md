@@ -101,9 +101,9 @@
 - [x] Page 이름 변경 후 링크 유지
 - [x] Backlinks
 - [x] Local Search
-- [ ] Global Full-text Search
-- [ ] Search Filter
-- [ ] Search by Property
+- [x] Global Full-text Search
+- [x] Search Filter
+- [x] Search by Property
 - [ ] Knowledge Graph
 - [ ] Related Pages 자동 추천
 - [ ] Broken Link 탐지
@@ -266,8 +266,8 @@
 - [x] 명령어 기반 Theme 변경
 - [x] 명령어 기반 이동
 - [x] 최근 사용 명령
-- [ ] Fuzzy Search
-- [ ] Search Operators
+- [x] Fuzzy Search
+- [x] Search Operators
 
 ---
 
@@ -446,9 +446,9 @@
 
 ## P2
 
-- [ ] Relation
-- [ ] Rollup
-- [ ] Formula
+- [x] Relation
+- [x] Rollup
+- [x] Formula
 - [ ] Knowledge Graph
 - [ ] AI Workspace
 - [ ] E2EE

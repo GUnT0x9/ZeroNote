@@ -64,3 +64,5 @@ Tag CRDT·Properties 편집·Snapshot 미리보기·복제/Import 보존을 구�
 Verified 2026-10-06: Tag와 source Index를 `a09db74`로 배포했다. CI 394 Tests/24 E2E/Docker/512MiB/8개 Migration/16개 Table 암호화 복원과 실제 HTTPS 3개 흐름을 확인했다. [출시 기록](tags-release.md)에 따라 45/148 완료·103개 남음이다. 다음 단계는 검색 API와 로컬/서버 결과 병합, 필터/속성 조건 UI, Graph/추천/연결 상태다.
 
 2026-10-06 검색 5개 기능 구현: 서버 Index 검색과 Offline matcher를 연결하고 UI 필터/Property 조건·연산자·오타 후보·Row 이동을 제공한다. 서버의 temporary source overlay로 미전송 변경과 의존 Database 계산을 같은 범위에서 평가하며 clean 로컬 캐시는 오래된 서버 non-match를 다시 결과에 넣지 않는다. 본문 동기화는 열 때 저장하는 방식으로 바꾸며 아직 열지 않은 문서도 서버 검색에서 찾을 수 있다. 로컬 전체 420 Tests 통과. Browser/CI/Production 검증은 진행 중이며 완료 수는 계속 45/148이다. [검증 기록](search-release.md).
+
+Verified 2026-10-07: 검색 5개를 `15f2036`으로 배포했다. CI 420 Tests/25 E2E/Docker/512MiB/8 Migrations/16개 Table 복원과 실제 HTTPS 3개 흐름이 통과했다. 50/148 완료·98개 남음이며 다음은 Graph·Related Pages·Broken Link다. [출시 기록](search-release.md).

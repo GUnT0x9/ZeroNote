@@ -123,3 +123,5 @@ Confirmed: Global Search·필터/속성·오타·연산자를 배포하고 Offli
 검색 중 미전송 source는 최대 32개 overlay로 요청 안에서만 적용한다. 요청자의 편집 권한을 확인하며 Index/CRDT를 수정하지 않는다. Computed 값·Relation/File/Person 이름은 요청자의 접근 가능한 같은 Workspace 범위로 읽는다. clean 로컬 결과로 서버 non-match를 다시 추가하지 않으며 아직 등록 대기 중인 새 Page는 로컬로 포함한다. 문법·UI 조건은 공유 AST로 검증하고 날짜 필터는 UTC 수정일(after 이상/before 미만)로 고정한다. 오타 비교는 짧은 문자 단어의 한 번 편집만 허용하며 정확/구문/제외어/숫자의 의미를 변경하지 않는다.
 
 검색은 8 Page batch·source 16MiB·동시 2개로 제한하고 범위 축소 오류와 로컬 대체 결과를 표시한다. 이전 요청은 취소하고 Search POST에만 읽기 재시도를 허용한다. [검증/배포 기록](../search-release.md); Production 확인 전에는 완료 수를 올리지 않는다.
+
+Verified 2026-10-07: DEC-047의 검색 5개를 `15f2036`으로 배포하고 CI 420 Tests/25 E2E/Docker/512MiB/백업 복원 및 실제 HTTPS 3개 흐름을 확인했다. 50/148 완료·98개 남음이다. [출시 기록](../search-release.md).

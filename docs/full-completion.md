@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 45개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md)에 남긴다. 나머지 103개는 계속 구현 대상이다. Tag는 394 Tests·24 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS 협업/Offline/Viewer/Snapshot/복제/로컬 검색을 확인하고 배포했다. 다음 검색·Knowledge 8개 기능은 [Knowledge·Search·Tags 기준](knowledge-search-plan.md)을 따른다. 검색 파서와 source Index 기반은 사용자 검색 기능 완료로 집계하지 않는다.
+현재 50개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md), [검색 기록](search-release.md)에 남긴다. 나머지 98개는 계속 구현 대상이다. 검색 5개는 420 Tests·25 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS의 새 기기 검색/Offline/협업/Viewer/Recovery/Database를 확인하고 배포했다. 다음 Knowledge Graph·Related Pages·Broken Link 3개는 [Knowledge·Search·Tags 기준](knowledge-search-plan.md)을 따른다. 기반 코드만으로 기능 완료를 집계하지 않는다.
 
 ## 항목별 완료 증거
 
@@ -40,9 +40,9 @@
 | 19   | Editor                   | Mermaid Diagram                       | 미구현                                                                                                         |
 | 20   | Editor                   | Code 파일 첨부                        | 구현·배포 / 소스 파일 텍스트 Preview · attachments.test.ts, workspace.spec.ts                                  |
 | 21   | Editor                   | Drag & Drop 파일 업로드               | 구현·배포 / Drop 좌표에 파일 첨부 · workspace.spec.ts                                                          |
-| 22   | 문서 연결 / Knowledge    | Global Full-text Search               | 미구현                                                                                                         |
-| 23   | 문서 연결 / Knowledge    | Search Filter                         | 미구현                                                                                                         |
-| 24   | 문서 연결 / Knowledge    | Search by Property                    | 미구현                                                                                                         |
+| 22   | 문서 연결 / Knowledge    | Global Full-text Search               | 구현·배포 / 전체 문서·Row·권한·Offline·typed Property / search-release.md                                      |
+| 23   | 문서 연결 / Knowledge    | Search Filter                         | 구현·배포 / 전체 문서·Row·권한·Offline·typed Property / search-release.md                                      |
+| 24   | 문서 연결 / Knowledge    | Search by Property                    | 구현·배포 / 전체 문서·Row·권한·Offline·typed Property / search-release.md                                      |
 | 25   | 문서 연결 / Knowledge    | Knowledge Graph                       | 미구현                                                                                                         |
 | 26   | 문서 연결 / Knowledge    | Related Pages 자동 추천               | 미구현                                                                                                         |
 | 27   | 문서 연결 / Knowledge    | Broken Link 탐지                      | 미구현                                                                                                         |
@@ -88,8 +88,8 @@
 | 67   | Search / Command         | 명령어 기반 Theme 변경                | 구현·배포 / Theme 저장/Reload · workspace.spec.ts                                                              |
 | 68   | Search / Command         | 명령어 기반 이동                      | 구현·배포 / >open / >go / >이동 · commands.test.ts, workspace.spec.ts                                          |
 | 69   | Search / Command         | 최근 사용 명령                        | 구현·배포 / 최근 8개 명령 저장 · commands.test.ts, workspace.spec.ts                                           |
-| 70   | Search / Command         | Fuzzy Search                          | 미구현                                                                                                         |
-| 71   | Search / Command         | Search Operators                      | 미구현                                                                                                         |
+| 70   | Search / Command         | Fuzzy Search                          | 구현·배포 / 전체 문서·Row·권한·Offline·typed Property / search-release.md                                      |
+| 71   | Search / Command         | Search Operators                      | 구현·배포 / 전체 문서·Row·권한·Offline·typed Property / search-release.md                                      |
 | 72   | Theme / UI               | Mobile 전체 Editor                    | 구현·배포 / Touch 작성/Undo·Block 도구 · workspace.spec.ts                                                     |
 | 73   | Theme / UI               | 사용자 Accent Color                   | 미구현                                                                                                         |
 | 74   | Theme / UI               | Font 선택                             | 미구현                                                                                                         |

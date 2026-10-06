@@ -1,6 +1,6 @@
 # 전체 문서·속성 검색 출시 기록
 
-2026-10-06. 대상: Global Full-text Search, Search Filter, Search by Property, Fuzzy Search, Search Operators의 5개 기능. 현재 구현·로컬 검증 중이며 Production 확인 전에는 완료 수 45/148을 변경하지 않는다. Graph·Related Pages·Broken Link와 다른 미완료 요구는 계속 구현 대상이다.
+2026-10-06 구현·배포, 2026-10-07 실제 HTTPS 검증. 대상: Global Full-text Search, Search Filter, Search by Property, Fuzzy Search, Search Operators의 5개 기능. CI와 Production 검증을 마쳤으며 50/148 완료·98개 계속 구현이다. Graph·Related Pages·Broken Link와 다른 미완료 요구는 계속 구현 대상이다.
 
 ## 동작
 
@@ -19,7 +19,14 @@
 - 로컬 전체 420 Tests 통과(78.35초): parser/matcher·Unicode·긴 본문·typed 값·Formula/Rollup·파일 이름·ACL·Trash·임시 변경·Abort/재시도·on-demand 동기화.
 - actual matcher의 1,000 Pages·1,000 Rows·500 Blocks 조건에서 준비된 Index의 검색 200ms 기준을 검증한다.
 - Browser 회귀: 새 브라우저 Recovery 이후 미열람 Page 검색, Tag·Property UI, Row 열기, 오타 후보, 문법 오류, Offline 수정과 서버 전송 실패 중의 검색. 로컬 Search E2E 18.1초·성능 E2E 15.8초 통과.
-- 전체 lint/type-check/build/E2E/CI/Docker/512MiB/백업 복원과 실제 HTTPS 결과는 완료 후 이 문서에 기록한다. 실제 Android Chrome/iOS Safari 검증은 아직 미실시다.
+- Source `15f2036e96bc463e2499f730e4e6ccb0f954a9ef`의 [CI 37431481786](https://github.com/GUnT0x9/ZeroNote/actions/runs/37431481786) 통과: lint/type-check/420 Tests/25 E2E(2.9분)/build/서버 Docker/512MiB 기동/8 Migrations/16개 Table 암호화 백업 복원. 실제 Android Chrome/iOS Safari 검증은 아직 미실시다.
+
+## Production 증거
+
+- Render `dep-db2ai7rtqb8s73cn5md0` Live와 Vercel `dpl_GVgHZwPr813Qyu4YBh2HuujwAnUX` READY가 같은 `15f2036` 소스다. Production Alias/Project ID와 `zeronoteCommit`/`githubCommitSha`를 Vercel API에서 확인했다.
+- 배포 전에 PostgreSQL 17의 암호화 백업을 생성했고 최근 4개 보관을 확인했다. HTTPS 확인 후 Migration 8개, Protocol 1–4, Checkpoint에 대응하는 source Index 누락 0건, DB 11,124,736 bytes, QA Workspace 0개다.
+- [Beta](https://zeronote-kohl.vercel.app)에서 3개 Browser 흐름 통과(3.8분): 새 기기 미열람 검색·Tag/Property 조건·Row 상세·오타·문법 오류·Offline/전송 실패 중 로컬 수정 반영(1.3분), 두 기기 Realtime·Comments·Viewer·Recovery(1.2분), File/Formula/Relation/Rollup·Rename·권한 철회·Offline Reload·Snapshot(53.8초).
+- 첫 CI에서 제목 표시 직후 본문 저장을 확인하는 테스트가 실패했다. 실제 IndexedDB 저장 완료를 기다린 후 Offline으로 전환하도록 수정한 최종 소스의 전체 CI와 HTTPS 재검증이 통과했다. 판정은 최종 검증을 기준으로 한다.
 
 ## 변경 파일과 이유
 
@@ -33,4 +40,5 @@
 | `apps/web/src/components/search-filters.tsx`, `dialogs.tsx`, `app/globals.css`                                                                                                                                      | 기존 Search/Command UI에 필터·속성 조건·범위/오타/오류와 Row 이동 추가   |
 | `apps/web/src/lib/api.ts`, `http.ts`, `sync.ts`                                                                                                                                                                     | 검색 취소/안전한 재시도와 문서 본문 on-demand 저장                       |
 | `packages/shared/src/search-engine.test.ts`, `apps/web/src/lib/advanced-search.test.ts`, `http.test.ts`, `sync.test.ts`, `apps/server/src/integration.test.ts`, `search-service.test.ts`, `tests/workspace.spec.ts` | 검색·범위·값 계산·실패·성능과 실제 브라우저 회귀                         |
+| `apps/web/src/components/context-panel.tsx`                                                                                                                                                                         | Backlinks의 로컬 조회 범위와 상위 Trash/철회 제외                        |
 | `docs/api.md`, `knowledge-search-plan.md`, `product/19-decision-log.md`, `search-release.md`                                                                                                                        | 검색 API·동작 기본안·검증 및 배포 증거                                   |
