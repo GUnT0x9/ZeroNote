@@ -97,3 +97,5 @@ Confirmed: 기존 체크리스트의 미완료 Public Page/Password/Temporary/Bu
 Adopted: 기본 noindex이며 보호되지 않은 Public 링크에서만 SEO를 opt-in한다. 보호된 링크의 256bit Secret은 URL Fragment에 담고 Hash만 저장한다. 비밀번호는 Salt/scrypt Hash, 읽기 권한은 별도 Cookie Session으로 관리한다. Burn은 명시적 POST의 첫 Session만 Transaction으로 승인하고 최초 내용/파일 참조를 고정한다. 같은 Operation/Reader의 재시도는 같은 Session을 받는다. 읽기 시간은 Burn 최대 1시간, 다른 보호된 링크 최대 24시간이며 링크의 만료/해제/Trash/파일 삭제가 이후 접근을 제한한다. 전달된 사본을 회수한다고 설명하지 않는다. 현재 참조 또는 유효한 Burn 읽기가 필요한 파일은 Storage 정리에서 보존한다. 주기적인 서버/DB Keep-alive는 추가하지 않는다.
 
 기존 Alpha/Beta API와 Editor Protocol 2를 유지하는 Migration 006 추가로 배포한다. 익명 `/s/` 화면은 Device·개인 Workspace·IndexedDB·Editor·WebSocket을 만들지 않는다. Scope·권한·Race·과거 내용 비노출·브라우저와 실제 HTTPS 결과를 출시 기록에 남긴 뒤 완료 항목에 반영한다.
+
+Verified 2026-10-06: `0b25956`의 CI 212 Tests/22 E2E/Docker/512MiB/암호화 백업 복원과 Render → Vercel 배포, 실제 HTTPS 6개 흐름 및 4MiB Public/Private/Range/Recovery/Offline PDF를 확인했다. 기록은 `docs/public-sharing-release.md`에 남기며 전체 목표는 40/148 완료, 108개 계속 개발이다.

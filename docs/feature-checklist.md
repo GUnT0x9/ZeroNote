@@ -1,6 +1,6 @@
 # ZeroNote 기능 체크리스트
 
-2026-10-02 코드 대조와 Database·파일·Template·Command·Mobile Editor 구현 반영. [x]는 사용 가능한 기능이며 후속 항목을 완료로 표시하지 않는다.
+2026-10-06 Database·파일·Template·Command·Mobile Editor·데이터 이전·Storage·Public Sharing 구현/배포 검증 반영. [x]는 사용 가능한 기능이며 후속 항목을 완료로 표시하지 않는다.
 
 - History/Restore는 Owner 전용 Online Snapshot과 새 비공유 Page 복구다. 원본 덮어쓰기, Compare, Branch/Merge는 포함하지 않는다.
 - Generic Database는 기존 Task Row 저장 구조를 재사용하며 13가지 속성 종류와 Saved View를 제공한다. File Property는 파일 저장 기반과 함께 후속 구현한다.
@@ -10,6 +10,7 @@
 - 전체 미완료 항목은 [전체 완료 목표](full-completion.md)에서 추적한다. 이번 추가 기능의 검증/배포 상태는 [파일·Editor 확장 기록](editor-files-release.md)에 기록한다. 일부 기능 구현으로 전체 목표를 종료하지 않는다.
 - 파일은 4MiB/개, Workspace 25MiB/200개다. PDF·Audio·Video·이미지·소스 미리보기와 파일을 포함한 Export/Import/Snapshot 복구를 제공한다. Storage 관리 UI와 참조 검사·영구 정리는 CI와 실제 HTTPS 검증을 통과해 배포했다. [검증 기록](storage-release.md)을 따른다.
 - Template은 기본 문서 3개와 저장한 Page 재사용이다. Task Template은 별도 구현 대상이다.
+- Public 공유는 Owner가 선택한 Page만 게시하며 보호 링크와 첫 Session 내용 고정, 기본 noindex/SEO opt-in을 제공한다. [CI·실제 HTTPS 기록](public-sharing-release.md)을 따르며 현재 전체 148개 중 40개를 추가 완료했다.
 
 ## Workspace / 인증
 
@@ -318,13 +319,13 @@
 - [x] One-time Invite
 - [x] Invite Expiration
 - [x] Invite Revoke
-- [ ] Public Page Share
-- [ ] Password Share
-- [ ] Temporary Share
-- [ ] Burn-after-read Share
-- [ ] Expiring Public Link
-- [ ] Public Workspace
-- [ ] SEO Page
+- [x] Public Page Share
+- [x] Password Share
+- [x] Temporary Share
+- [x] Burn-after-read Share
+- [x] Expiring Public Link
+- [x] Public Workspace
+- [x] SEO Page
 
 ---
 
@@ -439,9 +440,9 @@
 - [x] File / Image Upload
 - [x] Command Palette
 - [x] Templates
-- [ ] Public Share
+- [x] Public Share
 - [x] Full Mobile Editing
-- [ ] Markdown / PDF Export
+- [x] Markdown / PDF Export
 
 ## P2
 

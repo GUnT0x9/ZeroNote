@@ -88,7 +88,7 @@ DB 백업에는 서버 인증 Hash와 Membership도 포함되므로 암호화 �
 
 실제 Production HTTPS에서 Browser 8개 시나리오를 통과했고, 서버 재시작 후 새 브라우저 Recovery와 문서·Task·Comments·기록·기존 Viewer 권한 유지도 확인했다. 운영용 일회성 초대코드 10개는 2026-10-01 발급했으며 7일 뒤 만료한다. 먼저 운영자 2명에게 사용하고 실제 Android/iOS 및 Sleep 이후 연결 상태를 확인한 뒤 5–10명으로 확대한다.
 
-현재 Render는 검증된 Database 확장 작업의 `codex/database-views` Branch를 사용한다. Vercel은 CI 통과 후 해당 Checkout을 CLI로 수동 업로드한다. PR 병합 후 Render의 Branch를 `main`으로 바꾸고 같은 순서로 배포한다. DB Schema는 되감지 않는다.
+현재 Render는 `codex/remaining-features` Branch를 사용한다. Vercel은 CI 통과한 Commit Archive를 CLI로 수동 업로드한다. PR 병합 후 Render의 Branch를 `main`으로 바꾸고 같은 순서로 배포한다. DB Schema는 되감지 않는다.
 
 Render Free의 512MiB 제한에서 첫 배포가 실패했다. 원인은 Runtime의 `pnpm start`가 다시 전체 Workspace 의존성을 설치한 것이었다. `Dockerfile.server`에서 설치된 Loader로 Node.js를 직접 실행하도록 수정했고, CI에 512MiB Container 시작/Health 검증을 추가했다. 서버가 Ready가 된 뒤 Vercel을 배포했다.
 
@@ -103,3 +103,7 @@ Render Free의 512MiB 제한에서 첫 배포가 실패했다. 원인은 Runtime
 `4b07123`의 CI 통과 후 Render `dep-davg5gtg1s2s73acvs20` → Vercel `dpl_ANsVUuXFkgjcgq9Phb99gYh8Eggd` 순서로 배포했다. 제공 도메인과 Secret은 유지했고 Render 자동 배포는 꺼져 있다. 일반 Database 속성·Saved View·Calendar/Timeline/Gallery/List과 이전 Figma 메인/상단 저장 아이콘 개편을 포함한다. Production 11개 흐름과 기존 데이터/Recovery/권한을 확인했다. 앱 소스와 검증/미실행 항목은 [Database 배포 기록](database-release.md)을 따른다.
 
 2026-10-02 현재 Render 수동 배포 Branch는 `codex/remaining-features`이며 Auto Deploy는 꺼져 있다. 파일·Editor 확장의 현재 배포 Commit/검증/호환 Rollback은 [배포 기록](editor-files-release.md)을 따른다.
+
+### 2026-10-06 Public Sharing 배포
+
+현재 앱 소스는 `0b25956`이다. CI 통과와 암호화 Production 백업 후 Render `dep-db24f297lnhs73dil1b0` → Vercel `dpl_C3dsc4kk4tMRWAxDVVsSVygQ4ojf` 순서로 배포했고 Migration 006, Source SHA, Production Alias를 확인했다. 실제 HTTPS Browser 6개 및 4MiB Private/Public 다운로드·Range·새 기기 Recovery·Offline PDF를 통과했다. 보호 링크, 최초 Burn 내용, 선택 Scope, 공개 SEO와 검증/미실행 범위는 [Public Sharing 기록](public-sharing-release.md)을 따른다.

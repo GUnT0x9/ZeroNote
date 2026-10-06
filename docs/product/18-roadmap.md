@@ -23,3 +23,5 @@ Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Rec
 2026-10-02: 일반 Property 13종과 Saved View, Filter/Sort/Group, Calendar/Timeline/Gallery/List을 추가한다. 이전 메인 UI 개편과 함께 CI 통과 후 Render → Vercel Production에 배포한다. 파일 저장과 Public Share/전체 모바일 편집은 다음 P1, Relation/Rollup/Formula는 P2로 유지한다. 전체 기능 체크리스트는 `docs/feature-checklist.md`에서 실제 구현 증거와 후속 항목을 구분한다.
 
 2026-10-02 데이터 이전의 8개 기능을 구현했다. [형식과 검증](../transfer-release.md)에 범위를 기록하며 전체 148개 중 남은 116개는 계속 개발한다.
+
+2026-10-06 Storage와 Public Sharing 7개 기능의 CI·실제 HTTPS 검증/배포까지 반영해 전체 완료 수는 40개, 남은 요구는 108개다. 다음 File Property/Relation/Rollup/Formula는 [Database 확장 기준](../database-advanced-plan.md)을 따른다. Formula 파서 기반을 작성 중이며 UI·저장·공개 범위·배포 증거를 갖추기 전에는 완료로 표시하지 않는다.
