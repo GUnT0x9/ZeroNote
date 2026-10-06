@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 32개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Storage 관리 1개를 추가 구현·로컬 검증해 총 33개를 구현했으며 해당 CI/배포는 진행 중이다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md)에 남긴다. 나머지 115개는 계속 구현 대상이다.
+현재 33개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md)에 남긴다. 나머지 115개는 계속 구현 대상이다.
 
 ## 항목별 완료 증거
 
@@ -124,7 +124,7 @@
 | 103  | 파일 / Media             | Audio                                 | 구현·배포 / 실제 Audio Decode · workspace.spec.ts                                                              |
 | 104  | 파일 / Media             | PDF                                   | 구현·배포 / PDF Canvas/Text·손상 오류 · workspace.spec.ts                                                      |
 | 105  | 파일 / Media             | File Preview                          | 구현·배포 / 이미지/미디어/PDF/소스 · workspace.spec.ts                                                         |
-| 106  | 파일 / Media             | Storage 관리                          | 구현·로컬 검증 / storage.test.ts, document-files.test.ts, workspace.spec.ts / 파일 용량·참조·정리·Offline 보존 |
+| 106  | 파일 / Media             | Storage 관리                          | 구현·배포 / storage.test.ts, document-files.test.ts, workspace.spec.ts / [Production 검증](storage-release.md) |
 | 107  | 파일 / Media             | Attachment 권한 관리                  | 구현·배포 / Page Role·철회·Snapshot 새 파일 · integration.test.ts                                              |
 | 108  | AI                       | AI 요약                               | 미구현                                                                                                         |
 | 109  | AI                       | AI Rewrite                            | 미구현                                                                                                         |

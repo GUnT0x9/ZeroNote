@@ -10,7 +10,7 @@ Migration `005-attachment-purge.sql`은 기존 bytes를 보존하고 선택한 �
 
 로컬 Unit/Server Tests 198개가 통과했다. 미전송·보존·접근 철회·Trash 사본 유지, 서버 실패 시 로컬 bytes 유지, 정상/이름 오류/권한/다른 Workspace/참조/기록/Trash/재시도/Upload 충돌과 정리된 파일의 문서 Commit 거절을 포함한다. Migration 두 번 실행과 기존 Alpha Checkpoint 유지도 확인했다. 새 Storage 회귀는 자체 Fastify 인스턴스를 사용해 다른 인증 테스트의 Rate Limit 상태와 격리하며 Production 제한은 유지한다.
 
-로컬 전체 브라우저 19개가 통과했다. 정상 Upload 중 WebSocket 422 거절이 없음을 확인하고 1,000 Pages/500 Blocks/1,000 Rows, 협업/Undo/Offline/Recovery/Export/Snapshot/권한의 기존 흐름도 유지했다. 최종 CI/Production 결과를 확인 후 아래에 기록한다. 실제 Android/iOS 기기 검증과 전체 목표의 나머지 기능은 계속 미완료다.
+로컬 전체 브라우저 19개가 통과했다. 정상 Upload 중 WebSocket 422 거절이 없음을 확인하고 1,000 Pages/500 Blocks/1,000 Rows, 협업/Undo/Offline/Recovery/Export/Snapshot/권한의 기존 흐름도 유지했다. 최종 CI/Production 결과는 아래에 기록한다. 실제 Android/iOS 기기 검증과 전체 목표의 나머지 기능은 계속 미완료다.
 
 ## 변경 파일과 이유
 
@@ -26,3 +26,13 @@ Migration `005-attachment-purge.sql`은 기존 bytes를 보존하고 선택한 �
 | Service Worker                                 | 새 App Shell Cache와 메인 경로만 Cache          |
 | Server storage/browser tests                   | 정상·권한·참조·Offline·재시도 회귀              |
 | API/Decision/완료 기록                         | 동작 계약·호환성·배포 증거                      |
+
+## 2026-10-06 Production 결과
+
+- Source Commit `32d6e135a76f1e5393b640b700452b4c89b1707b`, CI `36979587809` 성공: lint, type-check, 198 Unit/Server Tests, 19 E2E, Web/Server build, 512MiB 서버 Docker 실행, 암호화 백업·복원과 Migration 5개를 검증했다.
+- 배포 직전 암호화 백업을 완료했고 최근 4개를 유지한다. Render `dep-davm2p1srm7s73chh0hg`가 Live이며 Production DB의 Migration 005 적용을 확인했다.
+- Vercel `dpl_ARtxaefhAnu9Jnec9RgyVeoXHDMv`가 같은 Commit으로 Ready다. Production Alias `zeronote-kohl.vercel.app`의 실제 Deployment ID도 일치한다. CLI 인증 갱신 후 명시한 Team scope로 재시도가 성공했다.
+- 실제 HTTPS 브라우저 회귀 3개 성공: 암호화 Export/새 Workspace Import, 파일·Offline·Viewer·Snapshot, Storage 참조 거절·미참조 파일 정리·미전송 사본 유지. 테스트 Workspace는 정확한 ID와 이름 확인 후 제거했다.
+- 실제 HTTPS의 4MiB 파일 Upload → 새 기기 Recovery → SHA256 일치 Download → Offline PDF 새로고침도 성공했다.
+
+Production: https://zeronote-kohl.vercel.app · API: https://zeronote-api.onrender.com
