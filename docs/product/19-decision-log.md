@@ -99,3 +99,11 @@ Adopted: 기본 noindex이며 보호되지 않은 Public 링크에서만 SEO를 
 기존 Alpha/Beta API와 Editor Protocol 2를 유지하는 Migration 006 추가로 배포한다. 익명 `/s/` 화면은 Device·개인 Workspace·IndexedDB·Editor·WebSocket을 만들지 않는다. Scope·권한·Race·과거 내용 비노출·브라우저와 실제 HTTPS 결과를 출시 기록에 남긴 뒤 완료 항목에 반영한다.
 
 Verified 2026-10-06: `0b25956`의 CI 212 Tests/22 E2E/Docker/512MiB/암호화 백업 복원과 Render → Vercel 배포, 실제 HTTPS 6개 흐름 및 4MiB Public/Private/Range/Recovery/Offline PDF를 확인했다. 기록은 `docs/public-sharing-release.md`에 남기며 전체 목표는 40/148 완료, 108개 계속 개발이다.
+
+### DEC-045 — Database 의존 값과 호환성
+
+Confirmed: 전체 미완료 범위의 File Property/Formula/Relation/Rollup을 구현·배포한다. Adopted: Property/Row/Database의 안정적인 ID를 저장하고 Formula AST와 Rollup 정의만 편집 원본으로 유지한다. 의존 값은 현재 요청자의 접근 가능한 대상에서 계산한다. 접근 철회/삭제가 서버에서 확인되면 캐시된 관계 이름과 이전 계산을 제외하며 미전송 데이터는 보존한다. Hocuspocus 인증 실패뿐 아니라 문서 Close에서도 REST로 상태를 확인하며 정상 종료/503/Offline을 권한 철회로 추측하지 않는다.
+
+새 Property를 모르는 Editor의 데이터 손실을 막기 위해 Protocol 3과 Migration 007을 적용한다. 기존 Block/Attachment의 Protocol 1/2를 유지한다. File 참조는 현재 Row·Row 본문·Trash·Snapshot과 Public Scope의 보호에 포함한다. Snapshot은 외부 Database의 과거 내용을 복사하지 않고 현재 허용된 값으로 계산한다. Public Projection은 게시되지 않은 관계 대상과 Person/비공개 파생 값을 제외한다.
+
+Verified 2026-10-06: `f7b4c00` CI 343 Tests/23 E2E/Docker/512MiB/암호화 복원과 Production Migration 7개, Render → Vercel 소스 일치, 실제 HTTPS 협업/Recovery와 속성/Offline/권한 철회/Snapshot을 확인했다. [출시 기록](../database-advanced-release.md)에 따라 44/148 완료, 104개는 계속 구현한다.

@@ -25,3 +25,5 @@ Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Rec
 2026-10-02 데이터 이전의 8개 기능을 구현했다. [형식과 검증](../transfer-release.md)에 범위를 기록하며 전체 148개 중 남은 116개는 계속 개발한다.
 
 2026-10-06 Storage와 Public Sharing 7개 기능의 CI·실제 HTTPS 검증/배포까지 반영해 전체 완료 수는 40개, 남은 요구는 108개다. 다음 File Property/Relation/Rollup/Formula는 [Database 확장 기준](../database-advanced-plan.md)을 따른다. Formula 파서 기반을 작성 중이며 UI·저장·공개 범위·배포 증거를 갖추기 전에는 완료로 표시하지 않는다.
+
+2026-10-06 Database 속성 4개를 CI 343 Tests/23 E2E/Docker/백업 복원과 실제 HTTPS 협업·권한 철회·Offline·Snapshot·Recovery로 확인하고 배포했다. [출시 기록](../database-advanced-release.md)에 따라 완료 수는 44개, 남은 요구는 104개다. 다음 묶음은 [Knowledge·Search·Tags의 9개 기능](../knowledge-search-plan.md)이며 기반 코드만으로 완료를 표시하지 않는다.

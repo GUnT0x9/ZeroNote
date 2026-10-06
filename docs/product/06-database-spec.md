@@ -44,7 +44,7 @@ File Property, 선택 옵션 편집, 타입 변환, Formula/Relation/Rollup은 D
 
 ## 전체 체크리스트 Database 확장 (2026-10-06)
 
-File/Formula/Relation/Rollup을 구현 대상으로 채택했고 현재 통합·브라우저 검증 중이다. 앞선 Alpha/P0의 Deferred 기록은 당시 출시 범위이며 현재는 [Database 확장 기준](../database-advanced-plan.md)을 따른다. Production 배포 완료까지 전체 체크리스트의 완료 수에는 포함하지 않는다.
+File/Formula/Relation/Rollup을 구현·검증하고 Render → Vercel Production에 배포했다. 앞선 Alpha/P0의 Deferred 기록은 당시 출시 범위이며 현재는 [Database 확장 기준](../database-advanced-plan.md)과 [실제 HTTPS 기록](../database-advanced-release.md)을 따른다.
 
 | Trigger       | Behavior                                                             | Offline                       | Sync                          | Error                            | Acceptance Criteria                                    |
 | ------------- | -------------------------------------------------------------------- | ----------------------------- | ----------------------------- | -------------------------------- | ------------------------------------------------------ |
@@ -54,3 +54,5 @@ File/Formula/Relation/Rollup을 구현 대상으로 채택했고 현재 통합·
 | Rollup 설정   | Relation의 대상 속성에 count/count_values/unique/sum/average/min/max | Cache된 대상                  | 정의와 각 Row의 원본 값       | 접근 불가와 빈 관계를 구분       | 대상 변경 시 재계산, 비공개·Person 파생 값 Public 제외 |
 
 Relation 대상 변경은 기존 해당 속성의 연결 해제를 UI에서 확인하고 적용한다. Row별 Share를 만들지 않는다. Snapshot은 원래 Row와 외부 관계를 유지하고 자기 Database 참조는 복구한 새 Page ID로 연결한다. Workspace Import는 포함된 Database ID를 재매핑한다. Formula/Rollup은 읽기 전용이며 계산된 Group에 Drag로 값을 쓰지 않는다.
+
+Snapshot은 해당 Page의 정의와 값·Row 본문·파일을 기록한다. 외부 Database의 과거 상태를 함께 기록하지 않으므로 외부 Relation/Rollup의 미리보기와 복구 결과는 현재 접근 가능한 대상 값으로 계산한다.

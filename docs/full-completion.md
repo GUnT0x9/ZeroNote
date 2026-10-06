@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 40개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md)에 남긴다. 나머지 108개는 계속 구현 대상이다. 다음 File Property/Relation/Rollup/Formula 묶음은 [Database 확장 기준](database-advanced-plan.md)을 따른다. 4개 Property의 공유 Schema·계산·UI·Export/Public/Snapshot 연결, 전체 335 Tests와 권한 철회·Snapshot 복구 브라우저 검증을 통과했다. 전체 CI·Production 검증이 남아 완료 수에 포함하지 않는다.
+현재 44개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md)에 남긴다. 나머지 104개는 계속 구현 대상이다. File Property/Formula/Relation/Rollup은 343 Tests·23 E2E·Docker·암호화 백업 복원과 실제 HTTPS 협업/권한 철회/Offline/Snapshot/Recovery를 확인하고 배포했다. 다음 9개 기능은 [Knowledge·Search·Tags 기준](knowledge-search-plan.md)을 따른다. 검색 파서 기반 작업은 아직 사용자 기능 완료로 집계하지 않는다.
 
 ## 항목별 완료 증거
 
@@ -56,10 +56,10 @@
 | 35   | Task / Project           | Task Activity Log                     | 미구현                                                                                                         |
 | 36   | Task / Project           | Task별 Comment Thread                 | 미구현                                                                                                         |
 | 37   | Task / Project           | Task Template                         | 미구현                                                                                                         |
-| 38   | Database                 | File Property                         | 미구현                                                                                                         |
-| 39   | Database                 | Formula                               | 미구현                                                                                                         |
-| 40   | Database                 | Relation                              | 미구현                                                                                                         |
-| 41   | Database                 | Rollup                                | 미구현                                                                                                         |
+| 38   | Database                 | File Property                         | 구현·배포 / 파일 연결·Preview·다운로드·Offline·Snapshot / database-advanced-release.md                         |
+| 39   | Database                 | Formula                               | 구현·배포 / ID AST·제한된 계산·속성 이름 변경·공개 범위 / formula.test.ts, database-advanced-release.md        |
+| 40   | Database                 | Relation                              | 구현·배포 / Database/Row ID·이름 변경·권한 철회·Import 재매핑 / database-advanced-release.md                   |
+| 41   | Database                 | Rollup                                | 구현·배포 / 집계·대상 변경·접근 범위·Snapshot / database-computation.test.ts, database-advanced-release.md     |
 | 42   | Collaboration            | Workspace Member 관리                 | 미구현                                                                                                         |
 | 43   | Collaboration            | Member Group                          | 미구현                                                                                                         |
 | 44   | Collaboration            | Mention `@user`                       | 미구현                                                                                                         |

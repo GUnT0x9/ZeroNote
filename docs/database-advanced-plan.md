@@ -54,3 +54,5 @@ Web Production build와 집중 브라우저 검증을 통과했으며, CI 전체
 Close 처리와 요청 예산의 집중 12 Tests 및 lint·type-check를 통과했다. 전체 Unit/Server·브라우저·CI와 Production 검증을 이어가며 완료 수는 40/148로 유지한다.
 
 CI `5359bb3` (37418972903)에서 전체 343 Tests와 Web/Server build가 통과했으나 Playwright가 새 Vitest Helper 테스트도 수집해 실행 시작 전에 실패했다. 브라우저 수집 범위를 기존 `*.spec.ts`로 명시하고 Unit 테스트는 Vitest에서 계속 검증한다. 기능 실패와 분리해 이 설정 수정 후 전체 브라우저/CI를 다시 실행한다.
+
+최종 `f7b4c00` CI 37419348014가 343 Tests·23 E2E·Docker/512MiB·Migration 7개/암호화 복원을 통과했다. 로컬 전체 23 E2E와 Production HTTPS 2개 대표 흐름도 통과했고 운영 백업 후 Render → Vercel을 같은 소스로 배포했다. [출시 증거](database-advanced-release.md)를 반영해 이 4개를 완료로 집계한다. 전체 목표는 44/148 완료·104개 남음이며 다음 Knowledge/Search/Tags를 이어간다.
