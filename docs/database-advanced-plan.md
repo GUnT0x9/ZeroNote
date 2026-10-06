@@ -28,3 +28,11 @@ Public Sharing은 게시 범위 안의 Database/Row와 파일만 읽는다. 공�
 각 기능의 정상 흐름과 실패 흐름을 Unit/Server 및 실제 브라우저에서 검증한다. 중점은 파일 참조·정리 보호, 속성/Row 이름 변경, 서로 다른 필드의 동시 변경, Offline Reload, Viewer 쓰기 차단, 관계 대상 권한 철회, 수식 순환·형 오류·계산량 제한, 집계 일치, Export/Import·Snapshot·공개 범위 회귀다.
 
 배포 전 lint·type-check·test·build·E2E·Docker·백업 복원을 확인하고 실제 HTTPS 증거를 출시 기록과 전체 체크리스트에 남긴다.
+
+## 2026-10-06 기반 모듈 진행
+
+`packages/shared/src/formula.ts`에 속성 ID 참조 AST, 제한된 문법 파서, 저장된 AST 형식 검증과 계산 함수를 추가했다. 산술·비교·논리·조건/문자열/숫자 함수, 짧은 조건 평가, 0 나누기·형/참조 오류와 입력/노드/중첩/결과 크기 제한을 검증했다. 허용하지 않은 함수·추가 필드·순환 AST는 속성을 읽기 전에 거절한다.
+
+집중 65 Tests, lint·type-check 및 전체 277 Tests가 통과했다. 최초 병렬 검증에서 Realtime `beforeAll`의 10초 초기화 제한을 넘겼으며 해당 6개를 단독 확인한 뒤 `pnpm test --maxWorkers=4`로 전체를 다시 통과했다. Production 코드는 변경하지 않았다.
+
+이 모듈은 아직 Property Schema·UI·Offline 대상 조회·Export/Public/Snapshot 모델에 연결하지 않았다. Migration/Editor Protocol 변경과 기능 배포가 남아 Formula를 완료로 체크하지 않는다. 현재 Production은 Public Sharing 소스 `0b25956`이며 전체 완료 수는 계속 40/148이다.
