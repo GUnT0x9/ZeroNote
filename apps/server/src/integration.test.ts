@@ -1507,3 +1507,32 @@ it("rejects invalid signatures and expired challenges", async () => {
     ).statusCode,
   ).toBe(401);
 });
+
+it("keeps the Beta redemption limit at fifteen attempts for the same IP", async () => {
+  const device = await actor(),
+    codeId = crypto.randomUUID(),
+    code = `ZNB1-${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")}`;
+  await repository.beta.issue(
+    codeId,
+    await sha256Hex(code),
+    new Date(Date.now() + 60000),
+  );
+  try {
+    for (let attempt = 0; attempt < 15; attempt++)
+      expect(
+        (await request("POST", "/v1/beta/redeem", { code }, device.cookie))
+          .statusCode,
+      ).toBe(200);
+    expect(
+      (await request("POST", "/v1/beta/redeem", { code }, device.cookie))
+        .statusCode,
+    ).toBe(429);
+  } finally {
+    await repository.database.execute(
+      sql`DELETE FROM beta_devices WHERE code_id=${codeId}`,
+    );
+    await repository.database.execute(
+      sql`DELETE FROM beta_codes WHERE id=${codeId}`,
+    );
+  }
+});

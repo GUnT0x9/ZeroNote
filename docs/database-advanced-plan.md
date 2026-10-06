@@ -42,3 +42,9 @@ Public Sharing은 게시 범위 안의 Database/Row와 파일만 읽는다. 공�
 전체 329 Tests를 통과했다. 브라우저 검증에서 공유받은 Viewer Page의 파일명 로딩이 멈추는 오류를 확인했다. 서버에 등록된 Page도 Metadata revision 0부터 시작하므로 revision으로 미등록 여부를 판단하던 코드를 생성 Queue 기준으로 수정했다. Viewer의 revision 0 조회와 생성 대기/승인 후 조회를 확인하는 회귀를 포함해 파일 Metadata·접근 범위 10 Tests를 통과했다. 수정 후 실제 브라우저에서 File/Formula/Relation/Rollup 생성, 속성/Row 이름 변경, Offline Reload, Viewer 파일 Preview/권한 차단 및 Snapshot 새 Page 복구 흐름을 통과했다. 추가로 Snapshot 파일명이 현재 파일 조회에 의해 지워지는 Cache 경쟁을 막고, Realtime/Token 실패 시 서버가 확인한 권한 철회·삭제를 로컬 Page에 반영하도록 수정했다. 이 변경의 정상·실패/일시 장애 경로 16 Tests를 통과했다. 최종 lint·type-check·전체 335 Tests가 통과했고, 실제 브라우저에서 추가 공유 수락 → 계산 값 표시 → 권한 철회 → 관계 이름/계산 숨김 → Owner Snapshot 새 Page 복구를 포함한 전체 시나리오도 통과했다(29.6초). 중간 브라우저 실패는 항목 열기 버튼의 접근성 이름과 재로딩 후 이미 닫힌 패널을 닫으려던 테스트 경로를 수정해 해결했다.
 
 Web Production build와 집중 브라우저 검증을 통과했으며, CI 전체 브라우저/Server build/Docker·백업 복원·HTTPS 검증과 기능 배포가 남아 이 4개를 완료로 체크하지 않는다. 현재 Production은 Public Sharing 소스 `0b25956`이며 전체 완료 수는 계속 40/148이다.
+
+## 2026-10-06 CI 요청 분리
+
+첫 기능 CI(`aa76fed`, run 37416255404)는 lint·type-check·전체 335 Tests와 Web/Server build를 통과했고 브라우저 23개 중 22개를 통과했다. 기존 Snapshot 시나리오는 기록 동작에 진입하기 전 Workspace 생성에서 Beta 수락 15회/IP/분 제한에 걸렸다(Trace의 `/v1/beta/redeem` 429). 새 Database 시나리오는 공유 수락·철회와 Snapshot 복구까지 CI에서도 통과했다.
+
+로컬/CI의 독립된 브라우저 시나리오에 문서용 IPv6 요청 주소를 부여하는 공통 Fixture를 추가한다. 실제 HTTPS 검증에서는 이 헤더를 설정하지 않는다. 서버의 제한은 유지하고 같은 IP에서 Beta 수락 재시도 15회 성공, 16회 429를 확인하는 API 회귀를 통과했다. 전체 브라우저 검증을 다시 실행하며 CI 통과 전 배포하지 않는다.
