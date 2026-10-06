@@ -60,3 +60,5 @@ Graph는 현재 Page를 중심으로 열고 한 화면에 최대 200개 Node를 
 ## 2026-10-06 Tag와 source Index 진행
 
 Tag CRDT·Properties 편집·Snapshot 미리보기·복제/Import 보존을 구현했다. Migration 008은 Protocol 4와 source 검색 Index를 추가하며 Commit/Checkpoint transaction에서 Index를 함께 저장한다. 기존 데이터의 초기 Index는 Page lock과 Checkpoint+이후 Update로 생성한다. Relation 대상 이름과 Formula/Rollup 결과는 공통 Index에 보관하지 않는다. 검색 API/새 필터 UI/Graph/추천은 아직 연결하지 않았다. Tag의 CI·배포·실제 HTTPS는 [출시 기록](tags-release.md)에 확인 후 기록하며 그 전에는 전체 완료 수를 늘리지 않는다.
+
+Verified 2026-10-06: Tag와 source Index를 `a09db74`로 배포했다. CI 394 Tests/24 E2E/Docker/512MiB/8개 Migration/16개 Table 암호화 복원과 실제 HTTPS 3개 흐름을 확인했다. [출시 기록](tags-release.md)에 따라 45/148 완료·103개 남음이다. 다음 단계는 검색 API와 로컬/서버 결과 병합, 필터/속성 조건 UI, Graph/추천/연결 상태다.

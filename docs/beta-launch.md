@@ -107,3 +107,5 @@ Render Free의 512MiB 제한에서 첫 배포가 실패했다. 원인은 Runtime
 ### 2026-10-06 Public Sharing 배포
 
 현재 앱 소스는 `0b25956`이다. CI 통과와 암호화 Production 백업 후 Render `dep-db24f297lnhs73dil1b0` → Vercel `dpl_C3dsc4kk4tMRWAxDVVsSVygQ4ojf` 순서로 배포했고 Migration 006, Source SHA, Production Alias를 확인했다. 실제 HTTPS Browser 6개 및 4MiB Private/Public 다운로드·Range·새 기기 Recovery·Offline PDF를 통과했다. 보호 링크, 최초 Burn 내용, 선택 Scope, 공개 SEO와 검증/미실행 범위는 [Public Sharing 기록](public-sharing-release.md)을 따른다.
+
+2026-10-06 Page Tags 운영 반영: `a09db74`, Render `dep-db29m26i0phs73ds9ugg`, Vercel `dpl_3KJzvYVinwygVggB2cesAZkhAsMy`. Migration 8개와 Protocol 1–4/source Index 누락 0건, CI 394 Tests/24 E2E/Docker/512MiB/암호화 복원 및 실제 HTTPS 3개 흐름을 확인했다. [Tag 출시 기록](tags-release.md). 전체 45/148 완료·103개 계속 개발.

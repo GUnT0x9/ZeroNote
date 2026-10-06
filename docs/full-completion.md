@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 44개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md)에 남긴다. 나머지 104개는 계속 구현 대상이다. File Property/Formula/Relation/Rollup은 343 Tests·23 E2E·Docker·암호화 백업 복원과 실제 HTTPS 협업/권한 철회/Offline/Snapshot/Recovery를 확인하고 배포했다. 다음 9개 기능은 [Knowledge·Search·Tags 기준](knowledge-search-plan.md)을 따른다. 검색 파서 기반 작업은 아직 사용자 기능 완료로 집계하지 않는다.
+현재 45개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md)에 남긴다. 나머지 103개는 계속 구현 대상이다. Tag는 394 Tests·24 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS 협업/Offline/Viewer/Snapshot/복제/로컬 검색을 확인하고 배포했다. 다음 검색·Knowledge 8개 기능은 [Knowledge·Search·Tags 기준](knowledge-search-plan.md)을 따른다. 검색 파서와 source Index 기반은 사용자 검색 기능 완료로 집계하지 않는다.
 
 ## 항목별 완료 증거
 
@@ -46,7 +46,7 @@
 | 25   | 문서 연결 / Knowledge    | Knowledge Graph                       | 미구현                                                                                                         |
 | 26   | 문서 연결 / Knowledge    | Related Pages 자동 추천               | 미구현                                                                                                         |
 | 27   | 문서 연결 / Knowledge    | Broken Link 탐지                      | 미구현                                                                                                         |
-| 28   | 문서 연결 / Knowledge    | Tag 시스템                            | 미구현                                                                                                         |
+| 28   | 문서 연결 / Knowledge    | Tag 시스템                            | 구현·배포 / Page Tags·두 기기/Offline/Viewer/Snapshot/복제·tags-release.md                                     |
 | 29   | Task / Project           | Subtask                               | 미구현                                                                                                         |
 | 30   | Task / Project           | Task Dependency                       | 미구현                                                                                                         |
 | 31   | Task / Project           | Task Label / Tag                      | 미구현                                                                                                         |

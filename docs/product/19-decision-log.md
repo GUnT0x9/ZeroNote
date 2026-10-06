@@ -113,3 +113,5 @@ Verified 2026-10-06: `f7b4c00` CI 343 Tests/23 E2E/Docker/512MiB/암호화 복�
 Confirmed: 남은 전체 체크리스트의 Tag와 검색·Knowledge 요구를 구현·배포한다. Adopted: Tag는 Page의 Yjs Map에 표시 이름과 NFKC/공백/대소문자를 정리한 Key로 저장한다. Page의 권한을 상속하며 기본 한도는 30개·각 64자다. 동시 추가로 한도를 초과하면 로컬 목록을 유지하고 제거 후 다시 저장할 수 있다. 복제/Export/Import/Snapshot에 포함하고 마지막 제거 이후에도 Editor Protocol 4 경계를 유지한다.
 
 Migration 008의 source Index는 Commit·Checkpoint와 같은 transaction에 저장하며 과거 삭제 Row/속성과 요청별 Relation 이름·Formula/Rollup 결과를 보관하지 않는다. Ready 전에 Page lock으로 기존 committed state를 읽어 한 번 생성한다. 접근 가능한 문서 목록에는 보이지 않는 부모의 Trash 상태만 파생 boolean으로 전달하며 부모 내용을 노출하지 않는다. 기존 로컬 검색/탐색에서도 제외한다. 검색 API/UI·Graph·추천은 별도 미완료 항목으로 유지하고 실제 배포 검증 뒤 완료 수를 기록한다.
+
+Verified 2026-10-06: `a09db74`의 CI 394 Tests/24 E2E/Docker/512MiB/8개 Migration/암호화 복원, Render → Vercel의 같은 소스 배포와 실제 HTTPS Tag/협업/Recovery/Database를 확인했다. [Tag 출시 기록](../tags-release.md)에 따라 45/148 완료·103개 계속 개발이다.

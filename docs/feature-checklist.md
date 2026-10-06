@@ -107,7 +107,7 @@
 - [ ] Knowledge Graph
 - [ ] Related Pages 자동 추천
 - [ ] Broken Link 탐지
-- [ ] Tag 시스템
+- [x] Tag 시스템
 
 ---
 
