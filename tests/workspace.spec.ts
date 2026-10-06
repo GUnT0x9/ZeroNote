@@ -121,7 +121,7 @@ test("Global Search finds unopened Pages and Rows with filters, operators, fuzzy
     await input.fill('"server-only-needle"');
     await dialog.getByRole("button", { name: /^Search zebra/ }).click();
     await expect(fresh.getByLabel("Page 제목")).toHaveValue("Search zebra");
-    expect(await cached()).toBe(true);
+    await expect.poll(cached).toBe(true);
     await freshContext.setOffline(true);
     await fresh
       .getByRole("textbox", { name: "문서 본문" })
