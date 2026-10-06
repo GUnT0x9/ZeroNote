@@ -52,3 +52,5 @@ Web Production build와 집중 브라우저 검증을 통과했으며, CI 전체
 로컬 전체 브라우저 검증에서는 22개가 통과하고 새 Database 시나리오의 권한 철회 갱신이 실패했다. Hocuspocus의 문서 단위 Close는 인증 실패 이벤트를 발생시키지 않는 경로가 있어 Close에서도 REST로 접근 권한을 확인한다. 서버가 403/410을 확인한 경우만 접근을 제외하며 미전송 수정은 보존한다. 정상 응답·503·Offline 종료에서는 권한을 추측해서 제거하지 않는다. 이 변경과 테스트 요청 예산의 정상·경계 사례를 검증한 뒤 CI를 다시 실행한다.
 
 Close 처리와 요청 예산의 집중 12 Tests 및 lint·type-check를 통과했다. 전체 Unit/Server·브라우저·CI와 Production 검증을 이어가며 완료 수는 40/148로 유지한다.
+
+CI `5359bb3` (37418972903)에서 전체 343 Tests와 Web/Server build가 통과했으나 Playwright가 새 Vitest Helper 테스트도 수집해 실행 시작 전에 실패했다. 브라우저 수집 범위를 기존 `*.spec.ts`로 명시하고 Unit 테스트는 Vitest에서 계속 검증한다. 기능 실패와 분리해 이 설정 수정 후 전체 브라우저/CI를 다시 실행한다.

@@ -4,6 +4,7 @@ if (externalOrigin && new URL(externalOrigin).origin !== externalOrigin)
   throw new Error("PLAYWRIGHT_BASE_URL must be an origin without a path");
 export default defineConfig({
   testDir: "./tests",
+  testMatch: "**/*.spec.ts",
   webServer: externalOrigin
     ? undefined
     : {
