@@ -19,6 +19,7 @@ import { Repository } from "./database/repository";
 import { env } from "./env";
 import { AccessService } from "./services";
 let application: Awaited<ReturnType<typeof createApp>>, origin: string;
+const TEST_SERVER_STARTUP_TIMEOUT_MS = 30_000;
 const workspaces: string[] = [],
   providers: HocuspocusProvider[] = [],
   sockets: HocuspocusProviderWebsocket[] = [],
@@ -204,7 +205,7 @@ async function serverTitle(pageId: string) {
 beforeAll(async () => {
   application = await createApp(new Repository(env.DATABASE_URL), false);
   origin = await application.app.listen({ port: 0, host: "127.0.0.1" });
-});
+}, TEST_SERVER_STARTUP_TIMEOUT_MS);
 afterEach(() => {
   vi.restoreAllMocks();
   for (const provider of providers.splice(0)) provider.destroy();
