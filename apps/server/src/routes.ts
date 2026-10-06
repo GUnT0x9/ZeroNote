@@ -37,6 +37,8 @@ import { registerAttachmentRoutes } from "./attachment-routes";
 
 import { PublicShareService } from "./public-share-service";
 import { registerPublicShareRoutes } from "./public-share-routes";
+import { SearchService } from "./search-service";
+import { registerSearchRoutes } from "./search-routes";
 
 type Handler = (
   request: FastifyRequest,
@@ -58,6 +60,7 @@ export function registerRoutes(
     access = new AccessService(repository),
     workspaces = new WorkspaceService(repository, access),
     snapshots = new SnapshotService(repository, access);
+  registerSearchRoutes(app, auth, new SearchService(repository, access));
   registerAttachmentRoutes(
     app,
     auth,

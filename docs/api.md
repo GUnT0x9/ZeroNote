@@ -11,6 +11,8 @@ Mutation에는 정확한 `WEB_ORIGIN`의 `Origin` Header가 필요하다. 인증
 | POST   | `/auth/challenge`                   | `{deviceId}` → `{id,nonce}`                                  | 공개/Rate Limit                  |
 | POST   | `/auth/verify`                      | `{challengeId,signature}` → Cookie                           | 서명                             |
 | GET    | `/metadata`                         | 접근 가능한 Workspace/Page/Identity/Role                     | Device                           |
+| POST   | `/search`                           | 공유 Search AST → Page/Row 결과·Snippet·오타 표시            | Device/접근 가능한 범위          |
+| GET    | `/pages/:id/search-properties`      | 선택한 Database의 활성 Property 정의                         | Viewer 이상/삭제 제외            |
 | POST   | `/workspaces`                       | `{id,name,ownerIdentityId,createdAt,recoveryHash}`           | Device                           |
 | POST   | `/workspaces/recover`               | `{key}` → Workspace                                          | Device/Rate Limit                |
 | POST   | `/workspaces/:id/recovery`          | `{key}` → 이전 Key 교체                                      | Owner/Online                     |
@@ -101,3 +103,13 @@ Owner 전용 `GET/POST /v1/workspaces/:id/public-shares`, `DELETE /v1/workspaces
 `GET /v1/public/:id/content[/:key]`는 불투명 공개 Page Key·제목·안전한 읽기 HTML과 선택한 공개 목록, Canonical을 제공한다. CRDT Update/삭제된 과거 내용/Comments/멤버 Identity/Recovery/비공개 Page ID나 자동 제목을 포함하지 않는다. Database는 모든 활성 Row/일반 Property/Row 본문을 게시하며 Person Property는 Identity 노출을 피하기 위해 제외한다. Workspace의 새 Page나 하위 Page는 자동 게시하지 않는다. Parent Trash도 검사한다.
 
 `GET /v1/public/:id/files/:fileId`는 활성 공개 Page에서 현재 참조하는 파일, 또는 승인된 Burn Session에서 고정한 파일만 제공한다. 다른 Page의 파일·미참조·삭제·영구 정리 파일은 거절하며 Range/Download/보안 Header는 기존 파일 응답과 동일하다. Burn Session의 유효한 참조 파일은 Storage 정리에서 보호하며 링크 해제/만료 후 정리할 수 있다. 모든 API 응답은 no-store, 모든 쓰기는 고정된 Web Origin 검사 대상이다. 익명 공유는 개인 REST/Realtime 접근 권한을 부여하지 않는다.
+
+## 전체 검색
+
+`POST /v1/search`의 공유 `SearchRequestSchema`: `{query:{clauses:[...]}, workspaceId:UUID|null, limit:1..50=30, overlays:[]=기본}`. Overlay는 `{pageId,projection:KnowledgeProjection,updatedAt:ISO}` 최대 32개이며 전송 중인 로컬 편집을 이번 읽기에만 적용한다. 현재 요청자에게 편집 권한이 없는 source는 사용하지 않는다. 요청 body는 기존 10MiB transport 제한을 따른다. 어떠한 검색 요청도 CRDT·Index·Checkpoint를 수정하지 않는다.
+
+응답 `SearchResponseSchema`: `{hits:[{pageId,workspaceId,rowId:null|UUID,kind,title,pageTitle,workspaceName,snippet,updatedAt,tags,score,fuzzy}],searchedPages,unavailableProperties}`. 제목을 우선하며 정확한 결과가 오타 후보보다 앞선다. `searchedPages`는 Metadata 필터를 통과한 source 수다. 미해결 속성 값은 부정 조건에서도 결과에 포함하지 않는다. `GET /v1/pages/:id/search-properties`는 본문이나 파일 bytes를 반환하지 않는다.
+
+Text는 Unicode NFKC/소문자/공백으로 정리한다. AND 조건, 따옴표·제외어, `type:page|database`, `tag:이름`, `workspace:UUID|"이름"`, `database:UUID`, `after:YYYY-MM-DD`, `before:YYYY-MM-DD`, `prop:속성ID|이름:연산자:값`을 지원한다. before는 UTC 수정일 미만, after는 해당 날짜 이상이다. Property는 contains/equals/not_equals/empty/not_empty/gt/gte/lt/lte를 Table과 같은 규칙으로 처리한다. 빈 값 조건에는 값을 적지 않으며 숫자/boolean을 typed 값으로 해석하고 따옴표 값은 문자열로 유지한다.
+
+8 Page batch와 접근 가능 같은 Workspace의 Database 의존성을 사용하며 source 16MiB를 넘으면 422로 검색 범위를 줄이도록 안내한다. 동시 Search 2개를 넘으면 429를 반환한다. 인증·Origin·Trash·철회 검사는 기존 REST와 동일하다. Search POST는 읽기 전용이므로 일시적인 502/503/504에만 제한된 재시도를 허용한다. 취소된 요청은 재시도하지 않는다. [출시/검증 기록](search-release.md).

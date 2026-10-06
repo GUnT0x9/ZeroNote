@@ -115,3 +115,11 @@ Confirmed: 남은 전체 체크리스트의 Tag와 검색·Knowledge 요구를 �
 Migration 008의 source Index는 Commit·Checkpoint와 같은 transaction에 저장하며 과거 삭제 Row/속성과 요청별 Relation 이름·Formula/Rollup 결과를 보관하지 않는다. Ready 전에 Page lock으로 기존 committed state를 읽어 한 번 생성한다. 접근 가능한 문서 목록에는 보이지 않는 부모의 Trash 상태만 파생 boolean으로 전달하며 부모 내용을 노출하지 않는다. 기존 로컬 검색/탐색에서도 제외한다. 검색 API/UI·Graph·추천은 별도 미완료 항목으로 유지하고 실제 배포 검증 뒤 완료 수를 기록한다.
 
 Verified 2026-10-06: `a09db74`의 CI 394 Tests/24 E2E/Docker/512MiB/8개 Migration/암호화 복원, Render → Vercel의 같은 소스 배포와 실제 HTTPS Tag/협업/Recovery/Database를 확인했다. [Tag 출시 기록](../tags-release.md)에 따라 45/148 완료·103개 계속 개발이다.
+
+### DEC-047 — 전체 검색과 일시적인 Local source overlay
+
+Confirmed: Global Search·필터/속성·오타·연산자를 배포하고 Offline 변경을 보존한다. Adopted: 같은 공유 matcher를 서버의 committed source Index와 기기의 저장된 문서에 사용한다. 첫 기본 범위는 현재 Workspace이며 전체 범위를 선택할 수 있다. 서버 검색은 전체 문서 본문을 기기로 내려받지 않고 결과를 반환한다. 본문은 열 때 저장하고 Offline 검색 범위를 표시한다.
+
+검색 중 미전송 source는 최대 32개 overlay로 요청 안에서만 적용한다. 요청자의 편집 권한을 확인하며 Index/CRDT를 수정하지 않는다. Computed 값·Relation/File/Person 이름은 요청자의 접근 가능한 같은 Workspace 범위로 읽는다. clean 로컬 결과로 서버 non-match를 다시 추가하지 않으며 아직 등록 대기 중인 새 Page는 로컬로 포함한다. 문법·UI 조건은 공유 AST로 검증하고 날짜 필터는 UTC 수정일(after 이상/before 미만)로 고정한다. 오타 비교는 짧은 문자 단어의 한 번 편집만 허용하며 정확/구문/제외어/숫자의 의미를 변경하지 않는다.
+
+검색은 8 Page batch·source 16MiB·동시 2개로 제한하고 범위 축소 오류와 로컬 대체 결과를 표시한다. 이전 요청은 취소하고 Search POST에만 읽기 재시도를 허용한다. [검증/배포 기록](../search-release.md); Production 확인 전에는 완료 수를 올리지 않는다.

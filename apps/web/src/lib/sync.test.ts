@@ -4,6 +4,7 @@ import { database } from "./database";
 import { api } from "./api";
 import { synchronize } from "./sync";
 import { useUiStore } from "./ui-store";
+import { cacheRemoteDocument } from "./documents";
 
 vi.mock("./api", () => ({
   authenticate: vi.fn(async () => undefined),
@@ -38,6 +39,41 @@ it("finishes one requested sync without idle polling", async () => {
     "/storage",
   ]);
   expect(useUiStore.getState().syncState).toBe("online");
+});
+it("syncs accessible metadata without downloading every unopened document body", async () => {
+  const id = crypto.randomUUID(),
+    workspace = {
+      id,
+      name: "Many Pages",
+      ownerIdentityId: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+  const pageId = crypto.randomUUID(),
+    page = {
+      id: pageId,
+      workspaceId: id,
+      parentId: null,
+      kind: "document",
+      title: "Not opened",
+      revision: 0,
+      deletedAt: null,
+      createdAt: workspace.createdAt,
+      isInbox: false,
+    };
+  vi.mocked(api).mockImplementation(async (path) =>
+    path === "/metadata"
+      ? {
+          ...emptyMetadata,
+          workspaces: [workspace],
+          pages: [page],
+          roles: { [pageId]: "owner" },
+        }
+      : { warning: false },
+  );
+  await synchronize();
+  expect((await database.pages.get(pageId))?.title).toBe("Not opened");
+  expect(await database.documents.get(pageId)).toBeUndefined();
+  expect(cacheRemoteDocument).not.toHaveBeenCalled();
 });
 
 it("refetches grants accepted during an older sync before resolving callers", async () => {

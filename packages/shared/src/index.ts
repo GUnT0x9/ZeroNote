@@ -484,3 +484,5 @@ export * from "./database-computation";
 export * from "./search-query";
 export * from "./page-tags";
 export * from "./knowledge-projection";
+export * from "./search-results";
+export * from "./search-engine";

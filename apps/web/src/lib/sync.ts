@@ -13,7 +13,6 @@ import { api, ApiError, authenticate } from "./api";
 import { useUiStore } from "./ui-store";
 import { syncAttachments } from "./attachments";
 import {
-  cacheRemoteDocument,
   setDocumentSyncRequest,
   getDocumentSession,
   disconnectDocument,
@@ -105,19 +104,6 @@ async function runSync(): Promise<void> {
     useUiStore
       .getState()
       .patch({ syncState: navigator.onLine ? "online" : "offline" });
-    const pages = await database.pages
-      .filter((page) => !page.accessLost && !page.deletedAt)
-      .toArray();
-    for (const page of pages) {
-      if (await database.documents.get(page.id)) continue;
-      try {
-        await cacheRemoteDocument(page);
-      } catch (error) {
-        if (error instanceof ApiError && [403, 410].includes(error.status))
-          continue;
-        throw error;
-      }
-    }
   } catch (error) {
     useUiStore.getState().patch({
       syncState: navigator.onLine ? "error" : "offline",

@@ -11,6 +11,162 @@ import {
   strToU8,
 } from "../apps/web/node_modules/fflate";
 const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
+test("Global Search finds unopened Pages and Rows with filters, operators, fuzzy matches and unsent local edits", async ({
+  page,
+  browser,
+}) => {
+  const name = `Search ${Date.now()}`,
+    key = await createWorkspace(page, name),
+    freshContext = await browser.newContext(),
+    fresh = await freshContext.newPage();
+  try {
+    await page.getByLabel("Page 제목").fill("Initial page");
+    await page
+      .getByRole("button", { name: "새 Page 만들기", exact: true })
+      .click();
+    await page.getByRole("button", { name: "새 문서", exact: true }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("제목 없음");
+    await page.getByLabel("Page 제목").fill("Search zebra");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("server-only-needle <literal> design notes");
+    const pageId = new URL(page.url()).searchParams.get("page")!;
+    await openPageTool(page, "Properties");
+    await page.getByLabel("Tag 추가").fill("Search");
+    await page.getByLabel("Tag 추가").press("Enter");
+    await page.getByRole("button", { name: "Context Panel 닫기" }).click();
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "To-Do", exact: true }).click();
+    await page.getByRole("button", { name: "새 Task", exact: true }).click();
+    await page.getByLabel("새 Task 제목").fill("Release Search");
+    await page.getByRole("button", { name: "추가", exact: true }).click();
+    await page.getByLabel("Release Search Status").selectOption("in_progress");
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    const databaseId = new URL(page.url()).searchParams.get("page")!;
+    await fresh.goto("/");
+    await fresh.getByRole("button", { name: "기존 Workspace 복구" }).click();
+    await fresh.getByLabel("Recovery Key", { exact: true }).fill(key);
+    await fresh
+      .getByRole("dialog")
+      .getByRole("button", { name: "Workspace 복구", exact: true })
+      .click();
+    await expect(fresh.getByLabel("Page 제목")).toHaveValue("Initial page");
+    const cached = () =>
+      fresh.evaluate(async (id) => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open("zeronote-alpha");
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        try {
+          return await new Promise<boolean>((resolve, reject) => {
+            const request = db
+              .transaction("documents")
+              .objectStore("documents")
+              .get(id);
+            request.onsuccess = () => resolve(!!request.result);
+            request.onerror = () => reject(request.error);
+          });
+        } finally {
+          db.close();
+        }
+      }, pageId);
+    expect(await cached()).toBe(false);
+    await fresh.keyboard.press("Control+k");
+    const dialog = fresh.getByRole("dialog", { name: "Search", exact: true }),
+      input = dialog.getByLabel("Workspace 검색");
+    await input.fill('"server-only-needle"');
+    await expect(
+      dialog.getByText("접근 가능한 전체 문서", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: /^Search zebra/ }),
+    ).toBeVisible();
+    expect(await cached()).toBe(false);
+    await input.fill("zebar");
+    await expect(dialog.getByText("오타 후보", { exact: true })).toBeVisible();
+    await input.fill('"unclosed');
+    await expect(dialog.getByRole("alert")).toContainText("따옴표");
+    await input.fill('"server-only-needle"');
+    await dialog.getByRole("button", { name: "필터", exact: true }).click();
+    await dialog.getByLabel("검색 Tag").fill("not-this-tag");
+    await expect(dialog.locator(".search-results > button")).toHaveCount(0);
+    await dialog.getByLabel("검색 Tag").fill("search");
+    await expect(
+      dialog.getByRole("button", { name: /^Search zebra/ }),
+    ).toBeVisible();
+    await dialog
+      .getByRole("button", { name: "필터 초기화", exact: true })
+      .click();
+    await input.fill("Release");
+    await dialog.getByLabel("검색 Database").selectOption(databaseId);
+    await dialog
+      .getByLabel("검색 속성", { exact: true })
+      .selectOption("status");
+    await dialog.getByLabel("검색 속성 값").selectOption("in_progress");
+    await dialog
+      .getByRole("button", { name: "조건 추가", exact: true })
+      .click();
+    await expect(
+      dialog.getByRole("button", { name: /^Release Search/ }),
+    ).toBeVisible();
+    await dialog.getByRole("button", { name: /^Release Search/ }).click();
+    await expect(fresh.getByLabel("Page 제목")).toHaveValue("Release Search");
+    expect(new URL(fresh.url()).searchParams.get("task")).toBeTruthy();
+    await fresh.keyboard.press("Control+k");
+    await input.fill('"server-only-needle"');
+    await dialog.getByRole("button", { name: /^Search zebra/ }).click();
+    await expect(fresh.getByLabel("Page 제목")).toHaveValue("Search zebra");
+    expect(await cached()).toBe(true);
+    await freshContext.setOffline(true);
+    await fresh
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("replacement-local-token");
+    await fresh.keyboard.press("Control+k");
+    await input.fill('"server-only-needle"');
+    await expect(dialog.locator(".search-results > button")).toHaveCount(0);
+    await input.fill('"replacement-local-token"');
+    await expect(
+      dialog.getByRole("button", { name: /^Search zebra/ }),
+    ).toBeVisible();
+    await fresh.route("**/v1/documents/*/commit", (route) =>
+      route.fulfill({
+        status: 507,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Test keeps unsent edits" }),
+      }),
+    );
+    await freshContext.setOffline(false);
+    await expect(
+      dialog.getByText("접근 가능한 전체 문서", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: /^Search zebra/ }),
+    ).toBeVisible();
+    await input.fill('"server-only-needle"');
+    await expect(
+      dialog.getByText("접근 가능한 전체 문서", { exact: true }),
+    ).toBeVisible();
+    await expect(dialog.locator(".search-results > button")).toHaveCount(0);
+    await fresh.keyboard.press("Escape");
+    await fresh.unroute("**/v1/documents/*/commit");
+    await fresh.reload();
+    await expect(
+      fresh.getByRole("textbox", { name: "문서 본문" }),
+    ).toContainText("replacement-local-token");
+    await expect(
+      fresh.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await freshContext.setOffline(false);
+    await freshContext.close();
+    await cleanup(page, name);
+  }
+});
 test("Portable exports download Markdown, safe HTML, ZIP and a Korean PDF that renders", async ({
   page,
 }) => {

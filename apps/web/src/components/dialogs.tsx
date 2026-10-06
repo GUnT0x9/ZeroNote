@@ -33,7 +33,10 @@ import {
   downloadJson,
   createLocalPage,
 } from "@/lib/workspace";
-import { availablePages, searchLocalPages } from "@/lib/search";
+import { availablePages } from "@/lib/search";
+import { SearchFilters } from "./search-filters";
+import { buildSearchQuery, EMPTY_SEARCH_FILTERS } from "@/lib/advanced-search";
+import { useSearch } from "@/lib/use-search";
 import { deleteLocalWorkspace } from "@/lib/workspace";
 import { api, authenticate, getDevice } from "@/lib/api";
 import { requestSync, synchronize } from "@/lib/sync";
@@ -266,6 +269,11 @@ export function SearchDialog({
     [active, setActive] = useState(0),
     [recent, setRecent] = useState<string[]>([]),
     [busy, setBusy] = useState(false),
+    [filters, setFilters] = useState(() => ({
+      ...EMPTY_SEARCH_FILTERS,
+      workspaceId: ui.workspaceId ?? "",
+    })),
+    [filtersOpen, setFiltersOpen] = useState(false),
     input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     void database.preferences
@@ -303,13 +311,25 @@ export function SearchDialog({
           recent,
         )
       : [];
-  const results = useMemo(
-    () =>
-      commandMode
-        ? []
-        : searchLocalPages(data.pages, data.documents, navigation ?? query),
-    [query, commandMode, navigation, data.pages, data.documents],
-  );
+  const parsed = useMemo(() => {
+    if (commandMode) return { query: null, error: null };
+    try {
+      return {
+        query: buildSearchQuery(navigation ?? query, filters),
+        error: null,
+      };
+    } catch (problem) {
+      return {
+        query: null,
+        error:
+          problem instanceof Error && problem.name === "SearchSyntaxError"
+            ? problem.message
+            : "검색 조건을 확인해주세요. 최대 32개의 조건을 사용할 수 있습니다.",
+      };
+    }
+  }, [query, commandMode, navigation, filters]);
+  const search = useSearch(data, parsed.query),
+    results = search.hits;
   const runCommand = async (command: WorkspaceCommand) => {
     if (busy) return;
     setBusy(true);
@@ -383,7 +403,7 @@ export function SearchDialog({
     const result = results[index];
     if (result) {
       const open = () => {
-        ui.select(result.page.workspaceId, result.page.id);
+        ui.select(result.workspaceId, result.pageId, result.rowId);
         onClose();
       };
       if (navigation !== null) {
@@ -432,6 +452,52 @@ export function SearchDialog({
           }}
         />
       </div>
+      {!commandMode && (
+        <>
+          <div className="search-tools">
+            <button
+              className="text-button"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              필터
+            </button>
+            <span className="search-scope" role="status">
+              {search.server
+                ? "접근 가능한 전체 문서"
+                : search.loading
+                  ? "전체 검색 중 · 이 기기 결과 표시"
+                  : `이 기기의 본문 ${search.cachedPages}개와 Page 제목`}
+            </span>
+          </div>
+          {filtersOpen && (
+            <SearchFilters
+              data={data}
+              value={filters}
+              onChange={(next) => {
+                setFilters(next);
+                setActive(0);
+              }}
+            />
+          )}
+          {parsed.error && (
+            <p className="inline-warning" role="alert">
+              {parsed.error}
+            </p>
+          )}
+          {search.error && (
+            <p className="search-scope" role="status">
+              전체 검색을 완료하지 못했습니다. 이 기기의 결과를 표시합니다.{" "}
+              {search.error}
+            </p>
+          )}
+          {!!search.unavailableProperties && (
+            <p className="search-scope">
+              읽거나 계산할 수 없는 속성은 결과에서 제외했습니다.
+            </p>
+          )}
+        </>
+      )}
       <div className="search-results">
         <div className="menu-caption">
           {commandMode
@@ -455,25 +521,27 @@ export function SearchDialog({
             </span>
           </button>
         ))}
-        {results.map(({ page, record }, index) => (
+        {results.map((hit, index) => (
           <button
             className={active === index ? "selected" : ""}
-            key={page.id}
+            key={`${hit.pageId}:${hit.rowId ?? ""}`}
             onClick={() => select(index)}
           >
-            {page.kind === "database" ? (
+            {hit.kind === "database" ? (
               <Columns3 size={17} />
             ) : (
               <FileText size={17} />
             )}
             <span>
-              <strong>{page.title}</strong>
+              <strong>
+                {hit.title}
+                {hit.fuzzy && <em className="search-fuzzy">오타 후보</em>}
+              </strong>
               <small>
-                {record?.text.replace(page.title, "").trim().slice(0, 100) ||
-                  data.workspaces.find(
-                    (workspace) => workspace.id === page.workspaceId,
-                  )?.name}
+                {hit.rowId ? `${hit.pageTitle} · ` : ""}
+                {hit.workspaceName}
               </small>
+              {!!query && <small>{hit.snippet}</small>}
             </span>
             <ArrowUpRight size={15} />
           </button>
@@ -498,6 +566,19 @@ export function SearchDialog({
         <span>↑ ↓ 선택</span>
         <span>Enter 열기</span>
         <span>Esc 닫기</span>
+        {!commandMode && (
+          <details className="search-operator-help">
+            <summary>검색 문법</summary>
+            <p>
+              "정확한 구문" -제외어 type:page tag:설계 workspace:"이름"
+              after:2026-10-01 before:2026-11-01 prop:Points:gte:5
+            </p>
+            <p>
+              날짜는 UTC 수정일 기준입니다. after는 해당 날짜 이상, before는
+              해당 날짜 미만입니다. 속성 조건은 Row를 검색합니다.
+            </p>
+          </details>
+        )}
       </div>
     </Dialog>
   );

@@ -33,6 +33,9 @@ import {
   removePageTag,
   getPageTags,
   type Metadata,
+  parseSearchQuery,
+  getKnowledgeProjection,
+  SearchResponseSchema,
 } from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
@@ -175,6 +178,329 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const id of created) await repository.deleteWorkspace(id);
   await app.close();
+});
+it("searches committed unopened Pages, preserves temporary edits without writes and filters revoked/Trashed scope", async () => {
+  const owner = await actor(),
+    viewer = await actor(),
+    outsider = await actor(),
+    ws = await workspace(owner);
+  const shared = await page(owner, ws.id),
+    privatePage = await page(owner, ws.id),
+    doc = new Y.Doc();
+  doc.getText("title").insert(0, "Published note");
+  const paragraph = new Y.XmlElement("paragraph"),
+    text = new Y.XmlText();
+  paragraph.insert(0, [text]);
+  text.insert(0, "unopened-search-body <literal>");
+  doc.getXmlFragment("content").insert(0, [paragraph]);
+  setPageTag(doc, "Search");
+  for (const target of [shared, privatePage])
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/documents/${target.id}/commit`,
+          {
+            operationId: crypto.randomUUID(),
+            update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+  const invitation = await invite(owner, shared.id, "viewer");
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/invites/${invitation.id}/redeem`,
+        { secret: invitation.secret },
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  const search = async (
+    cookie: string,
+    query: string,
+    overlays: unknown[] = [],
+  ) => {
+    const response = await request(
+      "POST",
+      "/v1/search",
+      { query: parseSearchQuery(query), workspaceId: null, overlays },
+      cookie,
+    );
+    expect(response.statusCode).toBe(200);
+    return SearchResponseSchema.parse(response.json());
+  };
+  expect(
+    (await search(viewer.cookie, '"unopened-search-body" tag:search')).hits.map(
+      (hit) => hit.pageId,
+    ),
+  ).toEqual([shared.id]);
+  expect((await search(outsider.cookie, "unopened-search-body")).hits).toEqual(
+    [],
+  );
+  const overlay = {
+    pageId: shared.id,
+    updatedAt: new Date().toISOString(),
+    projection: { ...getKnowledgeProjection(doc), body: "replacement-token" },
+  };
+  expect(
+    (await search(owner.cookie, '"unopened-search-body"', [overlay])).hits.map(
+      (hit) => hit.pageId,
+    ),
+  ).toEqual([privatePage.id]);
+  expect(
+    (await search(owner.cookie, '"replacement-token"', [overlay])).hits.map(
+      (hit) => hit.pageId,
+    ),
+  ).toEqual([shared.id]);
+  expect(
+    (await repository.search.list([shared.id]))[0]?.projection.body,
+  ).toContain("unopened-search-body");
+  expect(
+    (await search(viewer.cookie, '"replacement-token"', [overlay])).hits,
+  ).toEqual([]);
+  expect(
+    (
+      await search(owner.cookie, '"replacement-token"', [
+        { ...overlay, pageId: privatePage.id },
+        { ...overlay, pageId: crypto.randomUUID() },
+      ])
+    ).hits.map((hit) => hit.pageId),
+  ).toEqual([privatePage.id]);
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/search",
+        {
+          query: {
+            clauses: [
+              {
+                kind: "filter",
+                field: "before",
+                value: "2026-02-30",
+                excluded: false,
+              },
+            ],
+          },
+          workspaceId: null,
+        },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(400);
+  expect(
+    (
+      await request("POST", "/v1/search", {
+        query: { clauses: [] },
+        workspaceId: null,
+      })
+    ).statusCode,
+  ).toBe(401);
+  expect(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/v1/search",
+        headers: { cookie: owner.cookie, origin: "https://invalid.example" },
+        payload: { query: { clauses: [] }, workspaceId: null },
+      })
+    ).statusCode,
+  ).toBe(403);
+  const grants = (
+    await request(
+      "GET",
+      `/v1/pages/${shared.id}/share`,
+      undefined,
+      owner.cookie,
+    )
+  ).json<{ grants: { id: string }[] }>().grants;
+  expect(
+    (
+      await request(
+        "DELETE",
+        `/v1/pages/${shared.id}/grants/${grants[0]!.id}`,
+        undefined,
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect((await search(viewer.cookie, "unopened-search-body")).hits).toEqual(
+    [],
+  );
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/sync/page",
+        {
+          operationId: crypto.randomUUID(),
+          workspaceId: ws.id,
+          pageId: shared.id,
+          expectedRevision: 0,
+          action: "trash",
+        },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (await search(owner.cookie, '"unopened-search-body"')).hits.map(
+      (hit) => hit.pageId,
+    ),
+  ).toEqual([privatePage.id]);
+  doc.destroy();
+});
+it("searches typed Row properties and computed values only within the requester's Database scope", async () => {
+  const owner = await actor(),
+    viewer = await actor(),
+    ws = await workspace(owner);
+  const createDatabase = async (title: string) => {
+    const id = crypto.randomUUID(),
+      value = {
+        id,
+        workspaceId: ws.id,
+        parentId: null,
+        kind: "database",
+        title,
+        revision: 0,
+        deletedAt: null,
+        createdAt: new Date().toISOString(),
+        isInbox: false,
+      };
+    expect(
+      (
+        await request(
+          "POST",
+          "/v1/sync/page",
+          {
+            operationId: crypto.randomUUID(),
+            workspaceId: ws.id,
+            pageId: id,
+            expectedRevision: 0,
+            action: "create",
+            page: value,
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+    return id;
+  };
+  const targetId = await createDatabase("Target"),
+    sourceId = await createDatabase("Source"),
+    target = new Y.Doc(),
+    source = new Y.Doc();
+  target.getText("title").insert(0, "Target");
+  source.getText("title").insert(0, "Source");
+  const targetRow = createTaskRow(target, "Private linked row"),
+    row = createTaskRow(source, "Visible row"),
+    points = addDatabaseProperty(target, "Points", "number");
+  writeDatabaseValue(target, targetRow, points, 6);
+  const relation = addDatabaseProperty(
+    source,
+    "Linked",
+    "relation",
+    [],
+    crypto.randomUUID(),
+    { relation: { databaseId: targetId } },
+  );
+  writeDatabaseValue(source, row, relation, [targetRow]);
+  addDatabaseProperty(source, "Total", "rollup", [], crypto.randomUUID(), {
+    rollup: {
+      relationPropertyId: relation,
+      targetPropertyId: points,
+      operation: "sum",
+    },
+  });
+  for (const [id, doc] of [
+    [targetId, target],
+    [sourceId, source],
+  ] as const)
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/documents/${id}/commit`,
+          {
+            operationId: crypto.randomUUID(),
+            update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+  const query = (cookie: string, term: string, overlays: unknown[] = []) =>
+    request(
+      "POST",
+      "/v1/search",
+      { query: parseSearchQuery(term), workspaceId: ws.id, overlays },
+      cookie,
+    );
+  expect(
+    (await query(owner.cookie, "prop:Total:equals:6")).json<{
+      hits: { rowId: string }[];
+    }>().hits[0]?.rowId,
+  ).toBe(row);
+  writeDatabaseValue(target, targetRow, points, 11);
+  expect(
+    (
+      await query(owner.cookie, "prop:Total:equals:11", [
+        {
+          pageId: targetId,
+          projection: getKnowledgeProjection(target),
+          updatedAt: new Date().toISOString(),
+        },
+      ])
+    ).json<{ hits: { rowId: string }[] }>().hits[0]?.rowId,
+  ).toBe(row);
+  const invitation = await invite(owner, sourceId, "viewer");
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/invites/${invitation.id}/redeem`,
+        { secret: invitation.secret },
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  for (const term of [
+    "prop:Total:equals:6",
+    "prop:Total:equals:0",
+    "-prop:Total:equals:6",
+    '"Private linked row"',
+  ])
+    expect(
+      (await query(viewer.cookie, term)).json<{ hits: unknown[] }>().hits,
+    ).toEqual([]);
+  expect(
+    (
+      await request(
+        "GET",
+        `/v1/pages/${sourceId}/search-properties`,
+        undefined,
+        viewer.cookie,
+      )
+    )
+      .json<{ name: string }[]>()
+      .some((p) => p.name === "Total"),
+  ).toBe(true);
+  expect(
+    (
+      await request(
+        "GET",
+        `/v1/pages/${targetId}/search-properties`,
+        undefined,
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(403);
+  target.destroy();
+  source.destroy();
 });
 it("enforces the same-IP registration rate limit within an isolated scenario", async () => {
   const keys = await crypto.subtle.generateKey(

@@ -13,13 +13,18 @@ export async function requestJson<T>(
   method = "GET",
   body?: unknown,
   timeout = REQUEST_TIMEOUT_MS,
+  signal?: AbortSignal,
 ): Promise<T> {
   const retryable =
     method === "GET" ||
+    (method === "POST" && path === "/search") ||
     (typeof body === "object" && body !== null && "operationId" in body);
   const attempts = retryable && timeout !== WAKE_TIMEOUT_MS ? 3 : 1;
   for (let attempt = 0; attempt < attempts; attempt++) {
+    signal?.throwIfAborted();
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener("abort", abort, { once: true });
     const timer = setTimeout(() => controller.abort(), timeout);
     try {
       const response = await fetch(`/v1${path}`, {
@@ -53,6 +58,7 @@ export async function requestJson<T>(
       }
       return result as T;
     } catch (error) {
+      signal?.throwIfAborted();
       const failure =
         error instanceof ApiError
           ? error
@@ -70,6 +76,7 @@ export async function requestJson<T>(
         throw failure;
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
     }
   }
   throw new ApiError(503, "서버에 연결할 수 없습니다.");

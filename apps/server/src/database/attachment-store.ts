@@ -25,6 +25,15 @@ export interface AttachmentRecord extends AttachmentMetadata {
 }
 export class AttachmentStore {
   constructor(readonly repository: Repository) {}
+  async searchNames(
+    pageIds: string[],
+  ): Promise<{ id: string; pageId: string; name: string }[]> {
+    if (!pageIds.length) return [];
+    return this.repository
+      .query(sql`SELECT id,page_id AS "pageId",name FROM attachments
+      WHERE deleted_at IS NULL AND purged_at IS NULL AND page_id IN
+      (SELECT value::uuid FROM jsonb_array_elements_text(${JSON.stringify(pageIds)}::jsonb))`);
+  }
   async list(pageId: string, retained = false): Promise<AttachmentMetadata[]> {
     return this.repository.query<AttachmentMetadata>(
       sql`SELECT ${METADATA} FROM attachments WHERE page_id=${pageId} AND (${retained} OR deleted_at IS NULL) AND purged_at IS NULL ORDER BY created_at,id`,

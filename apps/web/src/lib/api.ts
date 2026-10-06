@@ -10,9 +10,10 @@ export async function api<T>(
   path: string,
   method = "GET",
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   try {
-    return await requestJson<T>(path, method, body);
+    return await requestJson<T>(path, method, body, undefined, signal);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401)
       authenticatedUntil = 0;

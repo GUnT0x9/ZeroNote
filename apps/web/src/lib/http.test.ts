@@ -77,3 +77,38 @@ it("bounds cold-start waits to ninety seconds", async () => {
   await vi.advanceTimersByTimeAsync(WAKE_TIMEOUT_MS);
   await pending;
 });
+it("retries read-only Search POSTs while an explicit abort stops retries immediately", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+    .mockResolvedValue(new Response('{"hits":[]}'));
+  vi.stubGlobal("fetch", fetch);
+  expect(
+    await requestJson("/search", "POST", { query: { clauses: [] } }),
+  ).toEqual({ hits: [] });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  const controller = new AbortController();
+  controller.abort();
+  await expect(
+    requestJson("/search", "POST", {}, undefined, controller.signal),
+  ).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+it("cancels an in-flight obsolete query without retrying or converting it to a sync error", async () => {
+  const fetch = vi.fn(
+    (_path, options: RequestInit) =>
+      new Promise((_resolve, reject) =>
+        options.signal?.addEventListener("abort", () =>
+          reject(new Error("aborted")),
+        ),
+      ),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const controller = new AbortController();
+  const result = expect(
+    requestJson("/search", "POST", {}, undefined, controller.signal),
+  ).rejects.toMatchObject({ name: "AbortError" });
+  controller.abort();
+  await result;
+  expect(fetch).toHaveBeenCalledTimes(1);
+});

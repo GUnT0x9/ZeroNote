@@ -1,12 +1,20 @@
 import { z } from "zod";
 import { DatabaseFilterSchema } from "./database-values";
 import { normalizeSearchText } from "./search-normalize";
+import { KnowledgeProjectionSchema } from "./knowledge-projection";
 export { normalizeSearchText } from "./search-normalize";
 
 export const MAX_SEARCH_QUERY_LENGTH = 512;
 export const MAX_SEARCH_CLAUSES = 32;
 export const MAX_SEARCH_TAG_LENGTH = 64;
-const SearchFields = ["type", "tag", "workspace", "before", "after"] as const;
+const SearchFields = [
+  "type",
+  "tag",
+  "workspace",
+  "database",
+  "before",
+  "after",
+] as const;
 export const SearchClauseSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -27,6 +35,7 @@ export const SearchClauseSchema = z.discriminatedUnion("kind", [
     .refine(({ field, value }) => {
       if (!value.trim()) return false;
       if (field === "type") return ["document", "database"].includes(value);
+      if (field === "database") return z.uuid().safeParse(value).success;
       if (field === "before" || field === "after")
         return z.iso.date().safeParse(value).success;
       return field !== "tag" || value.length <= MAX_SEARCH_TAG_LENGTH;
@@ -53,6 +62,19 @@ export const SearchRequestSchema = z
     query: SearchQuerySchema,
     workspaceId: z.uuid().nullable(),
     limit: z.number().int().min(1).max(50).default(30),
+    // Temporary local edits affect this read only; they never update the Index.
+    overlays: z
+      .array(
+        z
+          .object({
+            pageId: z.uuid(),
+            projection: KnowledgeProjectionSchema,
+            updatedAt: z.iso.datetime(),
+          })
+          .strict(),
+      )
+      .max(32)
+      .default([]),
   })
   .strict();
 export type SearchRequest = z.infer<typeof SearchRequestSchema>;
@@ -190,6 +212,11 @@ function clauseFromToken(token: SearchToken): SearchClause {
       "지원하지 않는 검색 연산자입니다. 일반 구문은 따옴표로 묶어주세요.",
     );
   let value = token.parts[1]!.value.trim();
+  if (field.data === "database" && !z.uuid().safeParse(value).success)
+    throw new SearchSyntaxError(
+      token.start,
+      "Database ID가 올바르지 않습니다.",
+    );
   if (field.data === "type") {
     if (!["page", "database"].includes(value))
       throw new SearchSyntaxError(
