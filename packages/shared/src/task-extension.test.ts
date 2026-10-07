@@ -76,6 +76,22 @@ describe("Task relationships and preserved conflicts", () => {
       { rowId: child, targetId: parent, kind: "parent", reason: "missing" },
     ]);
     expect(() => assertTaskExtensions(doc)).not.toThrow();
+    body(doc, parent, "Deleted parent body");
+    const copy = cloneDocumentContent(
+      doc,
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+    );
+    expect(() => assertTaskExtensions(copy)).not.toThrow();
+    expect(copy.getMap<Y.Map<unknown>>("tasks").get(parent)!.toJSON()).toEqual({
+      deleted: true,
+    });
+    expect(copy.getXmlFragment(`task:${parent}`).length).toBe(0);
+    copy
+      .getMap<Y.Map<unknown>>("tasks")
+      .get(child)!
+      .set("parentTaskId", crypto.randomUUID());
+    expect(() => assertTaskExtensions(copy)).toThrow("같은 Database");
     setTaskParent(doc, child, null);
     expect(getTaskRelationIssues(getTaskRows(doc))).toEqual([]);
   });
@@ -148,12 +164,15 @@ describe("Task relationships and preserved conflicts", () => {
     taskEntryMap(a, root, "dependencies").set(ids[0]!, "bad");
     expect(() => assertTaskExtensions(a)).toThrow();
     taskEntryMap(a, root, "dependencies").set(ids[0]!, true);
-    taskEntryMap(a, root, "dependencies").set(crypto.randomUUID(), true);
+    const unknown = crypto.randomUUID();
+    taskEntryMap(a, root, "dependencies").set(unknown, true);
     expect(
       getTaskRows(a).find((row) => row.id === root)?.dependencyIds,
     ).toHaveLength(MAX_TASK_DEPENDENCIES + 1);
     expect(() => assertTaskExtensions(a)).toThrow("한도");
     setTaskDependency(a, root, ids[0]!, false);
+    expect(() => assertTaskExtensions(a)).toThrow("같은 Database");
+    setTaskDependency(a, root, unknown, false);
     expect(() => assertTaskExtensions(a)).not.toThrow();
     expect(() => taskEntryMap(a, "invalid", "labels")).toThrow();
   });

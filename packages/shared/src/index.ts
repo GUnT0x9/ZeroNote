@@ -496,6 +496,23 @@ export function cloneDocumentContent(
       for (const [id, value] of taskEntryMap(source, row.id, key))
         taskEntryMap(target, row.id, key).set(id, structuredClone(value));
   }
+  // Preserve the identity of deleted relationship targets, without copying Trash content.
+  for (const row of getTaskRows(source))
+    for (const id of [
+      ...row.dependencyIds,
+      ...(row.parentTaskId ? [row.parentTaskId] : []),
+    ]) {
+      const original = source.getMap<Y.Map<unknown>>("tasks").get(id);
+      if (
+        original instanceof Y.Map &&
+        original.get("deleted") === true &&
+        !target.getMap("tasks").has(id)
+      ) {
+        const tombstone = new Y.Map<unknown>();
+        tombstone.set("deleted", true);
+        target.getMap<Y.Map<unknown>>("tasks").set(id, tombstone);
+      }
+    }
   for (const template of getTaskTemplates(source))
     copyFragment(`task-template:${template.id}`);
   remapDatabasePageIds(target, new Map([[oldPageId, newPageId]]));

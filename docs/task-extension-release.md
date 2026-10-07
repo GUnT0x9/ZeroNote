@@ -15,15 +15,21 @@
 
 ## CRDT 계약
 
+서버도 알 수 없는 Row ID/다른 Database의 새 참조를 거절한다. Snapshot/복제에서는 활성 Task가 참조하는 삭제된 Row의 ID와 삭제 표시만 보존해 관계를 구분하고 삭제된 Row의 제목·본문·파일은 복사하지 않는다. 새 기본 속성은 `Estimate (분)`으로 표시하여 기존 사용자 정의 `Estimate`와 입력 라벨을 구분한다.
+
 `TaskRow`는 기본값이 있는 `parentTaskId:null`, `estimateMinutes:null`, `dependencyIds:[]`, `labels:[]`를 더한다. 실제 Label/Dependency는 각각 `task-labels:<rowId>`와 `task-dependencies:<rowId>`의 최상위 Map에 연결별로 저장한다. 기존 Row의 첫 동시 편집에서 새 중첩 Map 두 개가 충돌해 한 기기의 연결 전체가 사라지는 일을 피한다. 제목/속성/Row 본문은 기존 원본을 유지한다.
 
 `taskTemplates` Map은 UUID별 정의, `task-template:<id>`는 저장한 독립 XML 본문이다. 정의에는 캡처한 사용자 정의 Property Schema와 값이 포함된다. 삭제는 정의에 표시하고 Template 본문을 제거하며 이미 생성한 Task를 유지한다. 기존 Template 정의는 빈 사용자 정의 속성 기본값으로 읽는다. Source 검색 Projection은 Row Label/관계/Estimate를 반영하고 Template 본문이나 비공개 파일 이름은 검색/공개 원본에 추가하지 않는다.
 
 ## 검증 진행
 
+첫 CI의 lint/type-check/460 Tests/build와 26 E2E는 통과했으나 기존 Custom Property의 `Estimate`와 새 기본 `Estimate` 입력의 중복 라벨이 strict locator에서 발견됐다. 단위가 있는 기본 이름으로 구분하고 해당 Viewer/Snapshot 회귀를 포함한 재검증을 수행한다. 이 실패한 CI 결과로 배포하거나 완료로 표시하지 않는다.
+
 최종 로컬 전체 460 Tests/54 files 통과(143.35초), lint/type-check와 Web/Server build 통과. 동시 실행 시 Beta 초기화 Hook의 10초 timeout으로 6개가 실행되지 않은 첫 결과를 기록하고, 동시 Test Worker를 4개로 제한한 전체 재실행에서 모두 통과했다. Template 보강 집중 27 Tests와 서버 Commit/파일 보호/새 ID Snapshot 복구 3개도 통과했다. 최종 Task Offline 생성/Reload·독립 본문/사용자 정의 값/File 복사·두 기기 Label 병합·Cycle 거절·Board/필터·Snapshot 브라우저(32.7초), 기존 File/Formula/Relation/Rollup·Rename/Offline/권한 철회/Snapshot(26.7초) 통과. Mobile Touch 재확인·CI·Production 배포 검증은 진행 중이다. 실제 Android Chrome/iOS Safari 검증은 미실시다.
 
 ## 변경 파일과 이유
+
+CI 실패 보강 후 최종 로컬 전체 460 Tests/54 files 통과(130.48초), lint/type-check 통과. 새 Task 흐름(26.8초), Mobile Touch(16.5초), 기존 File/Formula/Relation/Rollup(23.8초), 기존 사용자 정의 Estimate의 Viewer/Snapshot(15.4초) 브라우저 4개가 모두 통과했다. 같은 Database에 없는 Parent/Dependency의 서버 거절과 삭제된 부모의 내용 없는 Snapshot 복구/재Commit을 회귀에 추가했다. CI와 실제 배포 검증은 계속 진행한다.
 
 | 파일                                                                                                                                                                                                                 | 변경 이유                                                                       |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |

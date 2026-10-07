@@ -38,7 +38,9 @@ export function TaskSummary({
     });
   return (
     <div className="task-extra-summary">
-      {row.parentTaskId && <span>↳ {parent?.title || "삭제된 상위 Task"}</span>}
+      {row.parentTaskId && (
+        <span>↳ {parent?.title || "찾을 수 없는 상위 Task"}</span>
+      )}
       {!compact &&
         row.labels.map((label) => (
           <span className="task-label" key={label}>
@@ -115,7 +117,7 @@ export function TaskDetails({
             <option value="">없음</option>
             {row.parentTaskId &&
               !rows.some((item) => item.id === row.parentTaskId) && (
-                <option value={row.parentTaskId}>삭제된 상위 Task</option>
+                <option value={row.parentTaskId}>찾을 수 없는 상위 Task</option>
               )}
             {rows
               .filter((item) => item.id !== row.id)
@@ -230,7 +232,7 @@ export function TaskDetails({
                   disabled={!target}
                   onClick={() => open(id)}
                 >
-                  {target?.title || "삭제된 선행 Task"}
+                  {target?.title || "찾을 수 없는 선행 Task"}
                 </button>
                 <span className="muted small">
                   {target
@@ -242,7 +244,7 @@ export function TaskDetails({
                 {editable && (
                   <button
                     className="icon-button"
-                    aria-label={`선행 ${target?.title || "삭제된 Task"} 해제`}
+                    aria-label={`선행 ${target?.title || "찾을 수 없는 Task"} 해제`}
                     disabled={busy}
                     onClick={() =>
                       void change(() =>
@@ -349,7 +351,7 @@ export function TaskDetails({
         >
           {issue.reason === "cycle"
             ? "동시 변경으로 순환 관계가 생겼습니다. 상위 Task 또는 표시된 선행 연결을 해제해주세요."
-            : "삭제된 Task의 연결입니다. 필요하면 상위 Task를 변경하거나 선행 연결을 해제해주세요."}
+            : "찾을 수 없는 Task의 연결입니다. 필요하면 상위 Task를 변경하거나 선행 연결을 해제해주세요."}
         </p>
       ))}
       {error && (

@@ -346,6 +346,64 @@ it("rejects merged Task cycles and invalid Estimate before Commit, then accepts 
   expect(getTaskRows(doc)).toHaveLength(2);
   updateTaskField(doc, a, "estimateMinutes", 0);
   expect((await send(crypto.randomUUID())).statusCode).toBe(200);
+  const unknown = crypto.randomUUID(),
+    raw = doc.getMap<Y.Map<unknown>>("tasks").get(a)!;
+  raw.set("parentTaskId", unknown);
+  expect((await send(crypto.randomUUID())).statusCode).toBe(422);
+  raw.set("parentTaskId", null);
+  doc.getMap(`task-dependencies:${a}`).set(unknown, true);
+  expect((await send(crypto.randomUUID())).statusCode).toBe(422);
+  setTaskDependency(doc, a, unknown, false);
+  raw.set("parentTaskId", b);
+  updateTaskField(doc, b, "deleted", true);
+  expect((await send(crypto.randomUUID())).statusCode).toBe(200);
+  const snapshot = (
+    await request(
+      "POST",
+      `/v1/pages/${target.id}/snapshots`,
+      { operationId: crypto.randomUUID(), name: "Deleted relationship" },
+      owner.cookie,
+    )
+  ).json<{ id: string }>();
+  const restored = (
+    await request(
+      "POST",
+      `/v1/snapshots/${snapshot.id}/restore-copy`,
+      { operationId: crypto.randomUUID() },
+      owner.cookie,
+    )
+  ).json<{ id: string }>();
+  const copy = new Y.Doc();
+  Y.applyUpdate(
+    copy,
+    base64ToBytes(
+      (
+        await request(
+          "GET",
+          `/v1/documents/${restored.id}`,
+          undefined,
+          owner.cookie,
+        )
+      ).json<{ update: string }>().update,
+    ),
+  );
+  expect(getTaskRows(copy).map((row) => row.id)).toEqual([a]);
+  expect(copy.getMap<Y.Map<unknown>>("tasks").get(b)!.toJSON()).toEqual({
+    deleted: true,
+  });
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/documents/${restored.id}/commit`,
+        {
+          operationId: crypto.randomUUID(),
+          update: bytesToBase64(Y.encodeStateAsUpdate(copy)),
+        },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
 });
 it("retains independent child grants after parent revocation and does not disclose private parent deletion", async () => {
   const owner = await actor(),

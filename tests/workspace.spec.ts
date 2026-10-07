@@ -71,24 +71,22 @@ test("Task Subtask Dependency Label Estimate and Template survive Offline collab
     await page
       .getByLabel("Ship extension Instructions", { exact: true })
       .press("Tab");
-    await page
-      .getByLabel("Ship extension Files 파일 추가")
-      .setInputFiles({
-        name: "template.txt",
-        mimeType: "text/plain",
-        buffer: Buffer.from("Task template file bytes"),
-      });
+    await page.getByLabel("Ship extension Files 파일 추가").setInputFiles({
+      name: "template.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("Task template file bytes"),
+    });
     await expect(
       page.getByRole("button", { name: "template.txt 미리보기", exact: true }),
     ).toBeVisible();
     await page
-      .getByLabel("Ship extension Estimate", { exact: true })
+      .getByLabel("Ship extension Estimate (분)", { exact: true })
       .fill("1h 30m");
     await page
-      .getByLabel("Ship extension Estimate", { exact: true })
+      .getByLabel("Ship extension Estimate (분)", { exact: true })
       .press("Tab");
     await expect(
-      page.getByLabel("Ship extension Estimate", { exact: true }),
+      page.getByLabel("Ship extension Estimate (분)", { exact: true }),
     ).toHaveValue("1시간 30분");
     await label(page, "beta-task");
     await page.getByLabel("하위 Task 제목").fill("Documentation release");
@@ -141,17 +139,17 @@ test("Task Subtask Dependency Label Estimate and Template survive Offline collab
       .getByRole("button", { name: "Ship extension 열기", exact: true })
       .click();
     await expect(
-      other.getByLabel("Ship extension Estimate", { exact: true }),
+      other.getByLabel("Ship extension Estimate (분)", { exact: true }),
     ).toHaveValue("1시간 30분");
     await page.context().setOffline(true);
     await label(page, "offline-main");
     await label(other, "device-label");
     await ack(other);
     await page
-      .getByLabel("Ship extension Estimate", { exact: true })
+      .getByLabel("Ship extension Estimate (분)", { exact: true })
       .fill("2h 10m");
     await page
-      .getByLabel("Ship extension Estimate", { exact: true })
+      .getByLabel("Ship extension Estimate (분)", { exact: true })
       .press("Tab");
     await page
       .getByRole("button", { name: "Task Template", exact: true })
@@ -165,7 +163,7 @@ test("Task Subtask Dependency Label Estimate and Template survive Offline collab
     await expect(templates).toHaveCount(0);
     await expect(page.getByLabel("상위 Task")).toHaveValue("");
     await expect(
-      page.getByLabel("Ship extension Estimate", { exact: true }),
+      page.getByLabel("Ship extension Estimate (분)", { exact: true }),
     ).toHaveValue("1시간 30분");
     await expect(
       page.getByLabel("Ship extension Instructions", { exact: true }),
@@ -191,7 +189,7 @@ test("Task Subtask Dependency Label Estimate and Template survive Offline collab
       other.getByText("device-label", { exact: true }),
     ).toBeVisible();
     await expect(
-      other.getByLabel("Ship extension Estimate", { exact: true }),
+      other.getByLabel("Ship extension Estimate (분)", { exact: true }),
     ).toHaveValue("2시간 10분");
     await expect(
       other.getByRole("textbox", { name: "문서 본문" }),

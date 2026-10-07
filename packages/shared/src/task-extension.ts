@@ -271,6 +271,20 @@ export function assertTaskExtensions(document: Y.Doc): void {
         }
       }
     }
+    const relations = readTaskExtensions(document, id, row);
+    for (const targetId of [
+      ...relations.dependencyIds,
+      ...(relations.parentTaskId ? [relations.parentTaskId] : []),
+    ])
+      if (
+        !(
+          document.getMap<Y.Map<unknown>>("tasks").get(targetId) instanceof
+          Y.Map
+        )
+      )
+        throw new Error(
+          "같은 Database의 Task만 연결할 수 있습니다. 표시된 연결을 해제해주세요.",
+        );
   }
   if (
     getTaskRelationIssues(getTaskRows(document)).some(

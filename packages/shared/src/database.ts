@@ -194,7 +194,7 @@ const TASK_PROPERTIES: DatabaseProperty[] = [
     option("medium", "Medium"),
     option("high", "High"),
   ]),
-  builtin("estimateMinutes", "Estimate", "number"),
+  builtin("estimateMinutes", "Estimate (분)", "number"),
   builtin("labels", "Labels", "text"),
   builtin("startDate", "Start date", "date"),
   builtin("endDate", "End date", "date"),
