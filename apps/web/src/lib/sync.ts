@@ -1,6 +1,5 @@
 import {
   MetadataSchema,
-  CommentSchema,
   bytesToBase64,
   type Metadata,
   canEdit,
@@ -12,6 +11,7 @@ import { database, errorMessage, type LocalPage } from "./database";
 import { api, ApiError, authenticate } from "./api";
 import { useUiStore } from "./ui-store";
 import { syncAttachments } from "./attachments";
+import { syncPendingComments } from "./comments";
 import {
   setDocumentSyncRequest,
   getDocumentSession,
@@ -94,7 +94,17 @@ async function runSync(): Promise<void> {
     await syncMetadataOperations();
     await syncAttachments();
     await syncDocuments();
-    await syncComments();
+    await syncPendingComments(async (comment) => {
+      const session = getDocumentSession(comment.payload.pageId);
+      if (!session) return true;
+      const local = await database.documents.get(comment.payload.pageId);
+      return (
+        !session.localSaveError &&
+        (!local ||
+          local.state === "preserved" ||
+          session.generation <= local.committedGeneration)
+      );
+    });
     const metadata = MetadataSchema.parse(await api<unknown>("/metadata"));
     await mergeMetadata(metadata);
     const capacity = z
@@ -238,36 +248,6 @@ async function syncDocuments(): Promise<void> {
         state: "error",
         error: errorMessage(error),
       });
-      throw error;
-    }
-  }
-}
-async function syncComments(): Promise<void> {
-  for (const comment of (await database.pendingComments.toArray()).sort(
-    (a, b) => a.createdAt.localeCompare(b.createdAt),
-  )) {
-    if (comment.error) continue;
-    try {
-      await api("/comments", "POST", comment.payload);
-      const comments = z
-        .array(CommentSchema)
-        .parse(await api<unknown>(`/pages/${comment.payload.pageId}/comments`));
-      await database.transaction(
-        "rw",
-        database.pendingComments,
-        database.comments,
-        async () => {
-          await database.comments.bulkPut(comments);
-          await database.pendingComments.delete(comment.id);
-        },
-      );
-    } catch (error) {
-      if (error instanceof ApiError && [403, 410].includes(error.status)) {
-        await database.pendingComments.update(comment.id, {
-          error: error.message,
-        });
-        continue;
-      }
       throw error;
     }
   }

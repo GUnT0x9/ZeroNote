@@ -29,6 +29,14 @@ it("upgrades Alpha data once and rebuilds checkpoints from committed logs", asyn
     await legacy.database.execute(
       sql`INSERT INTO pages(id,workspace_id,kind,title) VALUES(${pageId},${workspaceId},'document','Committed')`,
     );
+    const identityId = crypto.randomUUID(),
+      commentId = crypto.randomUUID();
+    await legacy.database.execute(
+      sql`INSERT INTO identities(id,workspace_id,name) VALUES(${identityId},${workspaceId},'Legacy owner')`,
+    );
+    await legacy.database.execute(
+      sql`INSERT INTO comments(id,page_id,identity_id,body) VALUES(${commentId},${pageId},${identityId},'Legacy comment')`,
+    );
     const committed = new Y.Doc(),
       dirty = new Y.Doc();
     committed.getText("title").insert(0, "Committed");
@@ -43,7 +51,21 @@ it("upgrades Alpha data once and rebuilds checkpoints from committed logs", asyn
     await legacy.migrate();
     expect(
       await legacy.query(sql`SELECT version FROM schema_migrations`),
-    ).toHaveLength(8);
+    ).toHaveLength(9);
+    expect(await legacy.comments.list(pageId)).toMatchObject([
+      { id: commentId, body: "Legacy comment" },
+    ]);
+    expect((await legacy.comments.list(pageId))[0]).not.toHaveProperty("rowId");
+    expect(
+      await legacy.query(
+        sql`SELECT row_id FROM comments WHERE id=${commentId}`,
+      ),
+    ).toEqual([{ row_id: null }]);
+    expect(
+      await legacy.query(
+        sql`SELECT indexname FROM pg_indexes WHERE indexname='comments_scope'`,
+      ),
+    ).toHaveLength(1);
     const loaded = new Y.Doc();
     for (const update of await legacy.loadDocument(pageId))
       Y.applyUpdate(loaded, update);

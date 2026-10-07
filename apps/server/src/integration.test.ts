@@ -45,6 +45,7 @@ import {
   saveTaskTemplate,
   getTaskTemplates,
   createTaskFromTemplate,
+  CommentSchema,
 } from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
@@ -188,6 +189,382 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const id of created) await repository.deleteWorkspace(id);
   await app.close();
+});
+describe("Task scoped Comment transactions", () => {
+  async function fixture() {
+    const owner = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id, null, "database"),
+      doc = new Y.Doc();
+    const a = createTaskRow(doc, "First"),
+      b = createTaskRow(doc, "Second");
+    const commit = () =>
+      request(
+        "POST",
+        `/v1/documents/${target.id}/commit`,
+        {
+          operationId: crypto.randomUUID(),
+          update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+        },
+        owner.cookie,
+      );
+    expect((await commit()).statusCode).toBe(200);
+    return { owner, space, target, doc, a, b, commit };
+  }
+  it("separates Page and Row threads, validates parents and resolves only the requested root", async () => {
+    const f = await fixture(),
+      input = {
+        id: crypto.randomUUID(),
+        pageId: f.target.id,
+        rowId: f.a,
+        body: "Row discussion",
+      };
+    const send = (payload: unknown) =>
+      request("POST", "/v1/comments", payload, f.owner.cookie);
+    try {
+      expect((await send(input)).statusCode).toBe(200);
+      const pageComment = {
+        id: crypto.randomUUID(),
+        pageId: f.target.id,
+        body: "Page discussion",
+      };
+      expect((await send(pageComment)).statusCode).toBe(200);
+      const pageResult = (
+        await request(
+          "GET",
+          `/v1/pages/${f.target.id}/comments`,
+          undefined,
+          f.owner.cookie,
+        )
+      ).json<unknown[]>();
+      expect(pageResult).toHaveLength(1);
+      expect(CommentSchema.parse(pageResult[0])).not.toHaveProperty("rowId");
+      expect(
+        (
+          await request(
+            "GET",
+            `/v1/pages/${f.target.id}/comments?rowId=${f.a}`,
+            undefined,
+            f.owner.cookie,
+          )
+        ).json(),
+      ).toMatchObject([{ id: input.id, rowId: f.a }]);
+      expect(
+        (
+          await request(
+            "GET",
+            `/v1/pages/${f.target.id}/comments?rowId=${f.b}`,
+            undefined,
+            f.owner.cookie,
+          )
+        ).json(),
+      ).toEqual([]);
+      const reply = {
+        ...input,
+        id: crypto.randomUUID(),
+        parentId: input.id,
+        body: "Reply",
+      };
+      expect((await send(reply)).statusCode).toBe(200);
+      for (const payload of [
+        { ...reply, id: crypto.randomUUID(), rowId: f.b },
+        { ...reply, id: crypto.randomUUID(), rowId: null },
+        { ...reply, id: crypto.randomUUID(), parentId: reply.id },
+        { ...reply, id: crypto.randomUUID(), parentId: crypto.randomUUID() },
+      ])
+        expect((await send(payload)).statusCode).toBe(400);
+      const self = crypto.randomUUID();
+      expect(
+        (await send({ ...input, id: self, parentId: self })).statusCode,
+      ).toBe(400);
+      for (const rowId of [null, f.b])
+        expect(
+          (
+            await request(
+              "PATCH",
+              `/v1/pages/${f.target.id}/comments/${input.id}`,
+              { rowId, resolved: true },
+              f.owner.cookie,
+            )
+          ).statusCode,
+        ).toBe(404);
+      expect(
+        (
+          await request(
+            "PATCH",
+            `/v1/pages/${f.target.id}/comments/${reply.id}`,
+            { rowId: f.a, resolved: true },
+            f.owner.cookie,
+          )
+        ).statusCode,
+      ).toBe(404);
+      for (const resolved of [true, true, false])
+        expect(
+          (
+            await request(
+              "PATCH",
+              `/v1/pages/${f.target.id}/comments/${input.id}`,
+              { rowId: f.a, resolved },
+              f.owner.cookie,
+            )
+          ).statusCode,
+        ).toBe(200);
+      expect(
+        (
+          await request(
+            "GET",
+            `/v1/pages/${f.target.id}/comments?rowId=invalid`,
+            undefined,
+            f.owner.cookie,
+          )
+        ).statusCode,
+      ).toBe(400);
+      expect(
+        (
+          await send({
+            ...input,
+            id: crypto.randomUUID(),
+            rowId: crypto.randomUUID(),
+          })
+        ).statusCode,
+      ).toBe(404);
+      const ordinary = await page(f.owner, f.space.id);
+      expect(
+        (await send({ ...input, id: crypto.randomUUID(), pageId: ordinary.id }))
+          .statusCode,
+      ).toBe(404);
+      const snapshot = (
+        await request(
+          "POST",
+          `/v1/pages/${f.target.id}/snapshots`,
+          { operationId: crypto.randomUUID(), name: "Comment copy check" },
+          f.owner.cookie,
+        )
+      ).json<{ id: string }>();
+      const copy = (
+        await request(
+          "POST",
+          `/v1/snapshots/${snapshot.id}/restore-copy`,
+          { operationId: crypto.randomUUID() },
+          f.owner.cookie,
+        )
+      ).json<{ id: string }>();
+      expect(
+        (
+          await request(
+            "GET",
+            `/v1/pages/${copy.id}/comments?rowId=${f.a}`,
+            undefined,
+            f.owner.cookie,
+          )
+        ).json(),
+      ).toEqual([]);
+    } finally {
+      f.doc.destroy();
+    }
+  });
+  it("serializes concurrent retries, rejects changed payloads and allows the same owner after Recovery", async () => {
+    const f = await fixture(),
+      input = {
+        id: crypto.randomUUID(),
+        pageId: f.target.id,
+        rowId: f.a,
+        body: "Commit once",
+      };
+    try {
+      const results = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          request("POST", "/v1/comments", input, f.owner.cookie),
+        ),
+      );
+      expect(results.map((result) => result.statusCode)).toEqual(
+        Array(8).fill(200),
+      );
+      expect(await repository.comments.list(f.target.id, f.a)).toHaveLength(1);
+      for (const change of [
+        { body: "Other text" },
+        { rowId: f.b },
+        { rowId: null },
+        { parentId: crypto.randomUUID() },
+      ])
+        expect(
+          (
+            await request(
+              "POST",
+              "/v1/comments",
+              { ...input, ...change },
+              f.owner.cookie,
+            )
+          ).statusCode,
+        ).toBe(409);
+      const recovered = await actor();
+      expect(
+        (
+          await request(
+            "POST",
+            "/v1/workspaces/recover",
+            { key: f.space.key },
+            recovered.cookie,
+          )
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (await request("POST", "/v1/comments", input, recovered.cookie))
+          .statusCode,
+      ).toBe(200);
+      const capacity = vi
+        .spyOn(repository.documents, "assertCapacity")
+        .mockRejectedValue(new Error("At capacity"));
+      try {
+        expect(
+          (await request("POST", "/v1/comments", input, f.owner.cookie))
+            .statusCode,
+        ).toBe(200);
+        expect(
+          (
+            await request(
+              "POST",
+              "/v1/comments",
+              { ...input, id: crypto.randomUUID() },
+              f.owner.cookie,
+            )
+          ).statusCode,
+        ).toBe(500);
+      } finally {
+        capacity.mockRestore();
+      }
+    } finally {
+      f.doc.destroy();
+    }
+  });
+  it("allows Commenters to discuss but rejects Viewers and deleted Task writes while acknowledging existing commits", async () => {
+    const f = await fixture(),
+      commenter = await actor(),
+      viewer = await actor();
+    try {
+      for (const [member, role] of [
+        [commenter, "commenter"],
+        [viewer, "viewer"],
+      ] as const) {
+        const link = await invite(f.owner, f.target.id, role);
+        expect(
+          (
+            await request(
+              "POST",
+              `/v1/invites/${link.id}/redeem`,
+              { secret: link.secret },
+              member.cookie,
+            )
+          ).statusCode,
+        ).toBe(200);
+      }
+      const input = {
+        id: crypto.randomUUID(),
+        pageId: f.target.id,
+        rowId: f.a,
+        body: "Review Task",
+      };
+      expect(
+        (await request("POST", "/v1/comments", input, commenter.cookie))
+          .statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await request(
+            "POST",
+            "/v1/comments",
+            { ...input, id: crypto.randomUUID() },
+            viewer.cookie,
+          )
+        ).statusCode,
+      ).toBe(403);
+      expect(
+        (
+          await request(
+            "GET",
+            `/v1/pages/${f.target.id}/comments?rowId=${f.a}`,
+            undefined,
+            viewer.cookie,
+          )
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await request(
+            "PATCH",
+            `/v1/pages/${f.target.id}/comments/${input.id}`,
+            { rowId: f.a, resolved: true },
+            viewer.cookie,
+          )
+        ).statusCode,
+      ).toBe(403);
+      expect(
+        (
+          await request(
+            "PATCH",
+            `/v1/pages/${f.target.id}/comments/${input.id}`,
+            { rowId: f.a, resolved: true },
+            commenter.cookie,
+          )
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await request(
+            "POST",
+            `/v1/documents/${f.target.id}/commit`,
+            {
+              operationId: crypto.randomUUID(),
+              update: bytesToBase64(Y.encodeStateAsUpdate(f.doc)),
+            },
+            commenter.cookie,
+          )
+        ).statusCode,
+      ).toBe(403);
+      expect(
+        (await request("POST", "/v1/comments", input, f.owner.cookie))
+          .statusCode,
+      ).toBe(409);
+      f.doc.getMap<Y.Map<unknown>>("tasks").get(f.a)!.set("deleted", true);
+      expect((await f.commit()).statusCode).toBe(200);
+      expect(
+        (await request("POST", "/v1/comments", input, commenter.cookie))
+          .statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await request(
+            "POST",
+            "/v1/comments",
+            { ...input, id: crypto.randomUUID() },
+            commenter.cookie,
+          )
+        ).statusCode,
+      ).toBe(410);
+      expect(
+        (
+          await request(
+            "GET",
+            `/v1/pages/${f.target.id}/comments?rowId=${f.a}`,
+            undefined,
+            commenter.cookie,
+          )
+        ).statusCode,
+      ).toBe(410);
+      expect(
+        (
+          await request(
+            "PATCH",
+            `/v1/pages/${f.target.id}/comments/${input.id}`,
+            { rowId: f.a, resolved: false },
+            commenter.cookie,
+          )
+        ).statusCode,
+      ).toBe(410);
+    } finally {
+      f.doc.destroy();
+    }
+  });
 });
 it("commits Task extensions, indexes Labels and restores an independent Template/relationship snapshot", async () => {
   const owner = await actor(),

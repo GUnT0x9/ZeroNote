@@ -53,6 +53,8 @@ export interface PendingComment {
   payload: CommentInput;
   createdAt: string;
   error?: string;
+  acknowledged?: boolean;
+  errorStatus?: number;
 }
 export interface Preference {
   id: string;

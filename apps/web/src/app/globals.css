@@ -3679,3 +3679,35 @@ small,
     min-height: 36px;
   }
 }
+
+.comment-scope {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.comment-scope > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.comment-scope > strong {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 500;
+}
+.comment-actions {
+  flex-wrap: wrap;
+}
+.pending-comment > p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.comment-reply > .pending-comment {
+  min-width: 0;
+  flex: 1;
+}
+.comment-list > section > h3 {
+  font-size: 13px;
+  margin: 16px 0 4px;
+  font-weight: 500;
+}

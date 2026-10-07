@@ -10,4 +10,6 @@ Restore는 새 CRDT 문서와 새 Page ID를 사용하는 비공유 Root Page로
 
 Acceptance: Owner 외 기록 접근 거절, 원본 내용·링크 유지, 복구 결과의 Page/Task 데이터 일치, 동시 편집 후 Commit된 Snapshot 복원, 지원하지 않는 Version 거절.
 
+Task별 Thread/답글도 Page Comments와 같이 Snapshot·새 Page 복구에 복제하지 않는다. Row ID가 복구 파일에서 유지되더라도 댓글은 새 Page ID의 별도 범위다.
+
 Deferred: 현재 문서 되감기, 문서/Block Diff, Compare, Branch/Review/Merge. Beta의 새 Page 복구는 기존 Alpha 후속안의 in-place Restore를 대체한다. 자세한 운영 정책은 `docs/beta-launch.md`를 따른다.

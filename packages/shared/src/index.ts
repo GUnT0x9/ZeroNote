@@ -12,6 +12,7 @@ import {
   taskEntryMap,
 } from "./task-extension";
 import { getTaskTemplates } from "./task-templates";
+import { MAX_COMMENT_BODY_LENGTH } from "./comments";
 export * from "./portable-document";
 
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -85,7 +86,8 @@ export const CommentInputSchema = z
     id: IdSchema,
     pageId: IdSchema,
     parentId: IdSchema.nullable().default(null),
-    body: z.string().trim().min(1).max(10000),
+    rowId: IdSchema.nullable().optional(),
+    body: z.string().trim().min(1).max(MAX_COMMENT_BODY_LENGTH),
   })
   .strict();
 export type CommentInput = z.infer<typeof CommentInputSchema>;
@@ -96,6 +98,7 @@ export const CommentSchema = CommentInputSchema.extend({
   createdAt: z.string(),
 });
 export type PageComment = z.infer<typeof CommentSchema>;
+export * from "./comments";
 export const IdentitySchema = z.object({
   id: IdSchema,
   name: z.string(),

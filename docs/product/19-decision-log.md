@@ -135,3 +135,7 @@ Confirmed: Knowledge Graph·Related Pages·Broken Link와 전체 Backlinks를 �
 Verified 2026-10-07: `34bc93e`의 CI 440 Tests/26 E2E/Docker/512MiB/암호화 복원, Render → Vercel과 실제 HTTPS 5개 흐름을 확인했다. [출시 기록](../knowledge-release.md). 53/148 완료·95개 남음이다. 다음 Task 5개의 구현 기본안은 [Task 확장 기준](../task-extension-plan.md)에 기록했으며 구현 전에는 완료로 집계하지 않는다.
 
 Verified 2026-10-07: `bee64d1`의 CI 460 Tests/27 E2E/Docker/512MiB/암호화 복원, Render → Vercel과 실제 HTTPS 7개 흐름 통과. [Task 확장 기록](../task-extension-release.md). 사용자 정의 수정 가능 속성을 Template에 포함하고 File 참조를 비공개 보존한다. 변경된 정의는 확인 후 제외하며 삭제된 관계의 ID만 Snapshot에 남긴다. 기본 Estimate는 분 단위 이름으로 구분한다. 58/148 완료·90개 계속 개발. 다음 [Task Comments 기본안](../task-comments-plan.md)을 채택하며 구현 전 완료로 표시하지 않는다.
+
+### DEC-049 — Task 댓글 범위와 전송 확인
+
+Accepted default: 기존 Page Comments에 선택형 Row ID를 추가하고 같은 Database 권한을 상속한다. 작성 Identity·Page/Row·부모·본문이 같은 ID 재시도만 승인한다. 기존 Page DTO와 댓글은 유지한다. 댓글 작성은 committed Row 상태와 같은 Content/Page lock에서 승인하며 Pool 내부 executor로 권한을 검사한다. 초안/Queue를 범위별 보존하고 POST 저장 확인 이후 재조회 실패는 GET만 재시도한다. 삭제된 Task의 미전송 댓글은 Database 댓글 패널에서 복사·재시도·제거한다. Snapshot에 댓글은 복제하지 않는다. [검증 기록](../task-comments-release.md)은 Production 검증 전 미완료 상태다.

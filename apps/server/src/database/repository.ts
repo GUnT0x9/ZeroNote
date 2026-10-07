@@ -9,7 +9,8 @@ import { SnapshotStore } from "./snapshot-store";
 import { PublicShareStore } from "./public-share-store";
 import { AttachmentStore } from "./attachment-store";
 import { SearchStore } from "./search-store";
-import type { Page, Workspace, Role, PageComment } from "@zeronote/shared";
+import { CommentStore } from "./comment-store";
+import type { Page, Workspace, Role } from "@zeronote/shared";
 
 export interface DeviceRecord {
   id: string;
@@ -55,6 +56,7 @@ export class Repository {
   readonly attachments: AttachmentStore;
   readonly publicShares: PublicShareStore;
   readonly search: SearchStore;
+  readonly comments: CommentStore;
   constructor(url: string) {
     this.pool = new Pool({
       connectionString: url,
@@ -69,6 +71,7 @@ export class Repository {
     this.attachments = new AttachmentStore(this);
     this.publicShares = new PublicShareStore(this);
     this.search = new SearchStore(this);
+    this.comments = new CommentStore(this);
   }
   async query<T>(
     statement: SQL,
@@ -144,10 +147,12 @@ export class Repository {
   async getMembership(
     deviceId: string,
     workspaceId: string,
+    executor: Executor = this.database,
   ): Promise<MembershipRecord | undefined> {
     return (
       await this.query<MembershipRecord>(
         sql`SELECT m.workspace_id AS "workspaceId",m.device_id AS "deviceId",m.identity_id AS "identityId",i.name,w.owner_identity_id AS "ownerIdentityId",m.revoked_at::text AS "revokedAt" FROM memberships m JOIN identities i ON i.id=m.identity_id JOIN workspaces w ON w.id=m.workspace_id WHERE m.device_id=${deviceId} AND m.workspace_id=${workspaceId}`,
+        executor,
       )
     )[0];
   }
@@ -225,15 +230,23 @@ export class Repository {
       sql`DELETE FROM workspaces WHERE id=${workspaceId}`,
     );
   }
-  async listPages(workspaceId: string): Promise<Page[]> {
+  async listPages(
+    workspaceId: string,
+    executor: Executor = this.database,
+  ): Promise<Page[]> {
     return this.query<Page>(
       sql`SELECT id,workspace_id AS "workspaceId",parent_id AS "parentId",kind,title,revision,deleted_at::text AS "deletedAt",created_at::text AS "createdAt",is_inbox AS "isInbox" FROM pages WHERE workspace_id=${workspaceId} ORDER BY created_at`,
+      executor,
     );
   }
-  async getPage(id: string): Promise<Page | undefined> {
+  async getPage(
+    id: string,
+    executor: Executor = this.database,
+  ): Promise<Page | undefined> {
     return (
       await this.query<Page>(
         sql`SELECT id,workspace_id AS "workspaceId",parent_id AS "parentId",kind,title,revision,deleted_at::text AS "deletedAt",created_at::text AS "createdAt",is_inbox AS "isInbox" FROM pages WHERE id=${id}`,
+        executor,
       )
     )[0];
   }
@@ -244,9 +257,13 @@ export class Repository {
       )
     )[0]?.result;
   }
-  async listGrants(identityId: string): Promise<GrantRecord[]> {
+  async listGrants(
+    identityId: string,
+    executor: Executor = this.database,
+  ): Promise<GrantRecord[]> {
     return this.query<GrantRecord>(
       sql`SELECT id,workspace_id AS "workspaceId",page_id AS "pageId",identity_id AS "identityId",role,include_descendants AS "includeDescendants",revoked_at::text AS "revokedAt" FROM grants WHERE identity_id=${identityId} AND revoked_at IS NULL`,
+      executor,
     );
   }
   async applyPageOperation(
@@ -409,32 +426,6 @@ export class Repository {
   async revokeDevice(workspaceId: string, deviceId: string): Promise<void> {
     await this.database.execute(
       sql`UPDATE memberships SET revoked_at=now() WHERE workspace_id=${workspaceId} AND device_id=${deviceId}`,
-    );
-  }
-  async listComments(pageId: string): Promise<PageComment[]> {
-    return this.query(
-      sql`SELECT c.id,c.page_id AS "pageId",c.parent_id AS "parentId",c.body,c.identity_id AS "identityId",i.name AS "authorName",c.resolved,c.created_at::text AS "createdAt" FROM comments c JOIN identities i ON i.id=c.identity_id WHERE c.page_id=${pageId} ORDER BY c.created_at`,
-    );
-  }
-  async createComment(comment: {
-    id: string;
-    pageId: string;
-    parentId: string | null;
-    body: string;
-    identityId: string;
-  }): Promise<void> {
-    await this.documents.assertCapacity();
-    await this.database.execute(
-      sql`INSERT INTO comments(id,page_id,parent_id,body,identity_id) VALUES(${comment.id},${comment.pageId},${comment.parentId},${comment.body},${comment.identityId}) ON CONFLICT(id) DO NOTHING`,
-    );
-  }
-  async resolveComment(
-    pageId: string,
-    id: string,
-    resolved: boolean,
-  ): Promise<void> {
-    await this.database.execute(
-      sql`UPDATE comments SET resolved=${resolved} WHERE id=${id} AND page_id=${pageId}`,
     );
   }
 }

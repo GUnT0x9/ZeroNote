@@ -28,11 +28,13 @@ Mutation에는 정확한 `WEB_ORIGIN`의 `Origin` Header가 필요하다. 인증
 | GET    | `/pages/:id/share`                  | Grant와 Secret 없는 Invite 상태                              | Owner                            |
 | DELETE | `/pages/:id/grants/:grantId`        | 수락한 권한 철회                                             | Owner                            |
 | DELETE | `/pages/:id/invites/:inviteId`      | 미수락 초대 취소                                             | Owner                            |
-| GET    | `/pages/:id/comments`               | Thread와 답글                                                | Viewer 이상                      |
-| POST   | `/comments`                         | `{id,pageId,parentId,body}`                                  | Commenter 이상                   |
-| PATCH  | `/pages/:id/comments/:commentId`    | `{resolved}`                                                 | Commenter 이상                   |
+| GET    | `/pages/:id/comments`               | Page Thread; 선택형 `?rowId=<uuid>`는 해당 Task Thread만     | Viewer 이상                      |
+| POST   | `/comments`                         | `{id,pageId,parentId,body,rowId?}`                           | Commenter 이상                   |
+| PATCH  | `/pages/:id/comments/:commentId`    | `{resolved,rowId?}`                                          | Commenter 이상                   |
 
 PageOperation은 UUID `operationId`, `workspaceId`, `pageId`, `expectedRevision`, `action`을 받는다. `create`는 `page`, `move`는 `parentId`를 받는다. UUID 재전송을 중복 처리하지 않는다. 다른 기기의 Page 구조가 바뀌면 409로 응답하고 Client는 로컬 의도를 유지한 채 재적용을 제공한다.
+
+Comment는 Row ID 미지정/null이면 Page 범위다. Task는 committed 활성 Row와 Database 권한을 확인한다. Parent는 같은 Page/Row의 최상위 Thread만 가능하며 자기/누락/다른 범위/답글의 답글은 400이다. Viewer 쓰기 403, Row 미존재 404, 삭제 Row 410, 다른 Identity·Scope·부모·본문으로 댓글 ID 재사용은 409다. 같은 입력의 동시 재시도는 한 댓글만 저장한다. Page GET은 직전 strict DTO의 필드를 유지하고 Task GET만 `rowId`를 포함한다. Resolve는 같은 범위 root만 변경한다. Snapshot/복제에는 Task 댓글도 포함하지 않는다.
 
 문서 Commit은 Yjs Binary의 Base64이며 최대 Binary 5MB다. Operation ID는 같은 문서·같은 Update에만 재사용할 수 있다. Client의 저장 완료는 PostgreSQL Update 저장과 Checkpoint 후 응답을 받았을 때다. Projection을 CRDT와 별도로 편집하는 API는 없다.
 

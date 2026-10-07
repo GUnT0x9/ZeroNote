@@ -17,10 +17,10 @@ import {
   type Page,
   type PageOperation,
   type Metadata,
-  type CommentInput,
 } from "@zeronote/shared";
 import {
   Repository,
+  type Executor,
   type DeviceRecord,
   type GrantRecord,
 } from "./database/repository";
@@ -45,23 +45,25 @@ export class AccessService {
     deviceId: string,
     pageId: string,
     allowDeleted = false,
+    executor: Executor = this.repository.database,
   ): Promise<{ page: Page; role: Role; identityId: string; name: string }> {
-    const page = await this.repository.getPage(pageId);
+    const page = await this.repository.getPage(pageId, executor);
     if (!page) throw new DomainError(404, "Page를 찾을 수 없습니다.");
     const membership = await this.repository.getMembership(
       deviceId,
       page.workspaceId,
+      executor,
     );
     if (!membership || membership.revokedAt)
       throw new DomainError(403, "Page 접근 권한이 없습니다.");
-    const pages = await this.repository.listPages(page.workspaceId);
+    const pages = await this.repository.listPages(page.workspaceId, executor);
     const role =
       membership.identityId === membership.ownerIdentityId
         ? "owner"
         : roleForPage(
             page,
             pages,
-            await this.repository.listGrants(membership.identityId),
+            await this.repository.listGrants(membership.identityId, executor),
           );
     if (!role) throw new DomainError(403, "Page 접근 권한이 없습니다.");
     if (!allowDeleted && isTrashed(page, pages))
@@ -350,29 +352,6 @@ export class WorkspaceService {
     if (!updated)
       throw new DomainError(409, "다른 기기에서 구조가 변경되었습니다.");
     return updated;
-  }
-  async comment(deviceId: string, input: CommentInput): Promise<void> {
-    const access = await this.access.page(deviceId, input.pageId);
-    if (access.role === "viewer")
-      throw new DomainError(403, "Comment 권한이 필요합니다.");
-    if (input.parentId) {
-      const comments = await this.repository.listComments(input.pageId);
-      if (
-        !comments.some(
-          (comment) => comment.id === input.parentId && !comment.parentId,
-        )
-      )
-        throw new DomainError(400, "같은 Page의 Thread에 답글을 작성해주세요.");
-    }
-    const existing = (await this.repository.listComments(input.pageId)).find(
-      (comment) => comment.id === input.id,
-    );
-    if (existing && existing.identityId !== access.identityId)
-      throw new DomainError(409, "Comment ID 충돌입니다.");
-    await this.repository.createComment({
-      ...input,
-      identityId: access.identityId,
-    });
   }
 }
 export class DocumentService {

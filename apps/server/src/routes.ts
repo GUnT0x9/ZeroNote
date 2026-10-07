@@ -11,6 +11,8 @@ import {
   InviteSchema,
   CommitSchema,
   CommentInputSchema,
+  CommentQuerySchema,
+  CommentResolutionSchema,
   RecoverySchema,
   INVITE_LIFETIME_MS,
   IdSchema,
@@ -40,6 +42,7 @@ import { registerPublicShareRoutes } from "./public-share-routes";
 import { SearchService } from "./search-service";
 import { registerSearchRoutes } from "./search-routes";
 import { KnowledgeService } from "./knowledge-service";
+import { CommentService } from "./comment-service";
 import { registerKnowledgeRoutes } from "./knowledge-routes";
 
 type Handler = (
@@ -61,7 +64,8 @@ export function registerRoutes(
   const auth = new AuthService(repository),
     access = new AccessService(repository),
     workspaces = new WorkspaceService(repository, access),
-    snapshots = new SnapshotService(repository, access);
+    snapshots = new SnapshotService(repository, access),
+    comments = new CommentService(repository, access);
   registerSearchRoutes(app, auth, new SearchService(repository, access));
   registerKnowledgeRoutes(app, auth, new KnowledgeService(repository, access));
   registerAttachmentRoutes(
@@ -408,15 +412,15 @@ export function registerRoutes(
     "/v1/pages/:id/comments",
     authenticated(async (request, _reply, deviceId) => {
       const id = parameter(request, "id");
-      await access.page(deviceId, id);
-      return repository.listComments(id);
+      const query = CommentQuerySchema.parse(request.query);
+      return comments.list(deviceId, id, query.rowId);
     }),
   );
   app.post(
     "/v1/comments",
     authenticated(async (request, _reply, deviceId) => {
       const input = CommentInputSchema.parse(request.body);
-      await workspaces.comment(deviceId, input);
+      await comments.create(deviceId, input);
       realtime.documents
         .get(input.pageId)
         ?.broadcastStateless(
@@ -429,14 +433,13 @@ export function registerRoutes(
     "/v1/pages/:id/comments/:commentId",
     authenticated(async (request, _reply, deviceId) => {
       const id = parameter(request, "id"),
-        permission = await access.page(deviceId, id);
-      if (permission.role === "viewer")
-        throw new DomainError(403, "Comment 권한이 필요합니다.");
-      await repository.resolveComment(
+        input = CommentResolutionSchema.parse(request.body);
+      await comments.resolve(
+        deviceId,
         id,
         parameter(request, "commentId"),
-        z.object({ resolved: z.boolean() }).strict().parse(request.body)
-          .resolved,
+        input.rowId ?? null,
+        input.resolved,
       );
       realtime.documents
         .get(id)

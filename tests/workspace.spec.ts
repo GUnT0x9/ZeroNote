@@ -11,6 +11,306 @@ import {
   strToU8,
 } from "../apps/web/node_modules/fflate";
 const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
+test("Task Comments isolate scopes, preserve drafts and merge Offline replies with Commenter and Viewer roles", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(180000);
+  const name = `Task Comments ${Date.now()}`,
+    key = await createWorkspace(page, name),
+    context = await browser.newContext(),
+    member = await context.newPage(),
+    viewerContext = await browser.newContext(),
+    viewer = await viewerContext.newPage();
+  const panel = (target: Page) =>
+    target.getByRole("complementary", { name: "Comments", exact: true });
+  const send = async (target: Page, body: string) => {
+    await target.getByLabel("Comment 내용").fill(body);
+    await target.getByLabel("Comment 내용").press("Control+Enter");
+    await expect(target.getByLabel("Comment 내용")).toHaveValue("");
+  };
+  const ack = () =>
+    expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+  try {
+    await page.getByRole("button", { name: "To-Do", exact: true }).click();
+    for (const title of ["Discuss first", "Discuss second"]) {
+      await page.getByRole("button", { name: "새 Task", exact: true }).click();
+      await page.getByLabel("새 Task 제목").fill(title);
+      await page.getByRole("button", { name: "추가", exact: true }).click();
+      await expect(
+        page.getByRole("button", { name: `${title} 열기`, exact: true }),
+      ).toBeVisible();
+    }
+    await ack();
+    const baseUrl = page.url(),
+      pageId = new URL(baseUrl).searchParams.get("page")!;
+    const commenterLink = await createInvite(page, "commenter");
+    await member.goto(commenterLink);
+    await expect(member.getByLabel("Page 제목")).toHaveValue("To-Do");
+    const viewerLink = await createInviteFromOpenPanel(page, "viewer");
+    await viewer.goto(viewerLink);
+    await expect(viewer.getByLabel("Page 제목")).toHaveValue("To-Do");
+    await openPageTool(page, "Comments");
+    await send(page, "Database-only discussion");
+    await expect(
+      panel(page).getByText("Database-only discussion", { exact: true }),
+    ).toBeVisible();
+    await ack();
+    await page
+      .getByRole("button", { name: "Discuss first 열기", exact: true })
+      .click();
+    const firstUrl = page.url(),
+      firstId = new URL(firstUrl).searchParams.get("task")!;
+    await expect(
+      panel(page).getByText("Task 댓글", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      panel(page).getByText("Database-only discussion", { exact: true }),
+    ).toHaveCount(0);
+    await send(page, "First Task review");
+    await ack();
+    await member
+      .getByRole("button", { name: "Discuss first 열기", exact: true })
+      .click();
+    await openPageTool(member, "Comments");
+    await expect(
+      panel(member).getByText("First Task review", { exact: true }),
+    ).toBeVisible();
+    await expect(member.getByLabel("Page 제목")).toHaveAttribute(
+      "readonly",
+      "",
+    );
+    await expect(
+      member.getByRole("textbox", { name: "문서 본문" }),
+    ).toHaveAttribute("contenteditable", "false");
+    await panel(member)
+      .getByRole("button", { name: "답글", exact: true })
+      .click();
+    await expect(member.getByLabel("Comment 내용")).toBeFocused();
+    await send(member, "Commenter reply");
+    await expect(
+      panel(page).getByText("Commenter reply", { exact: true }),
+    ).toBeVisible();
+    await viewer
+      .getByRole("button", { name: "Discuss first 열기", exact: true })
+      .click();
+    await openPageTool(viewer, "Comments");
+    await expect(
+      panel(viewer).getByText("Commenter reply", { exact: true }),
+    ).toBeVisible();
+    await expect(viewer.getByLabel("Comment 내용")).toHaveCount(0);
+    await page.getByLabel("Page 제목").fill("Renamed discussion");
+    await ack();
+    await expect(
+      panel(member).getByText("Renamed discussion", { exact: true }),
+    ).toBeVisible();
+    await page.getByLabel("Comment 내용").fill("First scope draft");
+    await page
+      .getByRole("button", { name: "프로젝트로 돌아가기", exact: true })
+      .click();
+    await expect(
+      panel(page).getByText("Database-only discussion", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Comment 내용")).toHaveValue("");
+    await page
+      .getByRole("button", { name: "Discuss second 열기", exact: true })
+      .click();
+    const secondUrl = page.url();
+    await expect(
+      panel(page).getByText("First Task review", { exact: true }),
+    ).toHaveCount(0);
+    await page.getByLabel("Comment 내용").fill("Second scope draft");
+    await page.goto(firstUrl);
+    await openPageTool(page, "Comments");
+    await expect(page.getByLabel("Comment 내용")).toHaveValue(
+      "First scope draft",
+    );
+    await page.goto(secondUrl);
+    await openPageTool(page, "Comments");
+    await expect(page.getByLabel("Comment 내용")).toHaveValue(
+      "Second scope draft",
+    );
+    await page.context().setOffline(true);
+    await send(page, "Offline root Task");
+    const root = panel(page)
+      .locator(".comment-thread")
+      .filter({ hasText: "Offline root Task" });
+    await root.getByRole("button", { name: "답글", exact: true }).click();
+    await send(page, "Offline Task reply");
+    await expect(
+      root.getByText("Offline Task reply", { exact: true }),
+    ).toBeVisible();
+    await page.reload();
+    await openPageTool(page, "Comments");
+    await expect(
+      panel(page).getByText("Offline root Task", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      panel(page).getByText("Offline Task reply", { exact: true }),
+    ).toBeVisible();
+    await page.context().setOffline(false);
+    await ack();
+    await expect(
+      panel(page).getByText("전송 대기", { exact: true }),
+    ).toHaveCount(0);
+    await member
+      .getByRole("button", { name: "Context Panel 닫기", exact: true })
+      .click();
+    await member
+      .getByRole("button", { name: "프로젝트로 돌아가기", exact: true })
+      .click();
+    await member
+      .getByRole("button", { name: "Discuss second 열기", exact: true })
+      .click();
+    await openPageTool(member, "Comments");
+    await expect(
+      panel(member).getByText("Offline Task reply", { exact: true }),
+    ).toBeVisible();
+    const secondRoot = panel(member)
+      .locator(".comment-thread")
+      .filter({ hasText: "Offline root Task" });
+    await secondRoot.getByRole("button", { name: "해결", exact: true }).click();
+    await expect(
+      panel(page).getByText("Offline root Task", { exact: true }),
+    ).toHaveCount(0);
+    await panel(page).getByLabel("해결한 Thread 표시").check();
+    await expect(
+      panel(page).getByText("Offline root Task", { exact: true }),
+    ).toBeVisible();
+    await panel(page)
+      .getByRole("button", { name: "다시 열기", exact: true })
+      .click();
+    await expect(
+      panel(member).getByText("Offline root Task", { exact: true }),
+    ).toBeVisible();
+    const snapshot = await page.request.post(
+      `${ORIGIN}/v1/pages/${pageId}/snapshots`,
+      {
+        headers: { origin: ORIGIN },
+        data: { operationId: crypto.randomUUID(), name: "Comment isolation" },
+      },
+    );
+    expect(snapshot.status()).toBe(200);
+    const restored = await page.request.post(
+      `${ORIGIN}/v1/snapshots/${(await snapshot.json()).id}/restore-copy`,
+      {
+        headers: { origin: ORIGIN },
+        data: { operationId: crypto.randomUUID() },
+      },
+    );
+    expect(restored.status()).toBe(200);
+    const restoredId = (await restored.json()).id as string;
+    const comments = await page.request.get(
+      `${ORIGIN}/v1/pages/${restoredId}/comments?rowId=${firstId}`,
+    );
+    expect(comments.status()).toBe(200);
+    expect(await comments.json()).toEqual([]);
+    expect(key).toMatch(/^ZN/);
+  } finally {
+    await page.context().setOffline(false);
+    await cleanup(page, name);
+    await context.close();
+    await viewerContext.close();
+  }
+});
+test("Task Comments keep failed drafts and queued replies after deletion and support mobile focus", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(150000);
+  const name = `Task Comments Failure ${Date.now()}`;
+  await createWorkspace(page, name);
+  const mobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    }),
+    mobile = await mobileContext.newPage();
+  try {
+    await page.getByRole("button", { name: "To-Do", exact: true }).click();
+    await page.getByRole("button", { name: "새 Task", exact: true }).click();
+    await page.getByLabel("새 Task 제목").fill("Deleted discussion");
+    await page.getByRole("button", { name: "추가", exact: true }).click();
+    await expect(
+      page.getByRole("button", {
+        name: "Deleted discussion 열기",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    const link = await createInvite(page, "commenter");
+    await mobile.goto(link);
+    await mobile
+      .getByRole("button", { name: "Deleted discussion 열기", exact: true })
+      .tap();
+    await openPageTool(mobile, "Comments");
+    await mobile.getByLabel("Comment 내용").fill("Touch Task comment");
+    await mobile.getByRole("button", { name: "보내기", exact: true }).tap();
+    await expect(mobile.getByLabel("Comment 내용")).toBeFocused();
+    await page
+      .getByRole("button", { name: "Deleted discussion 열기", exact: true })
+      .click();
+    await openPageTool(page, "Comments");
+    await expect(
+      page.getByText("Touch Task comment", { exact: true }),
+    ).toBeVisible();
+    await page.context().setOffline(true);
+    await page.getByLabel("Comment 내용").fill("Local parent to preserve");
+    await page.getByRole("button", { name: "보내기", exact: true }).click();
+    const pending = page
+      .locator(".comment-thread")
+      .filter({ hasText: "Local parent to preserve" });
+    await pending.getByRole("button", { name: "답글", exact: true }).click();
+    await page.getByLabel("Comment 내용").fill("Local child to preserve");
+    await page.getByRole("button", { name: "보내기", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Context Panel 닫기", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Trash로 이동", exact: true })
+      .click();
+    await openPageTool(page, "Comments");
+    await expect(
+      page.getByRole("region", { name: "삭제된 Task의 전송 대기 댓글" }),
+    ).toBeVisible();
+    await page.context().setOffline(false);
+    await expect(page.getByText("전송 실패", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Local child to preserve", { exact: true }),
+    ).toBeVisible();
+    const preserved = page.getByRole("region", {
+        name: "삭제된 Task의 전송 대기 댓글",
+      }),
+      parent = preserved
+        .locator("article")
+        .filter({ hasText: "Local parent to preserve" }),
+      child = preserved
+        .locator("article")
+        .filter({ hasText: "Local child to preserve" });
+    await expect(
+      parent.getByRole("button", { name: "기기에서 제거", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      parent.getByRole("button", { name: "내용 복사", exact: true }),
+    ).toBeVisible();
+    await child
+      .getByRole("button", { name: "기기에서 제거", exact: true })
+      .click();
+    await parent
+      .getByRole("button", { name: "기기에서 제거", exact: true })
+      .click();
+    await expect(preserved).toHaveCount(0);
+  } finally {
+    await page.context().setOffline(false);
+    await cleanup(page, name);
+    await mobileContext.close();
+  }
+});
 test("Task Subtask Dependency Label Estimate and Template survive Offline collaboration and restore", async ({
   page,
   browser,
