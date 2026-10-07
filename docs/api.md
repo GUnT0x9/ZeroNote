@@ -88,6 +88,8 @@ Database의 File/Relation 값은 중복 없는 UUID 배열(최대 50개), Formul
 
 ## Storage 관리
 
+Task 확장은 별도 편집 REST를 만들지 않고 기존 Database CRDT Commit/권한 경계를 따른다. Commit 전에 부모·선행 작업 순환, 잘못된 Estimate/Label/연결, Template 정의/개수/값을 공통 검증하며 REST와 WebSocket 모두 실패 상태를 저장 완료로 표시하지 않는다. 삭제된 부모/선행 작업은 남은 Task와 본문을 삭제하지 않는다. Template의 본문/File Property 참조도 비공개 파일 보존과 Snapshot/Import 복제에 포함되며 Public 범위에는 사용하지 않은 Template 파일을 포함하지 않는다. 상세 계약은 [Task 확장 기록](task-extension-release.md)을 따른다.
+
 `GET /v1/workspaces/:id/attachments/storage`는 Workspace Owner에게 실제 bytes가 남은 파일과 `bytes/count/retained/limit/fileLimit`을 반환한다. `files[]`는 기존 Metadata에 `pageTitle`, `pageDeletedAt`, `deletedAt`을 더한다. bytes 원문이나 다른 Workspace의 목록은 포함하지 않는다. 집계는 동일 파일 목록에서 계산하고 주기적 Polling을 하지 않는다.
 
 `DELETE /v1/workspaces/:id/attachments/:fileId/content`는 Owner와 정확한 `{name}` 확인을 요구한다. PostgreSQL의 문서 Commit/Snapshot/파일 저장과 같은 Lock을 사용해 현재 문서(Trash 포함)와 보관 중인 Snapshot에 참조가 없을 때만 bytes를 제거한다. 성공은 `{id,purged:true}`이며 같은 파일의 재시도는 같은 응답을 반환한다. 참조는 409, 이름 불일치는 400, 권한 없음은 403, 다른 Workspace/없는 ID는 404다. 일반 `DELETE /v1/attachments/:id`는 계속 soft delete다.

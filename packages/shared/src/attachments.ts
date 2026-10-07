@@ -146,9 +146,40 @@ export function getAttachmentIds(document: Y.Doc): string[] {
   };
   walk(document.getXmlFragment("content"));
   for (const name of [...document.share.keys()])
-    if (name.startsWith("task:")) walk(document.getXmlFragment(name));
+    if (name.startsWith("task:") || name.startsWith("task-template:"))
+      walk(document.getXmlFragment(name));
   for (const id of propertyAttachmentIds(document)) ids.add(id);
+  for (const { values, propertyIds } of templateFileValues(document))
+    for (const id of propertyIds)
+      if (Array.isArray(values[id]))
+        for (const file of values[id])
+          if (typeof file === "string" && z.uuid().safeParse(file).success)
+            ids.add(file);
   return [...ids];
+}
+/** Template-only files remain private, but must be retained and copied. */
+function templateFileValues(document: Y.Doc): {
+  template: Y.Map<unknown>;
+  values: Record<string, unknown>;
+  propertyIds: string[];
+}[] {
+  const fileProperty = z.object({ id: z.string(), type: z.literal("file") });
+  return [...document.getMap<Y.Map<unknown>>("taskTemplates").values()].flatMap(
+    (template) => {
+      if (!(template instanceof Y.Map) || template.get("deleted") === true)
+        return [];
+      const properties = template.get("properties"),
+        values = z
+          .record(z.string(), z.unknown())
+          .safeParse(template.get("values"));
+      if (!Array.isArray(properties) || !values.success) return [];
+      const propertyIds = properties.flatMap((property: unknown) => {
+        const parsed = fileProperty.safeParse(property);
+        return parsed.success ? [parsed.data.id] : [];
+      });
+      return [{ template, values: values.data, propertyIds }];
+    },
+  );
 }
 function propertyAttachmentIds(document: Y.Doc): string[] {
   const properties = [...document.getMap<Y.Map<unknown>>("databaseProperties")]
@@ -204,7 +235,8 @@ export function remapAttachmentIds(
   document.transact(() => {
     walk(document.getXmlFragment("content"));
     for (const name of [...document.share.keys()])
-      if (name.startsWith("task:")) walk(document.getXmlFragment(name));
+      if (name.startsWith("task:") || name.startsWith("task-template:"))
+        walk(document.getXmlFragment(name));
     for (const [propertyId, property] of document.getMap<Y.Map<unknown>>(
       "databaseProperties",
     )) {
@@ -221,6 +253,17 @@ export function remapAttachmentIds(
             ),
           );
       }
+    }
+    for (const { template, values, propertyIds } of templateFileValues(
+      document,
+    )) {
+      const next = structuredClone(values);
+      for (const id of propertyIds)
+        if (Array.isArray(next[id]))
+          next[id] = next[id].map((file: unknown) =>
+            typeof file === "string" ? (ids.get(file) ?? file) : file,
+          );
+      template.set("values", next);
     }
   });
 }

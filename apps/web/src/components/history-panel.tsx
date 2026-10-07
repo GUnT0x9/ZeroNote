@@ -20,6 +20,7 @@ import { synchronize } from "@/lib/sync";
 import { BlockEditor } from "./block-editor";
 import { DatabaseRowProperties } from "./database-property";
 import { PageTags } from "./page-tags";
+import { TaskSummary } from "./task-details";
 import type { WorkspaceData } from "@/lib/hooks";
 export function HistoryPanel({
   page,
@@ -276,6 +277,10 @@ function SnapshotPreview({
                 row={rows.find((row) => row.id === taskId)!}
                 editable={false}
                 identities={[]}
+              />
+              <TaskSummary
+                row={rows.find((row) => row.id === taskId)!}
+                byId={new Map(rows.map((row) => [row.id, row]))}
               />
               <BlockEditor
                 key={taskId}

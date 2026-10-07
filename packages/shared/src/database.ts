@@ -194,6 +194,8 @@ const TASK_PROPERTIES: DatabaseProperty[] = [
     option("medium", "Medium"),
     option("high", "High"),
   ]),
+  builtin("estimateMinutes", "Estimate", "number"),
+  builtin("labels", "Labels", "text"),
   builtin("startDate", "Start date", "date"),
   builtin("endDate", "End date", "date"),
   builtin("createdAt", "Created time", "created_time"),
@@ -302,6 +304,8 @@ export function readDatabaseValue(
   property: DatabaseProperty,
 ): PropertyValue {
   if (["formula", "rollup"].includes(property.type)) return null;
+  if (property.builtin && property.id === "labels")
+    return row.labels.join(" · ");
   if (property.type === "created_time") return row.createdAt;
   if (property.type === "updated_time") return row.updatedAt;
   const value: unknown = property.builtin
@@ -500,6 +504,29 @@ export function remapDatabasePageIds(
           ...relation.data,
           databaseId: ids.get(relation.data.databaseId)!,
         });
+    }
+    for (const template of document
+      .getMap<Y.Map<unknown>>("taskTemplates")
+      .values()) {
+      if (!(template instanceof Y.Map)) continue;
+      const properties = template.get("properties");
+      if (!Array.isArray(properties)) continue;
+      template.set(
+        "properties",
+        properties.map((value: unknown) => {
+          const parsed = DatabasePropertySchema.safeParse(value);
+          if (
+            !parsed.success ||
+            !parsed.data.relation ||
+            !ids.has(parsed.data.relation.databaseId)
+          )
+            return structuredClone(value);
+          return {
+            ...parsed.data,
+            relation: { databaseId: ids.get(parsed.data.relation.databaseId)! },
+          };
+        }),
+      );
     }
   });
 }

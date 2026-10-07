@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import * as Y from "yjs";
+import { ZodError } from "zod";
 import {
   MAX_DOCUMENT_BYTES,
   STORAGE_LIMIT_BYTES,
@@ -12,6 +13,8 @@ import {
   getDocumentEditorProtocol,
   assertDatabaseState,
   assertPageTags,
+  assertTaskExtensions,
+  assertTaskTemplates,
 } from "@zeronote/shared";
 import { DomainError } from "../errors";
 import type { Repository, Executor } from "./repository";
@@ -120,10 +123,17 @@ export class DocumentStore {
         try {
           assertDatabaseState(document);
           assertPageTags(document);
-        } catch {
+          assertTaskExtensions(document);
+          assertTaskTemplates(document);
+        } catch (error) {
           throw new DomainError(
             422,
-            "Database 속성·파일·관계 값이나 Tag가 올바르지 않습니다. 로컬 변경을 보존했습니다.",
+            (error instanceof ZodError
+              ? "Task·Database의 입력값과 연결을 확인해주세요."
+              : error instanceof Error
+                ? error.message
+                : "Database·Task 데이터가 올바르지 않습니다.") +
+              " 로컬 변경을 보존했습니다.",
           );
         }
         const state = Y.encodeStateAsUpdate(document);

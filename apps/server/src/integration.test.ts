@@ -39,6 +39,12 @@ import {
   KnowledgeResponseSchema,
   getKnowledgeHead,
   updateTaskField,
+  setTaskLabel,
+  setTaskDependency,
+  createSubtask,
+  saveTaskTemplate,
+  getTaskTemplates,
+  createTaskFromTemplate,
 } from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
@@ -182,6 +188,164 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const id of created) await repository.deleteWorkspace(id);
   await app.close();
+});
+it("commits Task extensions, indexes Labels and restores an independent Template/relationship snapshot", async () => {
+  const owner = await actor(),
+    space = await workspace(owner),
+    target = await page(owner, space.id, null, "database"),
+    doc = new Y.Doc();
+  const parent = createTaskRow(doc, "Release"),
+    child = createSubtask(doc, parent, "Review");
+  setTaskDependency(doc, child, parent, true);
+  setTaskLabel(doc, child, "task-beta-label");
+  updateTaskField(doc, child, "estimateMinutes", 90);
+  const template = saveTaskTemplate(doc, child, "Review checklist");
+  const payload = {
+    operationId: crypto.randomUUID(),
+    update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+  };
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/documents/${target.id}/commit`,
+        payload,
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/documents/${target.id}/commit`,
+        payload,
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  const viewer = await actor(),
+    link = await invite(owner, target.id, "viewer");
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/invites/${link.id}/redeem`,
+        { secret: link.secret },
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/documents/${target.id}/commit`,
+        { ...payload, operationId: crypto.randomUUID() },
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(403);
+  const searched = (
+    await request(
+      "POST",
+      "/v1/search",
+      {
+        query: parseSearchQuery("tag:task-beta-label"),
+        workspaceId: null,
+        overlays: [],
+      },
+      viewer.cookie,
+    )
+  ).json();
+  expect(
+    SearchResponseSchema.parse(searched).hits.some(
+      (hit) =>
+        hit.pageId === target.id &&
+        hit.rowId === child &&
+        hit.tags.includes("task-beta-label"),
+    ),
+  ).toBe(true);
+  const snapshot = (
+    await request(
+      "POST",
+      `/v1/pages/${target.id}/snapshots`,
+      { operationId: crypto.randomUUID(), name: "Task extensions" },
+      owner.cookie,
+    )
+  ).json<{ id: string }>();
+  const restored = await request(
+    "POST",
+    `/v1/snapshots/${snapshot.id}/restore-copy`,
+    { operationId: crypto.randomUUID() },
+    owner.cookie,
+  );
+  expect(restored.statusCode).toBe(200);
+  const id = restored.json<{ id: string }>().id;
+  const copy = new Y.Doc();
+  Y.applyUpdate(
+    copy,
+    base64ToBytes(
+      (
+        await request("GET", `/v1/documents/${id}`, undefined, owner.cookie)
+      ).json<{ update: string }>().update,
+    ),
+  );
+  expect(getTaskRows(copy)).toEqual(getTaskRows(doc));
+  expect(getTaskTemplates(copy).map((item) => item.id)).toEqual([template]);
+  expect(
+    (await request("GET", `/v1/documents/${id}`, undefined, viewer.cookie))
+      .statusCode,
+  ).toBe(403);
+});
+it("rejects merged Task cycles and invalid Estimate before Commit, then accepts the preserved repaired document", async () => {
+  const owner = await actor(),
+    space = await workspace(owner),
+    target = await page(owner, space.id, null, "database"),
+    doc = new Y.Doc();
+  const a = createTaskRow(doc, "A"),
+    b = createTaskRow(doc, "B");
+  const send = async (operationId: string) =>
+    request(
+      "POST",
+      `/v1/documents/${target.id}/commit`,
+      { operationId, update: bytesToBase64(Y.encodeStateAsUpdate(doc)) },
+      owner.cookie,
+    );
+  expect((await send(crypto.randomUUID())).statusCode).toBe(200);
+  const other = new Y.Doc();
+  Y.applyUpdate(other, Y.encodeStateAsUpdate(doc));
+  setTaskDependency(doc, a, b, true);
+  setTaskDependency(other, b, a, true);
+  Y.applyUpdate(doc, Y.encodeStateAsUpdate(other));
+  const operation = crypto.randomUUID(),
+    denied = await send(operation);
+  expect(denied.statusCode).toBe(422);
+  expect(denied.json<{ error: string }>().error).toContain("순환");
+  const saved = new Y.Doc();
+  Y.applyUpdate(
+    saved,
+    base64ToBytes(
+      (
+        await request(
+          "GET",
+          `/v1/documents/${target.id}`,
+          undefined,
+          owner.cookie,
+        )
+      ).json<{ update: string }>().update,
+    ),
+  );
+  expect(
+    getTaskRows(saved).every((row) => row.dependencyIds.length === 0),
+  ).toBe(true);
+  setTaskDependency(doc, b, a, false);
+  expect((await send(operation)).statusCode).toBe(200);
+  doc.getMap<Y.Map<unknown>>("tasks").get(a)!.set("estimateMinutes", 1.5);
+  expect((await send(crypto.randomUUID())).statusCode).toBe(422);
+  expect(getTaskRows(doc)).toHaveLength(2);
+  updateTaskField(doc, a, "estimateMinutes", 0);
+  expect((await send(crypto.randomUUID())).statusCode).toBe(200);
 });
 it("retains independent child grants after parent revocation and does not disclose private parent deletion", async () => {
   const owner = await actor(),
@@ -1042,88 +1206,115 @@ it("lists retained file names only for Owner, including Trash, without returning
     ).statusCode,
   ).toBe(400);
 });
-it("protects File Property references from purge and copies bytes with new Snapshot-scoped IDs", async () => {
-  const owner = await actor(),
-    space = await workspace(owner),
-    target = await page(owner, space.id);
-  const file = {
-    id: crypto.randomUUID(),
-    operationId: crypto.randomUUID(),
-    name: "property.txt",
-    data: "QQ==",
-  };
-  await request(
-    "POST",
-    `/v1/pages/${target.id}/attachments`,
-    file,
-    owner.cookie,
-  );
-  const doc = new Y.Doc(),
-    rowId = createTaskRow(doc, "File Row"),
-    propertyId = addDatabaseProperty(doc, "File", "file");
-  writeDatabaseValue(doc, rowId, propertyId, [file.id]);
-  expect(
-    (
-      await request(
-        "POST",
-        `/v1/documents/${target.id}/commit`,
-        {
-          operationId: crypto.randomUUID(),
-          update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
-        },
-        owner.cookie,
-      )
-    ).statusCode,
-  ).toBe(200);
-  expect(
-    (
-      await request(
-        "DELETE",
-        `/v1/workspaces/${space.id}/attachments/${file.id}/content`,
-        { name: file.name },
-        owner.cookie,
-      )
-    ).statusCode,
-  ).toBe(409);
-  const snapshot = (
+it.each(["Row", "Template"] as const)(
+  "protects %s File Property references from purge and copies bytes with new Snapshot-scoped IDs",
+  async (scope) => {
+    const owner = await actor(),
+      space = await workspace(owner),
+      target = await page(owner, space.id);
+    const file = {
+      id: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      name: "property.txt",
+      data: "QQ==",
+    };
     await request(
       "POST",
-      `/v1/pages/${target.id}/snapshots`,
-      { operationId: crypto.randomUUID(), name: "File Property" },
+      `/v1/pages/${target.id}/attachments`,
+      file,
       owner.cookie,
-    )
-  ).json<{ id: string }>();
-  const restored = await request(
-    "POST",
-    `/v1/snapshots/${snapshot.id}/restore-copy`,
-    { operationId: crypto.randomUUID() },
-    owner.cookie,
-  );
-  expect(restored.statusCode).toBe(200);
-  const newId = restored.json<{ id: string }>().id;
-  const update = (
-    await request("GET", `/v1/documents/${newId}`, undefined, owner.cookie)
-  ).json<{ update: string }>();
-  const copy = new Y.Doc();
-  Y.applyUpdate(copy, base64ToBytes(update.update));
-  const files = readDatabaseValue(
-    copy,
-    getTaskRows(copy)[0]!,
-    getDatabaseProperties(copy).find((property) => property.id === propertyId)!,
-  );
-  expect(Array.isArray(files)).toBe(true);
-  expect(files).not.toContain(file.id);
-  const copied = await request(
-    "GET",
-    `/v1/attachments/${(files as string[])[0]}`,
-    undefined,
-    owner.cookie,
-  );
-  expect(copied.statusCode).toBe(200);
-  expect(copied.json()).toMatchObject({ pageId: newId, data: file.data });
-  doc.destroy();
-  copy.destroy();
-});
+    );
+    const doc = new Y.Doc(),
+      rowId = createTaskRow(doc, "File Row"),
+      propertyId = addDatabaseProperty(doc, "File", "file");
+    writeDatabaseValue(doc, rowId, propertyId, [file.id]);
+    if (scope === "Template") {
+      saveTaskTemplate(doc, rowId, "Retained File");
+      writeDatabaseValue(doc, rowId, propertyId, []);
+    }
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/documents/${target.id}/commit`,
+          {
+            operationId: crypto.randomUUID(),
+            update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await request(
+          "DELETE",
+          `/v1/workspaces/${space.id}/attachments/${file.id}/content`,
+          { name: file.name },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(409);
+    const snapshot = (
+      await request(
+        "POST",
+        `/v1/pages/${target.id}/snapshots`,
+        { operationId: crypto.randomUUID(), name: "File Property" },
+        owner.cookie,
+      )
+    ).json<{ id: string }>();
+    const restored = await request(
+      "POST",
+      `/v1/snapshots/${snapshot.id}/restore-copy`,
+      { operationId: crypto.randomUUID() },
+      owner.cookie,
+    );
+    expect(restored.statusCode).toBe(200);
+    const newId = restored.json<{ id: string }>().id;
+    const update = (
+      await request("GET", `/v1/documents/${newId}`, undefined, owner.cookie)
+    ).json<{ update: string }>();
+    const copy = new Y.Doc();
+    Y.applyUpdate(copy, base64ToBytes(update.update));
+    const restoredRowId =
+      scope === "Template"
+        ? createTaskFromTemplate(copy, newId, getTaskTemplates(copy)[0]!.id)
+        : rowId;
+    const files = readDatabaseValue(
+      copy,
+      getTaskRows(copy).find((row) => row.id === restoredRowId)!,
+      getDatabaseProperties(copy).find(
+        (property) => property.id === propertyId,
+      )!,
+    );
+    expect(Array.isArray(files)).toBe(true);
+    expect(files).not.toContain(file.id);
+    const copied = await request(
+      "GET",
+      `/v1/attachments/${(files as string[])[0]}`,
+      undefined,
+      owner.cookie,
+    );
+    expect(copied.statusCode).toBe(200);
+    expect(copied.json()).toMatchObject({ pageId: newId, data: file.data });
+    if (scope === "Template")
+      expect(
+        (
+          await request(
+            "POST",
+            `/v1/documents/${newId}/commit`,
+            {
+              operationId: crypto.randomUUID(),
+              update: bytesToBase64(Y.encodeStateAsUpdate(copy)),
+            },
+            owner.cookie,
+          )
+        ).statusCode,
+      ).toBe(200);
+    doc.destroy();
+    copy.destroy();
+  },
+);
 
 it("protects new blocks from legacy reads, offline deletions, retries and Snapshot previews", async () => {
   const owner = await actor(),

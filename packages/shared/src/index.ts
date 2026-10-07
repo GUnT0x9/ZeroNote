@@ -5,6 +5,13 @@ import { isCanonicalBase64 } from "./attachments";
 import { ExportAttachmentSchema } from "./attachments";
 import { setXmlAttribute } from "./xml";
 import { getPageTags } from "./page-tags";
+import { TaskExtensionShape } from "./task-schema";
+import {
+  readTaskExtensions,
+  assertTaskRelationChange,
+  taskEntryMap,
+} from "./task-extension";
+import { getTaskTemplates } from "./task-templates";
 export * from "./portable-document";
 
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -117,6 +124,7 @@ export const DateOnlySchema = z
   .string()
   .refine(isValidDateOnly, "Invalid calendar date");
 export const TaskRowSchema = z.object({
+  ...TaskExtensionShape,
   id: IdSchema,
   title: z.string().max(500),
   status: z.enum(TaskStatuses),
@@ -230,6 +238,10 @@ export function createTaskRow(
   title: string,
   id: string = crypto.randomUUID(),
 ): string {
+  IdSchema.parse(id);
+  z.string().max(500).parse(title);
+  if (document.getMap("tasks").has(id))
+    throw new Error("Task ID가 이미 있습니다.");
   const row = new Y.Map<unknown>();
   document.transact(() => {
     document.getMap<Y.Map<unknown>>("tasks").set(id, row);
@@ -249,9 +261,10 @@ export function createTaskRow(
 export function getTaskRows(document: Y.Doc): TaskRow[] {
   return Array.from(document.getMap<Y.Map<unknown>>("tasks").entries()).flatMap(
     ([id, row]) => {
-      if (!(row instanceof Y.Map)) return [];
+      if (!(row instanceof Y.Map) || !IdSchema.safeParse(id).success) return [];
       const title = row.get("title");
       const parsed = TaskRowSchema.safeParse({
+        ...readTaskExtensions(document, id, row),
         id,
         title: title instanceof Y.Text ? title.toString() : "",
         status: row.get("status"),
@@ -277,6 +290,15 @@ export function updateTaskField(
   const row = document.getMap<Y.Map<unknown>>("tasks").get(id);
   if (!row) throw new Error("Task not found");
   const candidate = getTaskRows(document).find((task) => task.id === id);
+  if (["labels", "dependencyIds"].includes(field))
+    throw new Error("Label과 Dependency는 항목별로 수정해주세요.");
+  if (field === "parentTaskId")
+    assertTaskRelationChange(
+      getTaskRows(document),
+      id,
+      IdSchema.nullable().parse(value),
+      "parent",
+    );
   TaskRowSchema.parse({ ...candidate, [field]: value });
   document.transact(() => {
     row.set(field, value);
@@ -454,6 +476,7 @@ export function cloneDocumentContent(
     "databaseViews",
     "pageSettings",
     "pageTags",
+    "taskTemplates",
   ])
     for (const [key, value] of source.getMap<unknown>(name))
       target
@@ -469,7 +492,12 @@ export function cloneDocumentContent(
     if (original)
       target.getMap<Y.Map<unknown>>("tasks").set(row.id, original.clone());
     copyFragment(`task:${row.id}`);
+    for (const key of ["labels", "dependencies"] as const)
+      for (const [id, value] of taskEntryMap(source, row.id, key))
+        taskEntryMap(target, row.id, key).set(id, structuredClone(value));
   }
+  for (const template of getTaskTemplates(source))
+    copyFragment(`task-template:${template.id}`);
   remapDatabasePageIds(target, new Map([[oldPageId, newPageId]]));
   return target;
 }
@@ -488,3 +516,7 @@ export * from "./search-results";
 export * from "./search-engine";
 export * from "./knowledge-graph";
 export * from "./knowledge-replacement";
+export * from "./task-schema";
+export * from "./task-extension";
+export * from "./task-templates";
+export { cloneXmlContent } from "./xml";

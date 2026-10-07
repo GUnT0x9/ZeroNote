@@ -50,6 +50,8 @@ import { EmptyState } from "./primitives";
 import { DesignIcon } from "./design-icon";
 import { TemplatesDialog } from "./templates-dialog";
 import { TransferDialog } from "./transfer-dialog";
+import { TaskDetails } from "./task-details";
+import { TaskTemplatesDialog } from "./task-templates";
 export function DocumentView({
   page,
   data,
@@ -63,6 +65,7 @@ export function DocumentView({
     [error, setError] = useState<string | null>(null),
     [menu, setMenu] = useState(false),
     [templatesOpen, setTemplatesOpen] = useState(false),
+    [taskTemplatesOpen, setTaskTemplatesOpen] = useState(false),
     [exportOpen, setExportOpen] = useState(false),
     menuRef = useRef<HTMLDivElement>(null),
     menuButton = useRef<HTMLButtonElement>(null),
@@ -81,6 +84,7 @@ export function DocumentView({
     return () => document.removeEventListener("pointerdown", dismiss);
   }, [menu]);
   useDocumentRevision(session?.document ?? null);
+  useEffect(() => setTaskTemplatesOpen(false), [page.id, ui.taskId]);
   useEffect(() => {
     let cancelled = false;
     setSession(null);
@@ -463,6 +467,16 @@ export function DocumentView({
           />
         )}
         <main className="page-body">
+          {taskTemplatesOpen && session && row && (
+            <TaskTemplatesDialog
+              session={session}
+              page={page}
+              data={data}
+              sourceRow={row}
+              editable={editable}
+              onClose={() => setTaskTemplatesOpen(false)}
+            />
+          )}
           {row && (
             <div className="page-return">
               <button onClick={() => ui.select(page.workspaceId, page.id)}>
@@ -565,13 +579,25 @@ export function DocumentView({
                   )}
                 />
               ) : (
-                <BlockEditor
-                  session={session}
-                  fragmentName={row ? `task:${row.id}` : "content"}
-                  editable={editable}
-                  pages={data.pages}
-                  onConvertTask={editable ? convertTask : undefined}
-                />
+                <>
+                  {row && (
+                    <TaskDetails
+                      key={row.id}
+                      document={session.document}
+                      row={row}
+                      page={page}
+                      editable={editable}
+                      onTemplates={() => setTaskTemplatesOpen(true)}
+                    />
+                  )}
+                  <BlockEditor
+                    session={session}
+                    fragmentName={row ? `task:${row.id}` : "content"}
+                    editable={editable}
+                    pages={data.pages}
+                    onConvertTask={editable ? convertTask : undefined}
+                  />
+                </>
               )}
               {!row &&
                 (page.isInbox ||

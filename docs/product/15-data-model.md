@@ -35,6 +35,8 @@ Ownership: Workspace Owner Identity 관리; Device는 Membership으로 연결; G
 
 ## Beta Entities
 
+Task 확장: Row의 nullable `parentTaskId`/정수 분 `estimateMinutes`, Row ID별 최상위 `task-labels:<id>`/`task-dependencies:<id>` Map이 편집 원본이다. 읽기 Type은 labels/dependencyIds 배열로 제공하며 기존 Row는 빈 기본값으로 읽는다. 같은 Database의 Row ID만 새 연결할 수 있고 삭제된 연결은 Task를 지우지 않는다. `taskTemplates`는 캡처한 Task/사용자 정의 Property 정의와 값, `task-template:<id>`는 독립 XML 본문이다. 이 데이터의 별도 관계형 편집 원본이나 Migration은 만들지 않는다. 파일/Relation 참조는 Snapshot/Import의 기존 소속 검증과 ID 재매핑을 따른다.
+
 `schema_migrations`는 적용된 SQL Version을 기록한다. `beta_codes`는 Secret Hash·만료·최초 수락 Device를 기록하고 `beta_devices`는 Device의 생성 자격을 연결한다. `workspaces.beta_code_id`로 자격당 생성 수를 계산한다. Owner Recovery가 같은 자격을 새 Device로 이어준다. 기존 Alpha Workspace의 자격 FK는 NULL이며 데이터는 유지한다.
 
 `document_checkpoints.through_update_id`는 포함된 Commit 위치다. `document_operations`는 정리된 Update의 Operation ID·Page ID·Payload Hash를 보존한다. Page 삭제 시 둘 다 Cascade한다. `document_snapshots`는 별도 immutable Yjs State, Version, 종류, 이름, UTC 자동 생성 날짜, 생성 Device를 기록한다. Page/Workspace hard delete 시 Snapshot도 Cascade한다. `snapshot_operations`는 생성/복구 재시도의 Device·대상·동작·결과를 기록한다. 이 결과에는 본문이나 인증 Secret을 저장하지 않는다.

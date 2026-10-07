@@ -35,6 +35,10 @@ import {
   type TaskRow,
   type Identity,
   getDatabaseMode,
+  getTaskRows,
+  getTaskRelationIssues,
+  taskCompletionWarning,
+  normalizeSearchText,
   getDatabaseProperties,
   defaultDatabaseView,
   getDatabaseViews,
@@ -65,12 +69,15 @@ import {
 } from "./database-settings";
 import { DatabaseDateView, DatabaseCards } from "./database-date-views";
 import { errorMessage } from "@/lib/database";
+import { TaskSummary } from "./task-details";
+import { TaskTemplatesDialog } from "./task-templates";
 export const STATUS_LABELS = {
   todo: "Todo",
   in_progress: "In progress",
   done: "Done",
 };
 export const PRIORITY_LABELS = { low: "Low", medium: "Medium", high: "High" };
+const MAX_TASK_LABEL_SUGGESTIONS = 200;
 export function TaskDatabase({
   session,
   page,
@@ -88,6 +95,8 @@ export function TaskDatabase({
   const [viewId, setViewId] = useState("default-table"),
     [drafts, setDrafts] = useState<Record<string, DatabaseView>>({}),
     [query, setQuery] = useState(""),
+    [labelFilter, setLabelFilter] = useState(""),
+    [templatesOpen, setTemplatesOpen] = useState(false),
     [newTitle, setNewTitle] = useState(""),
     [adding, setAdding] = useState(false),
     [propertyDialog, setPropertyDialog] = useState(false),
@@ -97,6 +106,17 @@ export function TaskDatabase({
   const generic = getDatabaseMode(session.document) === "generic",
     properties = getDatabaseProperties(session.document),
     savedViews = getDatabaseViews(session.document);
+  const taskRowsById = new Map(
+    getTaskRows(session.document).map((row) => [row.id, row]),
+  );
+  const relationIssues = generic
+    ? []
+    : getTaskRelationIssues([...taskRowsById.values()]).filter(
+        (issue) => issue.reason === "cycle",
+      );
+  const taskLabels = [
+    ...new Set([...taskRowsById.values()].flatMap((row) => row.labels)),
+  ].sort((a, b) => a.localeCompare(b));
   const stored = savedViews.find((entry) => entry.id === viewId);
   const baseView =
     drafts[viewId] ??
@@ -133,6 +153,14 @@ export function TaskDatabase({
     query,
     identities,
     context.reader,
+  ).filter(
+    (row) =>
+      generic ||
+      !labelFilter.trim() ||
+      row.labels.some(
+        (label) =>
+          normalizeSearchText(label) === normalizeSearchText(labelFilter),
+      ),
   );
   const openRow = (id: string) =>
     useUiStore.getState().select(page.workspaceId, page.id, id);
@@ -144,6 +172,14 @@ export function TaskDatabase({
     value: unknown,
   ) => {
     try {
+      if (field === "status") {
+        const warning = taskCompletionWarning(
+          [...taskRowsById.values()],
+          id,
+          value,
+        );
+        if (warning && !window.confirm(warning)) return;
+      }
       updateTaskField(session.document, id, field, value);
     } catch (error) {
       useUiStore.getState().patch({
@@ -202,6 +238,31 @@ export function TaskDatabase({
           )}
         </div>
         <div className="database-actions">
+          {!generic && (
+            <>
+              <input
+                className="task-label-filter"
+                aria-label="Task Label 필터"
+                list={`task-label-filter-${page.id}`}
+                value={labelFilter}
+                placeholder="Label 필터"
+                onChange={(event) => setLabelFilter(event.target.value)}
+              />
+              <datalist id={`task-label-filter-${page.id}`}>
+                {taskLabels
+                  .slice(0, MAX_TASK_LABEL_SUGGESTIONS)
+                  .map((label) => (
+                    <option key={label} value={label} />
+                  ))}
+              </datalist>
+              <button
+                className="button button-small"
+                onClick={() => setTemplatesOpen(true)}
+              >
+                Task Templates
+              </button>
+            </>
+          )}
           <label className="compact-search">
             <DesignIcon name="task-search" />
             <input
@@ -222,6 +283,30 @@ export function TaskDatabase({
           )}
         </div>
       </div>
+      {templatesOpen && (
+        <TaskTemplatesDialog
+          session={session}
+          page={page}
+          data={data}
+          editable={editable}
+          onClose={() => setTemplatesOpen(false)}
+        />
+      )}
+      {!!relationIssues.length && (
+        <div className="task-relation-warning" role="alert">
+          동시 변경으로 순환 관계가 생겼습니다. 표시된 Task에서 관계를
+          해제해주세요.
+          {relationIssues.map((issue) => (
+            <button
+              key={`${issue.kind}:${issue.rowId}:${issue.targetId}`}
+              className="text-button"
+              onClick={() => openRow(issue.rowId)}
+            >
+              {taskRowsById.get(issue.rowId)?.title || "Task"} 관계 열기
+            </button>
+          ))}
+        </div>
+      )}
       <div className="database-settings-toolbar">
         <DatabaseViewSettings
           key={view.kind}
@@ -378,6 +463,7 @@ export function TaskDatabase({
       )}
       {view.kind === "table" ? (
         <TaskTable
+          taskRowsById={taskRowsById}
           context={context}
           rows={rows}
           session={session}
@@ -394,6 +480,7 @@ export function TaskDatabase({
         />
       ) : view.kind === "board" ? (
         <TaskBoard
+          taskRowsById={taskRowsById}
           context={context}
           rows={rows}
           page={page}
@@ -435,8 +522,10 @@ export function TaskDatabase({
 function DatabaseTableCell({
   page,
   generic,
+  taskRowsById,
   ...props
 }: Parameters<typeof DatabasePropertyCell>[0] & {
+  taskRowsById: ReadonlyMap<string, TaskRow>;
   page: LocalPage;
   generic: boolean;
 }) {
@@ -466,7 +555,10 @@ function DatabaseTableCell({
       >
         <DesignIcon name="task-open" />
       </button>
-      {control}
+      <div>
+        {control}
+        {!generic && <TaskSummary row={row} byId={taskRowsById} compact />}
+      </div>
     </div>
   );
 }
@@ -476,6 +568,7 @@ type UpdateTask = (
   value: unknown,
 ) => void;
 function TaskTable({
+  taskRowsById,
   rows,
   session,
   page,
@@ -486,6 +579,7 @@ function TaskTable({
   generic,
   context,
 }: {
+  taskRowsById: ReadonlyMap<string, TaskRow>;
   rows: TaskRow[];
   session: DocumentSession;
   page: LocalPage;
@@ -555,6 +649,7 @@ function TaskTable({
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id}>
                           <DatabaseTableCell
+                            taskRowsById={taskRowsById}
                             context={context}
                             document={session.document}
                             row={row.original}
@@ -612,6 +707,7 @@ function Checkmark() {
   return <span className="empty-check">✓</span>;
 }
 function TaskBoard({
+  taskRowsById,
   rows,
   page,
   editable,
@@ -621,6 +717,7 @@ function TaskBoard({
   view,
   context,
 }: {
+  taskRowsById: ReadonlyMap<string, TaskRow>;
   rows: TaskRow[];
   page: LocalPage;
   editable: boolean;
@@ -656,6 +753,14 @@ function TaskBoard({
         const group = groups.find((entry) => entry.key === over?.id);
         if (movable && group && property) {
           try {
+            if (property.builtin && property.id === "status") {
+              const warning = taskCompletionWarning(
+                [...taskRowsById.values()],
+                String(active.id),
+                group.value,
+              );
+              if (warning && !window.confirm(warning)) return;
+            }
             writeDatabaseValue(
               session.document,
               String(active.id),
@@ -671,6 +776,7 @@ function TaskBoard({
       <div className="kanban-board">
         {groups.map((group) => (
           <BoardColumn
+            taskRowsById={taskRowsById}
             context={context}
             properties={getDatabaseProperties(session.document).filter(
               (property) =>
@@ -692,6 +798,7 @@ function TaskBoard({
   );
 }
 function BoardColumn({
+  taskRowsById,
   group,
   generic,
   page,
@@ -702,6 +809,7 @@ function BoardColumn({
   context,
   properties,
 }: {
+  taskRowsById: ReadonlyMap<string, TaskRow>;
   group: { key: string; label: string; value: PropertyValue; rows: TaskRow[] };
   generic: boolean;
   page: LocalPage;
@@ -728,6 +836,7 @@ function BoardColumn({
       </div>
       {group.rows.map((row) => (
         <BoardCard
+          taskRowsById={taskRowsById}
           context={context}
           properties={properties}
           key={row.id}
@@ -747,6 +856,7 @@ function BoardColumn({
   );
 }
 function BoardCard({
+  taskRowsById,
   row,
   page,
   editable,
@@ -757,6 +867,7 @@ function BoardCard({
   context,
   properties,
 }: {
+  taskRowsById: ReadonlyMap<string, TaskRow>;
   row: TaskRow;
   generic: boolean;
   draggable: boolean;
@@ -800,6 +911,7 @@ function BoardCard({
           </button>
         )}
       </div>
+      {!generic && <TaskSummary row={row} byId={taskRowsById} />}
       <div className="kanban-card-meta">
         {!generic && (
           <span className={`priority-tag ${row.priority}`}>

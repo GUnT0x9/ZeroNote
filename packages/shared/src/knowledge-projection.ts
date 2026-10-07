@@ -10,6 +10,8 @@ import {
 } from "./database";
 import { PropertyValueSchema } from "./database-values";
 import { getPageTags } from "./page-tags";
+import { taskEntryMap } from "./task-extension";
+import { normalizeSearchText } from "./search-normalize";
 
 export const KnowledgeLinkSchema = z
   .object({
@@ -154,8 +156,15 @@ export function createKnowledgeDatabase(
       const map = new Y.Map<unknown>();
       document.getMap<Y.Map<unknown>>("tasks").set(row.id, map);
       for (const [key, value] of Object.entries(row))
-        if (key !== "id")
+        if (!["id", "labels", "dependencyIds"].includes(key))
           map.set(key, key === "title" ? new Y.Text(String(value)) : value);
+      for (const label of row.labels)
+        taskEntryMap(document, row.id, "labels").set(
+          normalizeSearchText(label),
+          label,
+        );
+      for (const id of row.dependencyIds)
+        taskEntryMap(document, row.id, "dependencies").set(id, true);
       for (const [key, value] of Object.entries(values))
         map.set(`property:${key}`, value);
     }
@@ -166,6 +175,7 @@ export function createKnowledgeDatabase(
 export function knowledgeSourceText(projection: KnowledgeProjection): string {
   const directLabels = projection.rows.flatMap(({ row, values, body }) => [
     row.title,
+    ...row.labels,
     body,
     ...projection.properties.flatMap((property) => {
       if (

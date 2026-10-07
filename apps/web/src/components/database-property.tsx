@@ -9,6 +9,10 @@ import {
   type DatabaseProperty,
   type TaskRow,
   type Identity,
+  taskCompletionWarning,
+  getTaskRows,
+  getDatabaseMode,
+  DEFAULT_HIDDEN_PROPERTIES,
 } from "@zeronote/shared";
 import { errorMessage } from "@/lib/database";
 import type { LocalPage } from "@/lib/database";
@@ -22,6 +26,7 @@ import {
   DatabaseRelationCell,
   DatabaseFileCell,
 } from "./database-advanced-cell";
+import { TaskEstimateInput } from "./task-estimate";
 
 export const PROPERTY_TYPE_LABELS = {
   text: "Text",
@@ -70,6 +75,14 @@ export function DatabasePropertyCell({
   const commit = (next: unknown) => {
     if (!editable) return;
     try {
+      if (property.builtin && property.id === "status") {
+        const warning = taskCompletionWarning(
+          getTaskRows(document),
+          row.id,
+          next,
+        );
+        if (warning && !window.confirm(warning)) return;
+      }
       writeDatabaseValue(document, row.id, property.id, next);
       setError(null);
     } catch (problem) {
@@ -77,7 +90,22 @@ export function DatabasePropertyCell({
     }
   };
   let control;
-  if (["file", "formula", "relation", "rollup"].includes(property.type)) {
+  if (property.builtin && property.id === "estimateMinutes") {
+    control = (
+      <TaskEstimateInput
+        document={document}
+        row={row}
+        editable={editable}
+        label={ariaLabel}
+      />
+    );
+  } else if (property.builtin && property.id === "labels") {
+    control = (
+      <span className="muted small">{row.labels.join(" · ") || "—"}</span>
+    );
+  } else if (
+    ["file", "formula", "relation", "rollup"].includes(property.type)
+  ) {
     const props = context
       ? { document, row, property, editable, context, label: ariaLabel }
       : null;
@@ -233,20 +261,38 @@ export function DatabaseRowProperties(props: {
     props.data,
     props.historical,
   );
-  return (
-    <div className="database-row-properties">
-      {getDatabaseProperties(props.document)
-        .filter((property) => property.id !== "title")
-        .map((property) => (
-          <div className="field-label" key={property.id}>
-            <span>{property.name}</span>
-            <DatabasePropertyCell
-              {...props}
-              property={property}
-              context={context}
-            />
-          </div>
-        ))}
+  const properties = getDatabaseProperties(props.document).filter(
+      (property) => !["title", "labels"].includes(property.id),
+    ),
+    task = getDatabaseMode(props.document) === "task";
+  const render = (property: DatabaseProperty) => (
+    <div className="field-label" key={property.id}>
+      <span>{property.name}</span>
+      <DatabasePropertyCell {...props} property={property} context={context} />
     </div>
+  );
+  return (
+    <>
+      <div className="database-row-properties">
+        {properties
+          .filter(
+            (property) =>
+              !task || !DEFAULT_HIDDEN_PROPERTIES.includes(property.id),
+          )
+          .map(render)}
+      </div>
+      {task && (
+        <details className="task-date-disclosure">
+          <summary>날짜 · 생성/수정 기록</summary>
+          <div className="database-row-properties">
+            {properties
+              .filter((property) =>
+                DEFAULT_HIDDEN_PROPERTIES.includes(property.id),
+              )
+              .map(render)}
+          </div>
+        </details>
+      )}
+    </>
   );
 }

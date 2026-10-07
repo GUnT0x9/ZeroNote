@@ -468,7 +468,11 @@ function remapReferences(document: Y.Doc, ids: Map<string, string>): void {
   document.transact(() => {
     walk(document.getXmlFragment("content"));
     for (const [name, type] of document.share)
-      if (name.startsWith("task:") && type instanceof Y.XmlFragment) walk(type);
+      if (
+        (name.startsWith("task:") || name.startsWith("task-template:")) &&
+        type instanceof Y.XmlFragment
+      )
+        walk(type);
   });
 }
 export function downloadJson(value: unknown, filename: string): void {

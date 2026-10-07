@@ -14,6 +14,8 @@ Subtask, Task Dependency, Task Label/Tag, Task Estimate, Task Template의 5개�
 | Task Estimate 입력                         | 분 단위 정수로 저장하고 시간/분 입력과 읽기 표시를 제공한다. 미지정과 0을 구분한다.                                                                          | 로컬 입력               | Row별 값                                                | 음수·소수 분·범위 밖 입력을 저장하지 않는다.                                                                       | 상세·Table 데이터 일치, 시간 입력 변환 정확, 서로 다른 속성의 동시 수정 보존                             |
 | Task를 Template으로 저장/Template에서 생성 | 같은 Database에 이름과 Task 기본 속성·본문을 저장한다. 새 Row/본문을 만들고 상태는 Todo, 날짜는 미지정으로 시작한다. 부모·Dependency는 자동 복제하지 않는다. | Template 저장·조회·생성 | 같은 Database 문서의 Template 정의와 독립된 새 Task     | 권한·Template 개수·본문 크기 확인, 삭제/동시 변경된 Template은 재조회 안내                                         | 새 Task와 원본의 편집 독립, 파일 참조·문서 링크 보존, Viewer 쓰기 차단, Snapshot·복제·Export/Import 보존 |
 
+Template은 기본 Task 속성과 사용자 정의 수정 가능한 Property 값을 함께 캡처한다. Formula·Rollup·자동 시간은 복사하지 않고 새 Task에서 계산한다. 저장 이후 삭제/타입/Relation 대상/선택 옵션이 바뀐 속성은 생성 전에 표시하고 명시적인 확인을 받아 제외한다. File 값은 Template에만 남아도 보존하고 Snapshot/Import의 새 파일 ID로 재매핑한다. 기본 날짜와 부모·선행 작업은 미지정으로 시작하며 자기 Task Link/Relation은 새 Row ID를 사용한다.
+
 ## 실패·호환 규칙
 
 - 관계는 표시 이름 대신 안정적인 Row ID를 사용한다. Database 권한을 상속하며 Row별 Share나 접근 권한 전파를 추가하지 않는다.

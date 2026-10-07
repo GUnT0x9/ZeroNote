@@ -11,6 +11,308 @@ import {
   strToU8,
 } from "../apps/web/node_modules/fflate";
 const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
+test("Task Subtask Dependency Label Estimate and Template survive Offline collaboration and restore", async ({
+  page,
+  browser,
+}) => {
+  const name = `Task Extensions ${Date.now()}`,
+    key = await createWorkspace(page, name),
+    otherContext = await browser.newContext(),
+    other = await otherContext.newPage();
+  const ack = (target: Page) =>
+    expect(
+      target.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+  const add = async (title: string) => {
+    await page.getByRole("button", { name: "새 Task", exact: true }).click();
+    await page.getByLabel("새 Task 제목").fill(title);
+    await page.getByRole("button", { name: "추가", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: `${title} 열기`, exact: true }),
+    ).toBeVisible();
+  };
+  const label = async (target: Page, value: string) => {
+    await target.getByLabel("Task Label 추가", { exact: true }).fill(value);
+    await target
+      .getByRole("button", { name: "Label 추가", exact: true })
+      .click();
+  };
+  try {
+    await page.getByRole("button", { name: "To-Do", exact: true }).click();
+    for (const [title, type] of [
+      ["Instructions", "text"],
+      ["Files", "file"],
+    ]) {
+      await page.getByRole("button", { name: "속성", exact: true }).click();
+      const properties = page.getByRole("dialog", { name: "Database 속성" });
+      await properties.getByLabel("새 속성 이름").fill(title!);
+      await properties.getByLabel("새 속성 종류").selectOption(type!);
+      await properties
+        .getByRole("button", { name: "속성 추가", exact: true })
+        .click();
+      await expect(properties.getByLabel(`${title} 속성 이름`)).toBeVisible();
+      await properties
+        .getByRole("button", { name: "닫기", exact: true })
+        .last()
+        .click();
+    }
+    await add("Ship extension");
+    await add("Review extension");
+    const databaseId = new URL(page.url()).searchParams.get("page")!;
+    await page
+      .getByRole("button", { name: "Ship extension 열기", exact: true })
+      .click();
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Template captured body");
+    await page
+      .getByLabel("Ship extension Instructions", { exact: true })
+      .fill("Captured custom field");
+    await page
+      .getByLabel("Ship extension Instructions", { exact: true })
+      .press("Tab");
+    await page
+      .getByLabel("Ship extension Files 파일 추가")
+      .setInputFiles({
+        name: "template.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("Task template file bytes"),
+      });
+    await expect(
+      page.getByRole("button", { name: "template.txt 미리보기", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByLabel("Ship extension Estimate", { exact: true })
+      .fill("1h 30m");
+    await page
+      .getByLabel("Ship extension Estimate", { exact: true })
+      .press("Tab");
+    await expect(
+      page.getByLabel("Ship extension Estimate", { exact: true }),
+    ).toHaveValue("1시간 30분");
+    await label(page, "beta-task");
+    await page.getByLabel("하위 Task 제목").fill("Documentation release");
+    await page
+      .getByRole("button", { name: "하위 작업 추가", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Documentation release", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByLabel("선행 Task 선택")
+      .selectOption({ label: "Review extension" });
+    await page
+      .getByRole("button", { name: "선행 작업 추가", exact: true })
+      .click();
+    const confirmation = page.waitForEvent("dialog"),
+      select = page.getByLabel("Ship extension Status").selectOption("done"),
+      dialog = await confirmation;
+    expect(dialog.message()).toContain("미완료 선행 작업");
+    await dialog.dismiss();
+    await select;
+    await expect(page.getByLabel("Ship extension Status")).toHaveValue("todo");
+    await page
+      .getByRole("button", { name: "Task Template", exact: true })
+      .click();
+    const templates = page.getByRole("dialog", {
+      name: "Task Templates",
+      exact: true,
+    });
+    await templates.getByLabel("Task Template 이름").fill("Shipping checklist");
+    await templates
+      .getByRole("button", { name: "Task Template 저장", exact: true })
+      .click();
+    await expect(
+      templates.getByRole("textbox", { name: "문서 본문" }),
+    ).toHaveAttribute("contenteditable", "false");
+    await expect(
+      templates.getByRole("textbox", { name: "문서 본문" }),
+    ).toContainText("Template captured body");
+    await templates.getByRole("button", { name: "닫기", exact: true }).click();
+    await ack(page);
+    await other.goto("/");
+    await other.getByRole("button", { name: "기존 Workspace 복구" }).click();
+    await other.getByLabel("Recovery Key", { exact: true }).fill(key);
+    await other
+      .getByRole("button", { name: "Workspace 복구", exact: true })
+      .click();
+    await other.getByRole("button", { name: "To-Do", exact: true }).click();
+    await other
+      .getByRole("button", { name: "Ship extension 열기", exact: true })
+      .click();
+    await expect(
+      other.getByLabel("Ship extension Estimate", { exact: true }),
+    ).toHaveValue("1시간 30분");
+    await page.context().setOffline(true);
+    await label(page, "offline-main");
+    await label(other, "device-label");
+    await ack(other);
+    await page
+      .getByLabel("Ship extension Estimate", { exact: true })
+      .fill("2h 10m");
+    await page
+      .getByLabel("Ship extension Estimate", { exact: true })
+      .press("Tab");
+    await page
+      .getByRole("button", { name: "Task Template", exact: true })
+      .click();
+    await templates
+      .getByRole("button", { name: "Shipping checklist", exact: true })
+      .click();
+    await templates
+      .getByRole("button", { name: "Template으로 Task 생성", exact: true })
+      .click();
+    await expect(templates).toHaveCount(0);
+    await expect(page.getByLabel("상위 Task")).toHaveValue("");
+    await expect(
+      page.getByLabel("Ship extension Estimate", { exact: true }),
+    ).toHaveValue("1시간 30분");
+    await expect(
+      page.getByLabel("Ship extension Instructions", { exact: true }),
+    ).toHaveValue("Captured custom field");
+    await expect(
+      page.getByRole("button", { name: "template.txt 미리보기", exact: true }),
+    ).toBeVisible();
+    await page.getByLabel("Page 제목").fill("Template copy");
+    await page
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Independent copy body");
+    await page.reload();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("Template copy");
+    await expect(
+      page.getByRole("textbox", { name: "문서 본문" }),
+    ).toContainText("Independent copy body");
+    await page.context().setOffline(false);
+    await ack(page);
+    await expect(
+      other.getByText("offline-main", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      other.getByText("device-label", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      other.getByLabel("Ship extension Estimate", { exact: true }),
+    ).toHaveValue("2시간 10분");
+    await expect(
+      other.getByRole("textbox", { name: "문서 본문" }),
+    ).toContainText("Template captured body");
+    await page
+      .getByRole("button", { name: "프로젝트로 돌아가기", exact: true })
+      .click();
+    await page.getByLabel("Task Label 필터").fill("OFFLINE-MAIN");
+    await expect(
+      page.getByRole("button", { name: "Ship extension 열기", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Template copy 열기", exact: true }),
+    ).toHaveCount(0);
+    await page.getByLabel("Task Label 필터").fill("");
+    await page.getByRole("button", { name: "Board", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Documentation release", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Template copy", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Documentation release", exact: true })
+      .click();
+    await expect(page.getByLabel("상위 Task")).not.toHaveValue("");
+    await page
+      .getByLabel("선행 Task 선택")
+      .selectOption({ label: "Ship extension" });
+    await page
+      .getByRole("button", { name: "선행 작업 추가", exact: true })
+      .click();
+    await ack(page);
+    await page
+      .getByRole("button", { name: "상위 Task 열기", exact: true })
+      .click();
+    await page
+      .getByLabel("상위 Task")
+      .selectOption({ label: "Documentation release" });
+    await expect(
+      page.getByRole("alert").filter({ hasText: "순환" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("상위 Task")).toHaveValue("");
+    const snapshot = await page.request.post(
+      `${ORIGIN}/v1/pages/${databaseId}/snapshots`,
+      {
+        headers: { origin: ORIGIN },
+        data: {
+          operationId: crypto.randomUUID(),
+          name: "Task extension browser",
+        },
+      },
+    );
+    expect(snapshot.status()).toBe(200);
+    const snapshotId = (await snapshot.json()).id as string;
+    const restored = await page.request.post(
+      `${ORIGIN}/v1/snapshots/${snapshotId}/restore-copy`,
+      {
+        headers: { origin: ORIGIN },
+        data: { operationId: crypto.randomUUID() },
+      },
+    );
+    expect(restored.status()).toBe(200);
+    const restoredId = (await restored.json()).id as string;
+    await page.goto(
+      `/?workspace=${new URL(page.url()).searchParams.get("workspace")}&page=${restoredId}`,
+    );
+    await expect(
+      page.getByRole("button", { name: "Template copy 열기", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Template copy 열기", exact: true })
+      .click();
+    await expect(
+      page.getByLabel("Template copy Instructions", { exact: true }),
+    ).toHaveValue("Captured custom field");
+    await page
+      .getByRole("button", { name: "template.txt 미리보기", exact: true })
+      .click();
+    const preview = page.getByRole("dialog", { name: "template.txt" });
+    await expect(preview.locator("pre")).toHaveText("Task template file bytes");
+    await preview.getByRole("button", { name: "닫기", exact: true }).click();
+    await page
+      .getByRole("button", { name: "프로젝트로 돌아가기", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Documentation release 열기", exact: true })
+      .click();
+    await expect(page.getByLabel("상위 Task")).not.toHaveValue("");
+    await expect(
+      page.getByRole("button", {
+        name: "선행 Ship extension 해제",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page.getByRole("button", { name: "Sidebar 열기", exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page
+          .locator(".sidebar")
+          .evaluate((element) => element.getBoundingClientRect().right <= 0),
+      )
+      .toBe(true);
+    await expect(page.getByLabel("하위 Task 제목")).toBeVisible();
+    expect(
+      await page.evaluate(() => document.body.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: "/tmp/zeronote-task-detail.png",
+      fullPage: true,
+    });
+  } finally {
+    await page.context().setOffline(false);
+    await otherContext.setOffline(false);
+    await otherContext.close();
+    await cleanup(page, name);
+  }
+});
 test("Knowledge Graph and related Pages find unopened links, then replace a broken link Offline", async ({
   page,
   browser,

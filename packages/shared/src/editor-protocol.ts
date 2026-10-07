@@ -64,7 +64,11 @@ export function getDocumentEditorProtocol(document: Y.Doc): number {
       for (const child of node.toArray()) inspect(child);
   };
   for (const name of document.share.keys()) {
-    if (name === "content" || name.startsWith("task:"))
+    if (
+      name === "content" ||
+      name.startsWith("task:") ||
+      name.startsWith("task-template:")
+    )
       inspect(document.getXmlFragment(name));
   }
   return required;

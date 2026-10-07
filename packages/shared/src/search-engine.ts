@@ -351,6 +351,7 @@ export function createSearchEngine(
             ...hit,
             rowId: row.id,
             title: row.title || "제목 없음",
+            tags: [...new Set([...hit.tags, ...row.labels])],
             updatedAt: row.updatedAt ?? source.updatedAt,
           },
           body,
