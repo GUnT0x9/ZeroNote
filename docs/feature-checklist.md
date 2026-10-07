@@ -104,9 +104,9 @@
 - [x] Global Full-text Search
 - [x] Search Filter
 - [x] Search by Property
-- [ ] Knowledge Graph
-- [ ] Related Pages 자동 추천
-- [ ] Broken Link 탐지
+- [x] Knowledge Graph
+- [x] Related Pages 자동 추천
+- [x] Broken Link 탐지
 - [x] Tag 시스템
 
 ---
@@ -449,7 +449,7 @@
 - [x] Relation
 - [x] Rollup
 - [x] Formula
-- [ ] Knowledge Graph
+- [x] Knowledge Graph
 - [ ] AI Workspace
 - [ ] E2EE
 - [ ] QR Device Pairing

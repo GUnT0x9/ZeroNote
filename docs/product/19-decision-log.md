@@ -125,3 +125,11 @@ Confirmed: Global Search·필터/속성·오타·연산자를 배포하고 Offli
 검색은 8 Page batch·source 16MiB·동시 2개로 제한하고 범위 축소 오류와 로컬 대체 결과를 표시한다. 이전 요청은 취소하고 Search POST에만 읽기 재시도를 허용한다. [검증/배포 기록](../search-release.md); Production 확인 전에는 완료 수를 올리지 않는다.
 
 Verified 2026-10-07: DEC-047의 검색 5개를 `15f2036`으로 배포하고 CI 420 Tests/25 E2E/Docker/512MiB/백업 복원 및 실제 HTTPS 3개 흐름을 확인했다. 50/148 완료·98개 남음이다. [출시 기록](../search-release.md).
+
+### DEC-048 — 접근 범위의 Graph·관련 문서·링크 상태
+
+Confirmed: Knowledge Graph·Related Pages·Broken Link와 전체 Backlinks를 실제 UI에서 제공한다. Adopted: 기존 committed source Index에서 본문 전체/CRDT 이력 대신 제한된 연결·Tag·활성 Row 이름·단어 head를 읽고, 서버가 확인한 Metadata/Grant 범위로 같은 공유 계산을 적용한다. Editor/Owner의 Dirty Overlay는 요청 안에서만 적용하며 제목도 반영한다. Graph는 Page/Database Node로 Row 연결을 묶고 200 Node·800 Edge·목록/키보드/Touch 탐색을 제공한다. 관련 문서는 같은 Workspace의 연결·Tag·본문 단어 근거를 표시한다.
+
+접근 확인 불가와 알려진 Trash/삭제 Row를 구분한다. 숨겨진 대상의 존재/삭제/이름을 조회하지 않는다. Mention/Task Link는 선택한 본문의 같은 대상 링크를 함께 교체하고 Relation은 명시적으로 고른 한 Property의 Row 참조만 교체한다. 동시 변경·삭제·권한을 재검사하고 저장 실패를 성공으로 표시하지 않는다. 독립된 하위 Page Grant는 부모 접근 철회로 소멸하지 않으며 부모 Trash는 하위 Page에 적용한다. 서버 head 조회는 8 Page batch·16MiB·동시 2개 제한이며 유휴 Polling이나 인증 응답 영속 Cache를 추가하지 않는다.
+
+Verified 2026-10-07: `34bc93e`의 CI 440 Tests/26 E2E/Docker/512MiB/암호화 복원, Render → Vercel과 실제 HTTPS 5개 흐름을 확인했다. [출시 기록](../knowledge-release.md). 53/148 완료·95개 남음이다. 다음 Task 5개의 구현 기본안은 [Task 확장 기준](../task-extension-plan.md)에 기록했으며 구현 전에는 완료로 집계하지 않는다.

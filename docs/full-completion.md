@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 50개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md), [검색 기록](search-release.md)에 남긴다. 나머지 98개는 계속 구현 대상이다. 검색 5개는 420 Tests·25 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS의 새 기기 검색/Offline/협업/Viewer/Recovery/Database를 확인하고 배포했다. 다음 Knowledge Graph·Related Pages·Broken Link 3개는 [Knowledge·Search·Tags 기준](knowledge-search-plan.md)을 따른다. 기반 코드만으로 기능 완료를 집계하지 않는다.
+현재 53개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md), [검색 기록](search-release.md), [Graph·관련 문서·링크 상태 기록](knowledge-release.md)에 남긴다. 나머지 95개는 계속 구현 대상이다. Knowledge 3개는 440 Tests·26 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS 5개 흐름을 확인하고 배포했다. 다음 Task 확장 5개는 [Task 구현 기준](task-extension-plan.md)을 따른다. 기반 코드만으로 기능 완료를 집계하지 않는다.
 
 ## 항목별 완료 증거
 
@@ -43,9 +43,9 @@
 | 22   | 문서 연결 / Knowledge    | Global Full-text Search               | 구현·배포 / 전체 문서·Row·권한·Offline·typed Property / search-release.md                                      |
 | 23   | 문서 연결 / Knowledge    | Search Filter                         | 구현·배포 / 전체 문서·Row·권한·Offline·typed Property / search-release.md                                      |
 | 24   | 문서 연결 / Knowledge    | Search by Property                    | 구현·배포 / 전체 문서·Row·권한·Offline·typed Property / search-release.md                                      |
-| 25   | 문서 연결 / Knowledge    | Knowledge Graph                       | 미구현                                                                                                         |
-| 26   | 문서 연결 / Knowledge    | Related Pages 자동 추천               | 미구현                                                                                                         |
-| 27   | 문서 연결 / Knowledge    | Broken Link 탐지                      | 미구현                                                                                                         |
+| 25   | 문서 연결 / Knowledge    | Knowledge Graph                       | 구현·배포 / 권한 범위·미열람/Offline·명시적 링크 교체 / knowledge-release.md                                   |
+| 26   | 문서 연결 / Knowledge    | Related Pages 자동 추천               | 구현·배포 / 권한 범위·미열람/Offline·명시적 링크 교체 / knowledge-release.md                                   |
+| 27   | 문서 연결 / Knowledge    | Broken Link 탐지                      | 구현·배포 / 권한 범위·미열람/Offline·명시적 링크 교체 / knowledge-release.md                                   |
 | 28   | 문서 연결 / Knowledge    | Tag 시스템                            | 구현·배포 / Page Tags·두 기기/Offline/Viewer/Snapshot/복제·tags-release.md                                     |
 | 29   | Task / Project           | Subtask                               | 미구현                                                                                                         |
 | 30   | Task / Project           | Task Dependency                       | 미구현                                                                                                         |

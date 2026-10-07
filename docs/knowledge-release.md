@@ -1,6 +1,6 @@
 # Graph·관련 문서·링크 상태 구현 기록
 
-2026-10-07 구현 중. 기존 미구현 25–27번: Knowledge Graph, Related Pages, Broken Link 탐지. 검증·배포 전에는 완료 수를 늘리지 않는다. 현재 검증된 완료는 50/148이며 나머지 98개는 계속 구현 대상이다.
+2026-10-07 구현·배포·실제 HTTPS 검증 완료. 기존 미구현 25–27번: Knowledge Graph, Related Pages, Broken Link 탐지. 현재 검증된 완료는 53/148이며 나머지 95개는 계속 구현 대상이다.
 
 ## 동작
 
@@ -14,7 +14,15 @@
 
 ## 검증
 
-로컬 전체 440 Tests/53 files 통과(80.42초), lint/type-check 통과. 새 기기 미열람 Graph/Backlinks·관련 Tag 근거·키보드/목록/확대/Pan·Trash 상태·Offline 링크 교체와 새로고침/두 기기 재접속(27.4초), Mobile Touch 읽기/작성/Capture/Comments와 Graph(13.7초), 기존 Mention Rename/Backlinks/Slash/Todo 변환(12.9초)의 E2E 3개 통과. Graph 글자/Touch 대상은 확대율과 별도로 크기를 유지하고 키보드로 선택한 문서를 화면 안에 표시한다. Production Source/전체 CI/HTTPS 증거는 배포 완료 후 추가한다. 실제 Android Chrome/iOS Safari 기기 검증은 미실시다.
+로컬 전체 440 Tests/53 files 통과(80.42초), lint/type-check 통과. 새 기기 미열람 Graph/Backlinks·관련 Tag 근거·키보드/목록/확대/Pan·Trash 상태·Offline 링크 교체와 새로고침/두 기기 재접속(27.4초), Mobile Touch 읽기/작성/Capture/Comments와 Graph(13.7초), 기존 Mention Rename/Backlinks/Slash/Todo 변환(12.9초)의 E2E 3개 통과. Graph 글자/Touch 대상은 확대율과 별도로 크기를 유지하고 키보드로 선택한 문서를 화면 안에 표시한다. Source `34bc93eee53a110a7c023d79e65cebea2838c74b`의 [CI 37552924850](https://github.com/GUnT0x9/ZeroNote/actions/runs/37552924850)에서 lint/type-check/440 Tests/26 E2E(3.1분)/build/서버 Docker/512MiB 기동/8 Migrations/16개 Table 암호화 백업 복원이 통과했다. 1,000 Pages·1,000 Rows·500 Blocks의 기존 캐시 문서/검색 성능 회귀도 통과했다. 실제 Android Chrome/iOS Safari 기기 검증은 미실시다.
+
+## Production 증거
+
+- Render `dep-db2pce7lk1mc7388jo4g` Live → Vercel `dpl_AE4bWzSwT5m9qy9BTNXaqZ5qm8Vz` READY를 같은 `34bc93e` 소스로 배포했다. Production Alias/Project ID와 `zeronoteCommit`/`githubCommitSha`를 Vercel API에서 확인했다. 새 Migration이나 환경변수는 추가하지 않았다.
+- 배포 전 PostgreSQL 17 암호화 백업을 생성하고 최근 4개 보관을 확인했다. 실제 HTTPS 검증 후 Migration 8개, Protocol 1–4, Checkpoint에 대응하는 source Index 누락 0건, DB 11,255,808 bytes, QA Workspace 0개다.
+- [Beta](https://zeronote-kohl.vercel.app)의 5개 Browser 흐름이 통과했다(2.9분): 새 기기 미열람 Graph/Backlinks·관련 Tag 근거·키보드/목록/확대/Pan·Trash 상태·Offline 링크 교체/Reload/두 기기 수렴(41.0초), 전체 검색·Tag/Property·미전송 변경(32.4초), 두 기기 Realtime·Comments·Viewer·Recovery(29.8초), Mobile Touch 편집/Capture/Comments/Graph(19.4초), File/Formula/Relation/Rollup·Rename·권한 철회·Offline Reload·Snapshot(36.9초).
+- 최종 소스는 서버 미전송 제목도 허용된 Overlay에서 표시하고 Viewer의 Overlay는 무시한다. 부분 접근 기기의 Graph 개수/관련 문서/Backlinks/문제 목록에 범위 밖 문서 이름을 포함하지 않는 서버 회귀를 함께 확인했다.
+- 실제 모바일 기기는 별도로 검증해야 한다. 이번 Mobile 결과는 HTTPS Chromium의 Touch·390×844 viewport 검증이며 Android Chrome/iOS Safari 실기기 결과로 표현하지 않는다.
 
 ## 변경 파일과 이유
 
