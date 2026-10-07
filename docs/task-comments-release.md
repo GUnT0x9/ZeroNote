@@ -44,7 +44,7 @@ Production 암호화 백업을 생성하고 최근 4개를 보관한 뒤 Render 
 
 수정은 기기에 열린 Yjs 문서의 generation 변경을 즉시 구독하여 서버 Commit 확인까지 좌측 저장 모션을 유지한다. 새로운 Polling과 상단 알림은 추가하지 않는다. Commit 응답을 의도적으로 보류하는 브라우저 검증으로 미확인 상태가 완료로 바뀌지 않음을 확인한다. 실패한 첫 결과로 완료 수를 갱신하지 않는다.
 
-서버·공유 계약 집중 9 Tests, Local Queue/초안/동기화 14 Tests와 초기 전체 475 Tests/56 files 통과. 초기 브라우저의 삭제 Task/모바일 Focus 흐름은 통과했고 역할·전환 흐름은 `To-Do` 제목을 과거 이름으로 기대한 테스트를 수정했다. 최종 로컬 전체 476 Tests/56 files 통과(200.54초), lint/type-check/Web·Server build 통과. 취소된 지연 응답을 포함한 Local 댓글/동기화 15 Tests 통과. Task 범위/초안/Offline/역할/Snapshot 흐름 38.2초, 삭제 Task 보존/모바일 Focus 18.4초 통과. 기존 협업·Comments·Viewer·Recovery 23.7초, Mobile Touch 편집/Capture/Comments 15.4초로 브라우저 4개가 모두 통과했다(2.9분). CI·Production 결과는 아래에 추가한다. 실제 Android Chrome/iOS Safari 기기 검증은 아직 하지 않았다.
+서버·공유 계약 집중 9 Tests, Local Queue/초안/동기화 14 Tests와 초기 전체 475 Tests/56 files 통과. 초기 브라우저의 삭제 Task/모바일 Focus 흐름은 통과했고 역할·전환 흐름은 `To-Do` 제목을 과거 이름으로 기대한 테스트를 수정했다. 첫 후보의 로컬 전체 476 Tests/56 files 통과(200.54초), lint/type-check/Web·Server build 통과. 취소된 지연 응답을 포함한 Local 댓글/동기화 15 Tests 통과. Task 범위/초안/Offline/역할/Snapshot 흐름 38.2초, 삭제 Task 보존/모바일 Focus 18.4초 통과. 기존 협업·Comments·Viewer·Recovery 23.7초, Mobile Touch 편집/Capture/Comments 15.4초로 브라우저 4개가 모두 통과했다(2.9분). 저장 표시 보강 후 CI·Production 결과는 위에 기록했다. 실제 Android Chrome/iOS Safari 기기 검증은 아직 하지 않았다.
 
 ## 변경 파일과 이유
 
