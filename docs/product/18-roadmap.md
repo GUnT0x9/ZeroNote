@@ -33,3 +33,5 @@ Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Rec
 2026-10-07 검색 5개 배포 완료: 50/148 항목 검증 완료·98개 계속 구현. 다음은 Knowledge Graph·Related Pages·Broken Link와 전체 Backlinks의 서버 Index 연결이다. [출시 기록](../search-release.md).
 
 2026-10-07 Knowledge 3개와 전체 Backlinks의 서버 Index 연결을 배포했다. 53/148 항목 검증 완료·95개 계속 구현. [출시 기록](../knowledge-release.md). 다음은 [Subtask·Dependency·Label·Estimate·Template 구현](../task-extension-plan.md)이며 후속 Task/Comments/Member/Notification과 전체 미완료 요구도 계속 진행한다.
+
+2026-10-07 Task 확장 5개를 구현·배포했다. 58/148 완료·90개 계속 구현. [출시 기록](../task-extension-release.md). 다음은 [Task별 Comment Thread/Comment](../task-comments-plan.md)이며 Activity/Member/Notification과 나머지 전체 요구도 유지한다.

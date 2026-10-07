@@ -113,3 +113,5 @@ Render Free의 512MiB 제한에서 첫 배포가 실패했다. 원인은 Runtime
 2026-10-07 전체 검색 운영 반영: `15f2036`, Render `dep-db2ai7rtqb8s73cn5md0`, Vercel `dpl_GVgHZwPr813Qyu4YBh2HuujwAnUX`. CI 420 Tests/25 E2E/Docker/512MiB/암호화 복원과 실제 HTTPS 3개 흐름을 확인했다. Migration 8개·Protocol 1–4·Index 누락 0건·QA Workspace 0개. [검색 출시 기록](search-release.md). 전체 50/148 완료·98개 계속 개발.
 
 2026-10-07 Knowledge 운영 반영: `34bc93e`, Render `dep-db2pce7lk1mc7388jo4g`, Vercel `dpl_AE4bWzSwT5m9qy9BTNXaqZ5qm8Vz`. CI 440 Tests/26 E2E/Docker/512MiB/암호화 복원과 실제 HTTPS 5개 흐름을 확인했다. Migration 8개·Protocol 1–4·Index 누락 0건·QA Workspace 0개. [Graph·관련 문서·링크 상태 기록](knowledge-release.md). 전체 53/148 완료·95개 계속 개발.
+
+2026-10-07 Task 확장 운영 반영: `bee64d1`, Render `dep-db2qi20m7kps73builtg`, Vercel `dpl_F9cm2TfHshTaQqgR9yxvNp11tMKh`. CI 460 Tests/27 E2E/Docker/512MiB/암호화 복원 및 실제 HTTPS 7개 흐름 통과. Migration 8개·Protocol 1–4·Index 누락 0건·QA Workspace 0개. [Task 확장 기록](task-extension-release.md). 58/148 완료·90개 계속 구현.

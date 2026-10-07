@@ -1,6 +1,6 @@
 # Task 확장 구현 기록
 
-2026-10-07 구현·검증 진행 중. 기존 미구현 29–32, 37번: Subtask, Dependency, Label/Tag, Estimate, Task Template. 배포와 실제 HTTPS 검증 전에는 완료로 집계하지 않는다. 현재 검증된 전체 완료는 53/148이다.
+2026-10-07 구현·배포·실제 HTTPS 검증 완료. 기존 미구현 29–32, 37번: Subtask, Dependency, Label/Tag, Estimate, Task Template. 검증된 완료는 58/148이며 나머지 90개는 계속 구현 대상이다.
 
 ## 동작과 저장
 
@@ -21,15 +21,23 @@
 
 `taskTemplates` Map은 UUID별 정의, `task-template:<id>`는 저장한 독립 XML 본문이다. 정의에는 캡처한 사용자 정의 Property Schema와 값이 포함된다. 삭제는 정의에 표시하고 Template 본문을 제거하며 이미 생성한 Task를 유지한다. 기존 Template 정의는 빈 사용자 정의 속성 기본값으로 읽는다. Source 검색 Projection은 Row Label/관계/Estimate를 반영하고 Template 본문이나 비공개 파일 이름은 검색/공개 원본에 추가하지 않는다.
 
-## 검증 진행
+## 검증
 
-첫 CI의 lint/type-check/460 Tests/build와 26 E2E는 통과했으나 기존 Custom Property의 `Estimate`와 새 기본 `Estimate` 입력의 중복 라벨이 strict locator에서 발견됐다. 단위가 있는 기본 이름으로 구분하고 해당 Viewer/Snapshot 회귀를 포함한 재검증을 수행한다. 이 실패한 CI 결과로 배포하거나 완료로 표시하지 않는다.
+첫 CI의 lint/type-check/460 Tests/build와 26 E2E는 통과했으나 기존 Custom Property의 `Estimate`와 새 기본 `Estimate` 입력의 중복 라벨이 strict locator에서 발견됐다. 단위가 있는 기본 이름으로 구분하고 해당 Viewer/Snapshot 회귀를 포함한 재검증을 통과했다. 이 실패한 CI 결과로 배포하거나 완료로 표시하지 않는다.
 
-최종 로컬 전체 460 Tests/54 files 통과(143.35초), lint/type-check와 Web/Server build 통과. 동시 실행 시 Beta 초기화 Hook의 10초 timeout으로 6개가 실행되지 않은 첫 결과를 기록하고, 동시 Test Worker를 4개로 제한한 전체 재실행에서 모두 통과했다. Template 보강 집중 27 Tests와 서버 Commit/파일 보호/새 ID Snapshot 복구 3개도 통과했다. 최종 Task Offline 생성/Reload·독립 본문/사용자 정의 값/File 복사·두 기기 Label 병합·Cycle 거절·Board/필터·Snapshot 브라우저(32.7초), 기존 File/Formula/Relation/Rollup·Rename/Offline/권한 철회/Snapshot(26.7초) 통과. Mobile Touch 재확인·CI·Production 배포 검증은 진행 중이다. 실제 Android Chrome/iOS Safari 검증은 미실시다.
+Template 보강 초기 로컬 전체 460 Tests/54 files 통과(143.35초), lint/type-check와 Web/Server build 통과. 동시 실행 시 Beta 초기화 Hook의 10초 timeout으로 6개가 실행되지 않은 첫 결과를 기록하고, 동시 Test Worker를 4개로 제한한 전체 재실행에서 모두 통과했다. Template 보강 집중 27 Tests와 서버 Commit/파일 보호/새 ID Snapshot 복구 3개도 통과했다. 최종 Task Offline 생성/Reload·독립 본문/사용자 정의 값/File 복사·두 기기 Label 병합·Cycle 거절·Board/필터·Snapshot 브라우저(32.7초), 기존 File/Formula/Relation/Rollup·Rename/Offline/권한 철회/Snapshot(26.7초) 통과. Mobile Touch 17.0초 통과 후 최종 CI와 Production 결과는 아래에 기록했다. 실제 Android Chrome/iOS Safari 검증은 미실시다.
+
+## Production 증거
+
+- Source `bee64d1aaa3bc7617096c1abeb102cd07616386a`의 [CI 37559660137](https://github.com/GUnT0x9/ZeroNote/actions/runs/37559660137)에서 lint/type-check/460 Tests/27 E2E(3.2분)/Web·Server build/서버 Docker/512MiB 기동/8 Migrations/16개 Table 암호화 백업 복원이 통과했다. 1,000 Pages·1,000 Rows·500 Blocks의 캐시 열기/검색 성능 회귀도 통과했다.
+- Render `dep-db2qi20m7kps73builtg` Live → Vercel `dpl_F9cm2TfHshTaQqgR9yxvNp11tMKh` READY를 같은 `bee64d1` 소스로 배포했다. Production Alias/Project와 `zeronoteCommit`/`githubCommitSha`를 API로 확인했다. 새 환경변수나 Migration은 추가하지 않았다.
+- 배포 직전 PostgreSQL 17 암호화 백업과 최근 4개 보관을 확인했다. 실제 HTTPS 검증 후 Migration 8개, Protocol 1–4, source Index 누락 0건, DB 11,345,920 bytes, QA Workspace 0개다.
+- [Beta](https://zeronote-kohl.vercel.app)의 7개 흐름이 통과했다(3.5분): Task 확장·사용자 정의 값/File Template 복사·Offline Reload/두 기기 수렴/순환 거절/Board/필터/Snapshot(33.4초), Graph·관련 문서·링크 교체(34.7초), 전체 검색·미전송 변경(29.5초), Realtime·Comments·Viewer·Recovery(25.5초), Mobile Touch 편집/Capture/Comments/Graph(16.6초), File/Formula/Relation/Rollup·권한/Offline/Snapshot(33.1초), 기존 사용자 정의 Estimate·Viewer·Snapshot(23.5초).
+- Mobile 결과는 HTTPS Chromium Touch·390×844 viewport 검증이다. 실제 Android Chrome/iOS Safari 기기 검증은 미실시다. 이후 Task별 Comments/Activity/Recurring/Reminder와 전체 미완료 요구도 계속 구현한다.
 
 ## 변경 파일과 이유
 
-CI 실패 보강 후 최종 로컬 전체 460 Tests/54 files 통과(130.48초), lint/type-check 통과. 새 Task 흐름(26.8초), Mobile Touch(16.5초), 기존 File/Formula/Relation/Rollup(23.8초), 기존 사용자 정의 Estimate의 Viewer/Snapshot(15.4초) 브라우저 4개가 모두 통과했다. 같은 Database에 없는 Parent/Dependency의 서버 거절과 삭제된 부모의 내용 없는 Snapshot 복구/재Commit을 회귀에 추가했다. CI와 실제 배포 검증은 계속 진행한다.
+CI 실패 보강 후 최종 로컬 전체 460 Tests/54 files 통과(130.48초), lint/type-check 통과. 새 Task 흐름(26.8초), Mobile Touch(16.5초), 기존 File/Formula/Relation/Rollup(23.8초), 기존 사용자 정의 Estimate의 Viewer/Snapshot(15.4초) 브라우저 4개가 모두 통과했다. 같은 Database에 없는 Parent/Dependency의 서버 거절과 삭제된 부모의 내용 없는 Snapshot 복구/재Commit을 회귀에 추가했다. 최종 CI와 실제 배포 검증도 아래와 같이 통과했다.
 
 | 파일                                                                                                                                                                                                                 | 변경 이유                                                                       |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |

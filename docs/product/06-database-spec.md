@@ -56,3 +56,5 @@ File/Formula/Relation/Rollup을 구현·검증하고 Render → Vercel Productio
 Relation 대상 변경은 기존 해당 속성의 연결 해제를 UI에서 확인하고 적용한다. Row별 Share를 만들지 않는다. Snapshot은 원래 Row와 외부 관계를 유지하고 자기 Database 참조는 복구한 새 Page ID로 연결한다. Workspace Import는 포함된 Database ID를 재매핑한다. Formula/Rollup은 읽기 전용이며 계산된 Group에 Drag로 값을 쓰지 않는다.
 
 Snapshot은 해당 Page의 정의와 값·Row 본문·파일을 기록한다. 외부 Database의 과거 상태를 함께 기록하지 않으므로 외부 Relation/Rollup의 미리보기와 복구 결과는 현재 접근 가능한 대상 값으로 계산한다.
+
+Verified 2026-10-07: Task Subtask/Dependency/Label/Estimate/Template을 기존 Database 권한/CRDT/Offline/검색/뷰/복구에 연결했다. Template은 사용자 정의 수정 가능 값과 본문을 독립 복제하며 변경된 정의의 제외 확인, File 보호/재매핑, 자기 링크 변경을 제공한다. 미완료 선행 작업의 Done 변경은 확인한다. [CI·실제 HTTPS 기록](../task-extension-release.md).

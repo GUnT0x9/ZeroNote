@@ -133,3 +133,5 @@ Confirmed: Knowledge Graph·Related Pages·Broken Link와 전체 Backlinks를 �
 접근 확인 불가와 알려진 Trash/삭제 Row를 구분한다. 숨겨진 대상의 존재/삭제/이름을 조회하지 않는다. Mention/Task Link는 선택한 본문의 같은 대상 링크를 함께 교체하고 Relation은 명시적으로 고른 한 Property의 Row 참조만 교체한다. 동시 변경·삭제·권한을 재검사하고 저장 실패를 성공으로 표시하지 않는다. 독립된 하위 Page Grant는 부모 접근 철회로 소멸하지 않으며 부모 Trash는 하위 Page에 적용한다. 서버 head 조회는 8 Page batch·16MiB·동시 2개 제한이며 유휴 Polling이나 인증 응답 영속 Cache를 추가하지 않는다.
 
 Verified 2026-10-07: `34bc93e`의 CI 440 Tests/26 E2E/Docker/512MiB/암호화 복원, Render → Vercel과 실제 HTTPS 5개 흐름을 확인했다. [출시 기록](../knowledge-release.md). 53/148 완료·95개 남음이다. 다음 Task 5개의 구현 기본안은 [Task 확장 기준](../task-extension-plan.md)에 기록했으며 구현 전에는 완료로 집계하지 않는다.
+
+Verified 2026-10-07: `bee64d1`의 CI 460 Tests/27 E2E/Docker/512MiB/암호화 복원, Render → Vercel과 실제 HTTPS 7개 흐름 통과. [Task 확장 기록](../task-extension-release.md). 사용자 정의 수정 가능 속성을 Template에 포함하고 File 참조를 비공개 보존한다. 변경된 정의는 확인 후 제외하며 삭제된 관계의 ID만 Snapshot에 남긴다. 기본 Estimate는 분 단위 이름으로 구분한다. 58/148 완료·90개 계속 개발. 다음 [Task Comments 기본안](../task-comments-plan.md)을 채택하며 구현 전 완료로 표시하지 않는다.

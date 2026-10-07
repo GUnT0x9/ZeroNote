@@ -27,3 +27,5 @@ Template은 기본 Task 속성과 사용자 정의 수정 가능한 Property 값
 ## 이후 묶음
 
 Task별 Comment Thread와 Task별 Comment 요구는 같은 Row Scope로 연결하고 Page Thread를 유지한다. 그다음 Task Activity Log와 Member/Mention/Notification 기반을 연결한 뒤 Recurring Task·Task Reminder를 구현한다. 반복 생성은 안정적인 Operation ID와 기간별 중복 방지가 필요하다. 알림과 반복 실행 시점은 Render Free의 절전 조건과 Offline 상태를 구분해 UI에 표시하며 유휴 DB Polling이나 서버를 깨워 두는 요청을 추가하지 않는다. 이 후속 기능들도 전체 완료 대상이다.
+
+Verified 2026-10-07: `bee64d1`로 5개를 배포했다. CI 460 Tests/27 E2E/Docker/512MiB/암호화 복원 및 실제 HTTPS 7개 흐름 통과. 58/148 완료·90개 계속 구현. [Task 확장 기록](task-extension-release.md). 다음은 [Task Comments](task-comments-plan.md).
