@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
+import { registerMemberRoutes } from "./member-routes";
+import { MemberService } from "./member-service";
 import {
   BetaRedeemSchema,
   SnapshotInputSchema,
@@ -65,8 +67,12 @@ export function registerRoutes(
     access = new AccessService(repository),
     workspaces = new WorkspaceService(repository, access),
     snapshots = new SnapshotService(repository, access),
-    comments = new CommentService(repository, access);
+    comments = new CommentService(repository, access),
+    members = new MemberService(repository, access, (id) =>
+      realtime.closeConnections(id),
+    );
   registerSearchRoutes(app, auth, new SearchService(repository, access));
+  registerMemberRoutes(app, auth, members);
   registerKnowledgeRoutes(app, auth, new KnowledgeService(repository, access));
   registerAttachmentRoutes(
     app,
@@ -259,15 +265,7 @@ export function registerRoutes(
     authenticated(async (request, _reply, deviceId) => {
       const id = parameter(request, "id"),
         target = parameter(request, "deviceId");
-      await access.workspaceOwner(deviceId, id);
-      if (target === deviceId)
-        throw new DomainError(
-          400,
-          "현재 기기는 다른 승인된 기기에서 철회해주세요.",
-        );
-      await repository.revokeDevice(id, target);
-      for (const page of await repository.listPages(id))
-        realtime.closeConnections(page.id);
+      await members.revokeDevice(deviceId, id, target);
       return { revoked: true };
     }),
   );

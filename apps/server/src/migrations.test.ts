@@ -37,6 +37,10 @@ it("upgrades Alpha data once and rebuilds checkpoints from committed logs", asyn
     await legacy.database.execute(
       sql`INSERT INTO comments(id,page_id,identity_id,body) VALUES(${commentId},${pageId},${identityId},'Legacy comment')`,
     );
+    const grantId = crypto.randomUUID();
+    await legacy.database.execute(
+      sql`INSERT INTO grants(id,workspace_id,page_id,identity_id,role,include_descendants) VALUES(${grantId},${workspaceId},${pageId},${identityId},'viewer',false)`,
+    );
     const committed = new Y.Doc(),
       dirty = new Y.Doc();
     committed.getText("title").insert(0, "Committed");
@@ -51,7 +55,13 @@ it("upgrades Alpha data once and rebuilds checkpoints from committed logs", asyn
     await legacy.migrate();
     expect(
       await legacy.query(sql`SELECT version FROM schema_migrations`),
-    ).toHaveLength(9);
+    ).toHaveLength(10);
+    expect(
+      await legacy.query(
+        sql`SELECT id,role,revision FROM grants WHERE id=${grantId}`,
+      ),
+    ).toEqual([{ id: grantId, role: "viewer", revision: 0 }]);
+    expect(await legacy.query(sql`SELECT id FROM member_groups`)).toEqual([]);
     expect(await legacy.comments.list(pageId)).toMatchObject([
       { id: commentId, body: "Legacy comment" },
     ]);

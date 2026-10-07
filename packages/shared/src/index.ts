@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Roles, RoleSchema, IdSchema, NameSchema } from "./identity-schema";
 import { remapDatabasePageIds } from "./database";
 import * as Y from "yjs";
 import { isCanonicalBase64 } from "./attachments";
@@ -21,11 +22,14 @@ export const MAX_TRANSPORT_BYTES = MAX_DOCUMENT_BYTES * 2;
 export const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 export const CHALLENGE_LIFETIME_MS = 60_000;
 export const SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000;
-export const Roles = ["editor", "commenter", "viewer"] as const;
-export const RoleSchema = z.enum(Roles);
+export {
+  Roles,
+  RoleSchema,
+  IdSchema,
+  NameSchema,
+  MAX_IDENTITY_NAME_LENGTH,
+} from "./identity-schema";
 export type Role = z.infer<typeof RoleSchema> | "owner";
-export const IdSchema = z.uuid();
-export const NameSchema = z.string().trim().min(1).max(160);
 export const PublicKeySchema = z
   .object({
     kty: z.literal("EC"),
@@ -539,4 +543,5 @@ export * from "./knowledge-replacement";
 export * from "./task-schema";
 export * from "./task-extension";
 export * from "./task-templates";
+export * from "./members";
 export { cloneXmlContent } from "./xml";

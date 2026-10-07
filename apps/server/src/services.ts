@@ -23,23 +23,40 @@ import {
   type Executor,
   type DeviceRecord,
   type GrantRecord,
+  type MembershipRecord,
 } from "./database/repository";
 
 import { DomainError } from "./errors";
 export { DomainError } from "./errors";
 export class AccessService {
   constructor(readonly repository: Repository) {}
-  async workspaceOwner(deviceId: string, workspaceId: string): Promise<void> {
+  async workspaceMember(
+    deviceId: string,
+    workspaceId: string,
+    executor: Executor = this.repository.database,
+  ): Promise<MembershipRecord> {
     const membership = await this.repository.getMembership(
       deviceId,
       workspaceId,
+      executor,
     );
-    if (
-      !membership ||
-      membership.revokedAt ||
-      membership.identityId !== membership.ownerIdentityId
-    )
+    if (!membership || membership.revokedAt)
+      throw new DomainError(403, "Workspace 접근 권한이 없습니다.");
+    return membership;
+  }
+  async workspaceOwner(
+    deviceId: string,
+    workspaceId: string,
+    executor: Executor = this.repository.database,
+  ): Promise<MembershipRecord> {
+    const membership = await this.workspaceMember(
+      deviceId,
+      workspaceId,
+      executor,
+    );
+    if (membership.identityId !== membership.ownerIdentityId)
       throw new DomainError(403, "Workspace Owner 권한이 필요합니다.");
+    return membership;
   }
   async page(
     deviceId: string,

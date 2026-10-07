@@ -37,6 +37,7 @@ import { searchLocalPages, availablePages, retainEqualItems } from "./search";
 import { useUiStore } from "./ui-store";
 import { stageAttachment, loadAttachment } from "./attachments";
 import { getAttachmentIds } from "@zeronote/shared";
+import { MEMBER_PREFERENCE_PREFIXES } from "./members";
 vi.mock("./api", () => ({
   api: vi.fn(async () => {
     throw new Error("Network disabled in local tests");
@@ -442,8 +443,18 @@ describe("Local-first data", () => {
     expect(operation?.payload.expectedRevision).toBe(0);
     expect(operation?.status).toBe("pending");
   });
-  it("clears page documents and pending comments when deleting local workspaces", async () => {
+  it("clears documents, comments and Member data only for the deleted local Workspace", async () => {
     const { workspace: ws, page } = await workspace();
+    const otherId = crypto.randomUUID();
+    const memberKeys = MEMBER_PREFERENCE_PREFIXES.map(
+      (prefix) => `${prefix}${ws.id}:device:fixture`,
+    );
+    const retainedKeys = MEMBER_PREFERENCE_PREFIXES.map(
+      (prefix) => `${prefix}${otherId}:device:fixture`,
+    );
+    await database.preferences.bulkPut(
+      [...memberKeys, ...retainedKeys].map((id) => ({ id, value: "fixture" })),
+    );
     await database.pendingComments.put({
       id: crypto.randomUUID(),
       createdAt: "now",
@@ -457,6 +468,13 @@ describe("Local-first data", () => {
     await deleteLocalWorkspace(ws.id);
     expect(await database.documents.get(page.id)).toBeUndefined();
     expect(await database.pendingComments.count()).toBe(0);
+    expect(await database.preferences.bulkGet(memberKeys)).toEqual(
+      memberKeys.map(() => undefined),
+    );
+    expect(await database.preferences.bulkGet(retainedKeys)).toEqual(
+      retainedKeys.map((id) => ({ id, value: "fixture" })),
+    );
+    await database.preferences.bulkDelete(retainedKeys);
     expect(
       await database.operations
         .filter((value) => value.payload.workspaceId === ws.id)

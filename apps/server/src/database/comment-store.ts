@@ -12,7 +12,7 @@ import { DomainError } from "../errors";
 import type { Repository, Executor } from "./repository";
 
 // Same transaction lock as document Commit and file cleanup.
-const CONTENT_WRITE_LOCK_ID = 92061002;
+import { CONTENT_WRITE_LOCK_ID } from "./locks";
 type CommentRecord = PageComment & { rowId: string | null };
 type Authorize = (
   executor: Executor,

@@ -10,6 +10,7 @@ const MIGRATIONS = [
   "007-database-properties.sql",
   "008-knowledge-search.sql",
   "009-task-comments.sql",
+  "010-workspace-members.sql",
 ] as const;
 export async function migrateDatabase(pool: Pool): Promise<void> {
   const client = await pool.connect();

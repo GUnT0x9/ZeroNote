@@ -22,6 +22,8 @@ export interface DocumentSession {
   awareness: Awareness;
   persistence: IndexeddbPersistence;
   provider?: HocuspocusProvider;
+  rejoinRequired?: boolean;
+  rejoinToken?: string;
   attachmentUploads?: Set<string>;
   generation: number;
   localSaveError?: string;
@@ -31,6 +33,7 @@ export interface DocumentSession {
   saving?: Promise<void>;
 }
 const sessions = new Map<string, DocumentSession>();
+const DOCUMENT_RESET_REASON = "Reset Connection";
 let requestSync = () => {};
 export function setDocumentSyncRequest(callback: () => void): void {
   requestSync = callback;
@@ -276,7 +279,17 @@ export async function connectDocument(
     return undefined;
   }
   if (session.provider) {
-    await session.provider.connect();
+    if (session.rejoinRequired) {
+      // sendToken swallows token-fetch errors. Check first so an unavailable
+      // token endpoint cannot start another unauthenticated sync loop.
+      const response = await api<{ token: string }>(
+        `/documents/${page.id}/realtime-token`,
+        "POST",
+      );
+      session.rejoinToken = response.token;
+      await session.provider.sendToken();
+      session.provider.startSync();
+    } else await session.provider.connect();
     return session.provider;
   }
   if (session.connecting) return session.connecting;
@@ -322,11 +335,19 @@ async function createProvider(
     document: session.document,
     awareness: session.awareness,
     token: async () => {
+      if (session.rejoinToken) {
+        const token = session.rejoinToken;
+        session.rejoinToken = undefined;
+        return token;
+      }
       const response = await api<{ token: string }>(
         `/documents/${page.id}/realtime-token`,
         "POST",
       );
       return response.token;
+    },
+    onAuthenticated: () => {
+      session.rejoinRequired = false;
     },
     onStateless: ({ payload }) => {
       try {
@@ -351,10 +372,15 @@ async function createProvider(
         useUiStore.getState().patch({ notice: errorMessage(error) }),
       );
     },
-    onClose: () => {
+    onClose: (closed) => {
       // Revocation can close just this document while its WebSocket stays open.
       // Confirm access with REST; an ordinary disconnect must not discard data.
       if (!navigator.onLine) return;
+      if (
+        closed?.event?.code === 1000 &&
+        closed.event.reason === DOCUMENT_RESET_REASON
+      )
+        session.rejoinRequired = true;
       void markAccessFailure(page.id).catch((error) =>
         useUiStore.getState().patch({ notice: errorMessage(error) }),
       );
@@ -366,6 +392,8 @@ async function createProvider(
 async function markAccessFailure(pageId: string): Promise<void> {
   try {
     await api(`/documents/${pageId}`);
+    // A closed connection can mean a Role changed while read access remains.
+    requestSync();
   } catch (error) {
     if (error instanceof ApiError && [403, 410].includes(error.status)) {
       // Dependency readers must stop resolving the cached Page as soon as the

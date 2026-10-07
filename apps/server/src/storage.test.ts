@@ -9,6 +9,7 @@ import type { FastifyInstance } from "fastify";
 import { EDITOR_PROTOCOL, EDITOR_PROTOCOL_HEADER } from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
+const TEST_SERVER_STARTUP_TIMEOUT_MS = 30_000;
 const created: string[] = [];
 interface Actor {
   id: string;
@@ -137,7 +138,7 @@ beforeAll(async () => {
   app = result.app;
   repository = result.repository;
   await app.ready();
-});
+}, TEST_SERVER_STARTUP_TIMEOUT_MS);
 afterAll(async () => {
   for (const id of created) await repository.deleteWorkspace(id);
   await app.close();

@@ -222,7 +222,10 @@ function SharePanel({ page }: { page: LocalPage }) {
       )}
       {error && <div className="inline-warning">{error}</div>}
       <div className="panel-section">
-        <h3>접근 권한</h3>
+        <h3>개별 접근 권한</h3>
+        <p className="field-help">
+          그룹 공유는 Settings의 멤버와 그룹에서 관리합니다.
+        </p>
         {!data.grants.length && (
           <p className="muted small">아직 초대를 수락한 사람이 없습니다.</p>
         )}

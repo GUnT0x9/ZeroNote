@@ -1,3 +1,4 @@
+import { CONTENT_WRITE_LOCK_ID } from "./locks";
 import { sql } from "drizzle-orm";
 import * as Y from "yjs";
 import {
@@ -80,7 +81,9 @@ export class SnapshotStore {
     name: string,
   ): Promise<DocumentSnapshot> {
     return this.repository.database.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       await this.repository.documents.lock(pageId, tx);
       const previous = await this.replay<DocumentSnapshot>(
         operationId,
@@ -134,7 +137,9 @@ export class SnapshotStore {
     operationId: string,
   ): Promise<Page> {
     return this.repository.database.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       await this.repository.documents.lock(source.id, tx);
       const previous = await this.replay<Page>(
         operationId,

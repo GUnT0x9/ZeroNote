@@ -141,3 +141,9 @@ Verified 2026-10-07: `bee64d1`의 CI 460 Tests/27 E2E/Docker/512MiB/암호화 �
 Accepted default: 기존 Page Comments에 선택형 Row ID를 추가하고 같은 Database 권한을 상속한다. 작성 Identity·Page/Row·부모·본문이 같은 ID 재시도만 승인한다. 기존 Page DTO와 댓글은 유지한다. 댓글 작성은 committed Row 상태와 같은 Content/Page lock에서 승인하며 Pool 내부 executor로 권한을 검사한다. 초안/Queue를 범위별 보존하고 POST 저장 확인 이후 재조회 실패는 GET만 재시도한다. 삭제된 Task의 미전송 댓글은 Database 댓글 패널에서 복사·재시도·제거한다. Snapshot에 댓글은 복제하지 않는다. [검증 기록](../task-comments-release.md)에 구현·배포 증거를 기록한다.
 
 Verified 2026-10-07: `522637e`의 CI 479 Tests/29 E2E/Docker/512MiB/암호화 복원과 Render → Vercel 및 실제 HTTPS 7개 흐름 통과. 최초 Production 회귀에서 확인한 Local Projection 전 완료 표시를 즉시 generation 구독으로 수정하고 지연 Commit 검증을 추가했다. Migration 009는 기존 댓글을 보존하며 이후 서버 Rollback은 Row 범위를 이해하는 버전으로 제한한다. 60/148 완료·88개 계속 구현.
+
+### DEC-050 — Workspace Member와 동적 Group 공유
+
+Confirmed: 남은 요구 42·43의 Member 관리와 Member Group을 구현·배포한다. Accepted default: 기존 Workspace Identity를 관리 단위로 사용하고 Owner Recovery는 같은 사람으로 묶는다. 모든 협업 기기를 한 사람으로 Pairing하는 기능은 별도 미완료 항목이다. Group 구성은 현재 Page 공유에 동적으로 적용하고 개별 Grant와의 가장 높은 유효 Role을 유지한다. Owner만 다른 Member/Group/권한을 관리하며 본인 표시 이름은 활성 Membership으로 확인한다. Member 제거는 모든 기기의 Membership·개별 Grant·그룹 참여를 함께 철회하고 원본 문서/댓글은 유지한다.
+
+Migration 010은 기존 DTO·CRDT·Editor Protocol을 유지한다. 권한 변경은 Content lock·Operation ID·Revision으로 승인하고 Commit 이후 연결을 재인증한다. Offline 초안과 전송 결과가 불명확한 변경은 기기에 보관하며 자동 권한 재전송이나 유휴 Polling을 추가하지 않는다. 배포 검증 전에는 완료 수 60/148을 유지한다. [구현 기준](../workspace-members-plan.md).

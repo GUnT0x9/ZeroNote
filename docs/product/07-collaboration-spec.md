@@ -24,3 +24,7 @@ Offline 편집은 CRDT 병합한다. 권한 철회·삭제된 문서의 변경�
 | Grant/Device 철회 | 기존 연결을 종료                | 로컬 문서는 유지              | 이후 요청에서 권한 재검사  | 미전송 변경은 보존본             | 접근 불가 문서의 원격 쓰기 거절      |
 
 원격 Update를 받은 Client도 DB 저장 확인 없이 완료로 표시하지 않는다. Editor는 Commit 응답을 사용하고 Viewer/Commenter는 서버에서 읽은 상태와 로컬 Yjs Snapshot을 비교해 확인한다. State Vector뿐 아니라 Delete Set도 비교해 삭제 변경을 빠뜨리지 않는다.
+
+## Workspace Member·Group 확장 기본안
+
+Member는 Workspace Identity이며 Owner Recovery의 여러 기기는 한 사람으로 표시한다. Owner가 기기/멤버·개별 Grant·그룹·그룹별 Page 공유를 관리한다. 그룹 공유는 현재 구성원과 선택한 Page/하위 범위에 적용하며 개별/다른 그룹 중 가장 강한 유효 Role을 유지한다. 멤버 제거는 모든 해당 기기·Grant·그룹 참여를 철회하고 작성한 문서/댓글은 남긴다. 본인 표시 이름은 서버가 확인한 Identity로만 바꾼다. 권한/그룹 변경은 Online에서 명시적으로 실행하며 초안/불명확한 요청은 기기에 보존한다. [구현·검증 기준](../workspace-members-plan.md).

@@ -22,6 +22,7 @@ import { Dialog } from "./primitives";
 import { TransferDialog } from "./transfer-dialog";
 import { PublicWorkspaceDialog } from "./public-share-manager";
 import { StorageDialog } from "./storage-dialog";
+import { MembersDialog } from "./members-dialog";
 import { useUiStore } from "@/lib/ui-store";
 import type { WorkspaceData } from "@/lib/hooks";
 import { database, errorMessage, type LocalWorkspace } from "@/lib/database";
@@ -705,6 +706,7 @@ export function SettingsDialog({
     [confirmDelete, setConfirmDelete] = useState(false),
     [transferOpen, setTransferOpen] = useState(false),
     [storageOpen, setStorageOpen] = useState(false),
+    [membersOpen, setMembersOpen] = useState(false),
     [publicOpen, setPublicOpen] = useState(false),
     [deleteName, setDeleteName] = useState("");
   const owner =
@@ -773,6 +775,16 @@ export function SettingsDialog({
         onClose={() => setStorageOpen(false)}
       />
     );
+  if (membersOpen && workspace)
+    return (
+      <MembersDialog
+        key={workspace.id}
+        workspace={workspace}
+        owner={owner}
+        pages={data.pages}
+        onClose={() => setMembersOpen(false)}
+      />
+    );
   if (transferOpen && workspace)
     return (
       <TransferDialog
@@ -784,6 +796,14 @@ export function SettingsDialog({
   return (
     <Dialog title="Settings" onClose={onClose} wide>
       <div className="settings-content">
+        {workspace && (
+          <section>
+            <h3>{owner ? "팀" : "프로필"}</h3>
+            <button className="button" onClick={() => setMembersOpen(true)}>
+              {owner ? "멤버와 그룹" : "내 표시 이름"}
+            </button>
+          </section>
+        )}
         <section>
           <h3>화면</h3>
           <div className="theme-options">

@@ -40,3 +40,11 @@ Task 확장: Row의 nullable `parentTaskId`/정수 분 `estimateMinutes`, Row ID
 `schema_migrations`는 적용된 SQL Version을 기록한다. `beta_codes`는 Secret Hash·만료·최초 수락 Device를 기록하고 `beta_devices`는 Device의 생성 자격을 연결한다. `workspaces.beta_code_id`로 자격당 생성 수를 계산한다. Owner Recovery가 같은 자격을 새 Device로 이어준다. 기존 Alpha Workspace의 자격 FK는 NULL이며 데이터는 유지한다.
 
 `document_checkpoints.through_update_id`는 포함된 Commit 위치다. `document_operations`는 정리된 Update의 Operation ID·Page ID·Payload Hash를 보존한다. Page 삭제 시 둘 다 Cascade한다. `document_snapshots`는 별도 immutable Yjs State, Version, 종류, 이름, UTC 자동 생성 날짜, 생성 Device를 기록한다. Page/Workspace hard delete 시 Snapshot도 Cascade한다. `snapshot_operations`는 생성/복구 재시도의 Device·대상·동작·결과를 기록한다. 이 결과에는 본문이나 인증 Secret을 저장하지 않는다.
+
+## Workspace Member와 Group · Migration 010
+
+Member는 기존 Workspace Identity와 Device Membership을 묶은 읽기 모델이다. Owner Recovery 기기는 같은 Identity에 연결하며 협업자의 기기 Pairing은 별도 기능이다. Member 제거는 Membership·개별 Grant·그룹 참여를 철회하고 작성 문서와 댓글의 Identity를 보존한다.
+
+`member_groups`는 Workspace 소속 이름·Revision·삭제 시각, `member_group_members`는 Group/Identity 연결, `member_group_grants`는 Group/Page별 Role·하위 Page 포함·Revision·철회를 저장한다. 그룹 구성의 변경은 모든 그룹 공유에 적용한다. 활성 Membership과 삭제되지 않은 그룹을 확인해 기존 개별 Grant와 합친다. Row별 독립 권한은 추가하지 않는다.
+
+기존 `grants.revision`은 0에서 시작한다. `member_operations`는 Operation ID·Workspace·Device·입력 Hash·결과만 저장하며 같은 요청 재시도는 같은 결과를 반환한다. 서버 Commit과 권한 확인은 문서 쓰기와 같은 Content lock 안에서 수행하고, Commit 이후 연결을 다시 인증한다. Workspace 삭제는 네 테이블을 Cascade하며 Export/Import와 Snapshot은 그룹·권한·Operation을 복제하지 않는다.

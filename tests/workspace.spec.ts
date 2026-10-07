@@ -11,6 +11,304 @@ import {
   strToU8,
 } from "../apps/web/node_modules/fflate";
 const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
+test("Workspace Members and Groups update realtime Page roles and preserve authors after removal", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(180000);
+  const name = `Member Groups ${Date.now()}`;
+  await createWorkspace(page, name);
+  const workspaceId = new URL(page.url()).searchParams.get("workspace")!,
+    pageId = new URL(page.url()).searchParams.get("page")!;
+  const context = await browser.newContext(),
+    peer = await context.newPage();
+  const team = (target: Page) =>
+    target.getByRole("dialog", { name: "멤버와 그룹", exact: true });
+  const openTeam = async () => {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("button", { name: "멤버와 그룹", exact: true })
+      .click();
+    await expect(
+      team(page).getByText("서버의 최신 상태", { exact: true }),
+    ).toBeVisible();
+  };
+  const closeTeam = async () => {
+    await page
+      .getByRole("button", { name: "Settings로 돌아가기", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "Settings", exact: true })
+      .getByRole("button", { name: "닫기", exact: true })
+      .click();
+  };
+  try {
+    const invitation = await createInvite(page, "viewer");
+    await peer.goto(invitation);
+    await expect(peer.getByLabel("Page 제목")).toHaveValue("시작하기");
+    await expect(
+      peer.getByRole("textbox", { name: "문서 본문" }),
+    ).toHaveAttribute("contenteditable", "false");
+    await peer.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(
+      peer.getByRole("button", { name: "멤버와 그룹", exact: true }),
+    ).toHaveCount(0);
+    await peer
+      .getByRole("button", { name: "내 표시 이름", exact: true })
+      .click();
+    await peer
+      .getByRole("textbox", { name: "내 표시 이름", exact: true })
+      .fill("Reviewer");
+    await peer.getByRole("button", { name: "이름 저장", exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          (
+            (await (
+              await peer.request.get(
+                `${ORIGIN}/v1/workspaces/${workspaceId}/profile`,
+              )
+            ).json()) as { name: string }
+          ).name,
+      )
+      .toBe("Reviewer");
+    await expect(
+      peer.getByRole("button", { name: "이름 저장", exact: true }),
+    ).toBeDisabled();
+    await peer
+      .getByRole("button", { name: "Settings로 돌아가기", exact: true })
+      .click();
+    await peer
+      .getByRole("dialog", { name: "Settings", exact: true })
+      .getByRole("button", { name: "닫기", exact: true })
+      .click();
+    const profile = await peer.request.get(
+      `${ORIGIN}/v1/workspaces/${workspaceId}/profile`,
+    );
+    expect(profile.status()).toBe(200);
+    const identity = (await profile.json()) as { id: string };
+    await openTeam();
+    await team(page)
+      .getByRole("tab", { name: "멤버", exact: true })
+      .press("ArrowRight");
+    await expect(
+      team(page).getByRole("tab", { name: "그룹", exact: true }),
+    ).toBeFocused();
+    await team(page)
+      .getByRole("button", { name: "새 그룹", exact: true })
+      .click();
+    await team(page).getByLabel("그룹 이름").fill("Engineering");
+    await team(page).getByLabel("그룹 멤버 Reviewer", { exact: true }).check();
+    await team(page)
+      .getByRole("button", { name: "그룹 저장", exact: true })
+      .click();
+    await expect(
+      team(page).getByText("Engineering", { exact: true }),
+    ).toBeVisible();
+    await team(page)
+      .getByRole("tab", { name: "그룹 공유", exact: true })
+      .click();
+    await team(page)
+      .getByLabel("공유할 그룹")
+      .selectOption({ label: "Engineering" });
+    await team(page).getByLabel("그룹에 공유할 Page").selectOption(pageId);
+    await team(page).getByLabel("그룹 Page Role").selectOption("editor");
+    await team(page)
+      .getByRole("button", { name: "그룹 공유 저장", exact: true })
+      .click();
+    await expect(
+      team(page).getByRole("button", { name: "공유 편집", exact: true }),
+    ).toBeVisible();
+    await expect(
+      peer.getByRole("textbox", { name: "문서 본문" }),
+    ).toHaveAttribute("contenteditable", "true");
+    await peer
+      .getByRole("textbox", { name: "문서 본문" })
+      .fill("Edited through a group grant");
+    await expect(
+      peer.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await closeTeam();
+    await expect(
+      page.getByRole("textbox", { name: "문서 본문" }),
+    ).toContainText("Edited through a group grant");
+    await openTeam();
+    await team(page)
+      .getByRole("tab", { name: "그룹 공유", exact: true })
+      .click();
+    await team(page)
+      .getByRole("button", { name: "공유 편집", exact: true })
+      .click();
+    await team(page).getByLabel("그룹 Page Role").selectOption("commenter");
+    await team(page)
+      .getByRole("button", { name: "그룹 공유 저장", exact: true })
+      .click();
+    await expect(
+      peer.getByRole("textbox", { name: "문서 본문" }),
+    ).toHaveAttribute("contenteditable", "false");
+    await openPageTool(peer, "Comments");
+    await peer.getByLabel("Comment 내용").fill("Keep this member's comment");
+    await peer.getByLabel("Comment 내용").press("Control+Enter");
+    await expect(
+      peer
+        .getByRole("complementary", { name: "Comments", exact: true })
+        .getByText("Keep this member's comment", { exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(async () =>
+        (
+          (await (
+            await page.request.get(`${ORIGIN}/v1/pages/${pageId}/comments`)
+          ).json()) as { body: string }[]
+        ).some((comment) => comment.body === "Keep this member's comment"),
+      )
+      .toBe(true);
+    await team(page)
+      .getByRole("button", { name: "공유 편집", exact: true })
+      .click();
+    await team(page).getByLabel("그룹 Page Role").selectOption("viewer");
+    await team(page)
+      .getByRole("button", { name: "그룹 공유 저장", exact: true })
+      .click();
+    await expect(peer.getByLabel("Comment 내용")).toHaveCount(0);
+    await team(page).getByRole("tab", { name: "멤버", exact: true }).click();
+    const member = team(page).getByTestId(`member-${identity.id}`);
+    await member
+      .getByRole("button", { name: "멤버 제거", exact: true })
+      .click();
+    await member
+      .getByRole("button", { name: "접근 철회", exact: true })
+      .click();
+    await expect(member.getByText("철회됨", { exact: true })).toBeVisible();
+    expect(
+      (await peer.request.get(`${ORIGIN}/v1/documents/${pageId}`)).status(),
+    ).toBe(403);
+    await closeTeam();
+    await openPageTool(page, "Comments");
+    await expect(
+      page
+        .getByRole("complementary", { name: "Comments", exact: true })
+        .getByText("Keep this member's comment", { exact: true }),
+    ).toBeVisible();
+    const response = await page.request.get(
+      `${ORIGIN}/v1/workspaces/${workspaceId}/members`,
+    );
+    const data = (await response.json()) as {
+      groups: { memberIds: string[] }[];
+    };
+    expect(data.groups[0]?.memberIds).toEqual([]);
+  } finally {
+    await context.close();
+    await cleanup(page, name);
+  }
+});
+
+test("Workspace Members and Groups retain Offline drafts and retry unknown committed changes without duplicates", async ({
+  page,
+}) => {
+  test.setTimeout(180000);
+  const name = `Member Groups Retry ${Date.now()}`;
+  await createWorkspace(page, name);
+  const workspaceId = new URL(page.url()).searchParams.get("workspace")!;
+  const openTeam = async () => {
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("button", { name: "멤버와 그룹", exact: true })
+      .click();
+    await page.getByRole("tab", { name: "그룹", exact: true }).click();
+  };
+  try {
+    await openTeam();
+    await expect(
+      page.getByText("서버의 최신 상태", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "새 그룹", exact: true }).click();
+    await expect(page.getByLabel("그룹 이름")).toBeFocused();
+    await page.getByLabel("그룹 이름").fill("Offline group draft");
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    await page.context().setOffline(true);
+    await expect(
+      page.getByRole("button", { name: "그룹 저장", exact: true }),
+    ).toBeDisabled();
+    await page.getByLabel("그룹 이름").fill("Offline group retained");
+    await expect(page.getByTestId("member-group-draft-status")).toHaveText(
+      "이 기기에 저장됨",
+    );
+    await page.reload();
+    await openTeam();
+    await expect(page.getByLabel("그룹 이름")).toHaveValue(
+      "Offline group retained",
+    );
+    await expect(
+      page.getByRole("button", { name: "그룹 저장", exact: true }),
+    ).toBeDisabled();
+    await page.context().setOffline(false);
+    await expect(
+      page.getByRole("button", { name: "그룹 저장", exact: true }),
+    ).toBeEnabled();
+    const path = `**/v1/workspaces/${workspaceId}/member-groups/*`,
+      operations: string[] = [];
+    await page.route(path, async (route) => {
+      if (route.request().method() !== "PUT") return route.continue();
+      operations.push(
+        (route.request().postDataJSON() as { operationId: string }).operationId,
+      );
+      const response = await route.fetch();
+      expect(response.status()).toBe(200);
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Unknown result fixture" }),
+      });
+    });
+    await page.getByRole("button", { name: "그룹 저장", exact: true }).click();
+    await expect(
+      page.getByText("전송 결과를 확인하지 못했습니다.", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("그룹 이름")).toHaveValue(
+      "Offline group retained",
+    );
+    await page.unroute(path);
+    await page.reload();
+    await openTeam();
+    await expect(
+      page.getByText("전송 결과를 확인하지 못했습니다.", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "같은 변경 재시도", exact: true })
+      .click();
+    await expect(
+      page.getByText("전송 결과를 확인하지 못했습니다.", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByLabel("그룹 이름")).toHaveCount(0);
+    await expect(
+      page.getByText("Offline group retained", { exact: true }),
+    ).toHaveCount(1);
+    const response = await page.request.get(
+      `${ORIGIN}/v1/workspaces/${workspaceId}/members`,
+    );
+    const data = (await response.json()) as { groups: { name: string }[] };
+    expect(
+      data.groups.filter((group) => group.name === "Offline group retained"),
+    ).toHaveLength(1);
+    expect(new Set(operations).size).toBe(1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("tab", { name: "그룹", exact: true }).press("End");
+    await expect(
+      page.getByRole("tab", { name: "그룹 공유", exact: true }),
+    ).toBeFocused();
+    expect(
+      await page
+        .getByRole("dialog", { name: "멤버와 그룹", exact: true })
+        .evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+  } finally {
+    await page.context().setOffline(false);
+    await cleanup(page, name);
+  }
+});
 test("Task Comments isolate scopes, preserve drafts and merge Offline replies with Commenter and Viewer roles", async ({
   page,
   browser,

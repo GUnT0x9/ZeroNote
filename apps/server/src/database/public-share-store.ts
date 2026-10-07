@@ -1,3 +1,4 @@
+import { CONTENT_WRITE_LOCK_ID } from "./locks";
 import { createHash, createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import * as Y from "yjs";
@@ -144,7 +145,9 @@ export class PublicShareStore {
       ? await hashPublicPassword(input.password)
       : null;
     return this.repository.database.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       const [owner] = await this.repository.query(
         sql`SELECT 1 FROM memberships m JOIN workspaces w ON w.id=m.workspace_id WHERE m.workspace_id=${workspaceId} AND m.device_id=${deviceId} AND m.revoked_at IS NULL AND m.identity_id=w.owner_identity_id`,
         tx,
@@ -223,7 +226,9 @@ export class PublicShareStore {
   }
   async revoke(workspaceId: string, id: string): Promise<{ revoked: true }> {
     return this.repository.database.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       const rows = await this.repository.query(
         sql`UPDATE public_shares SET revoked_at=COALESCE(revoked_at,now()) WHERE id=${id} AND workspace_id=${workspaceId} RETURNING id`,
         tx,
@@ -278,7 +283,9 @@ export class PublicShareStore {
         .digest("hex"),
       tokenHash = publicHash(token);
     return this.repository.database.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       const current = await this.record(id, tx, true);
       const [prior] = await this.repository.query<{
         tokenHash: string;

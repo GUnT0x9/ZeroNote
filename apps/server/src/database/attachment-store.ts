@@ -1,3 +1,4 @@
+import { CONTENT_WRITE_LOCK_ID } from "./locks";
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import {
@@ -75,7 +76,9 @@ export class AttachmentStore {
     name: string,
   ): Promise<{ id: string; purged: true }> {
     return this.repository.database.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       const [file] = await this.repository.query<{
         pageId: string;
         name: string;
@@ -198,7 +201,9 @@ export class AttachmentStore {
         .update(JSON.stringify([pageId, input.id, name, hash]))
         .digest("hex");
     return this.repository.database.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       const [prior] = await this.repository.query<{
         attachmentId: string;
         hash: string;

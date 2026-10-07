@@ -1,4 +1,5 @@
 import * as Y from "yjs";
+import { MEMBER_PREFERENCE_PREFIXES } from "./members";
 import {
   createRecoveryKey,
   initializeGenericDatabase,
@@ -565,6 +566,13 @@ export async function deleteLocalWorkspace(workspaceId: string): Promise<void> {
       await database.pages.bulkDelete(ids);
       await database.documents.bulkDelete(ids);
       await database.preferences.bulkDelete(ids.map(attachmentMetadataKey));
+      await database.preferences
+        .filter((preference) =>
+          MEMBER_PREFERENCE_PREFIXES.some((prefix) =>
+            preference.id.startsWith(`${prefix}${workspaceId}:`),
+          ),
+        )
+        .delete();
       await database.attachments
         .where("workspaceId")
         .equals(workspaceId)

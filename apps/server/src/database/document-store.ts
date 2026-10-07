@@ -1,3 +1,4 @@
+import { CONTENT_WRITE_LOCK_ID } from "./locks";
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import * as Y from "yjs";
@@ -90,7 +91,9 @@ export class DocumentStore {
       throw new DomainError(413, "문서 크기 제한을 초과했습니다.");
     const hash = createHash("sha256").update(update).digest("hex");
     await this.repository.database.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(92061002)`);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       await this.lock(pageId, tx);
       // Validate before deduplication too: a previous operation cannot grant an
       // incompatible client access to the current document state.

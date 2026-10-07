@@ -129,3 +129,26 @@ Text는 Unicode NFKC/소문자/공백으로 정리한다. AND 조건, 따옴표�
 Overlay는 `{pageId,projection}` 최대 32개이며 현재 접근 가능하고 편집 가능한 Page에만 적용한다. 본문·Index·Checkpoint를 변경하지 않는다. 서버는 기존 source Index에서 링크·활성 Row 이름·Tag와 제한된 본문 근거를 읽는다. 같은 Body 정규화/점수 규칙을 Offline에서도 사용한다. 본문 근거는 앞 8,192자, 각 Row 본문 앞 1,024자와 최대 64개 단어로 제한하며 공통 단어를 제외한다. 관련 문서는 직접 연결 100점·공통 Tag당 12점·본문 단어당 1점으로 정렬하고 제목·ID로 같은 점수의 순서를 고정한다. 자기 자신·Trash·다른 Workspace의 추천을 제외한다.
 
 전체 source head 16MiB와 동시 2개 요청 제한을 적용한다. 422/429와 Offline/연결 실패에서는 로컬 결과·범위를 표시한다. 새 Page의 Metadata 등록 대기 중에는 로컬 결과를 유지하며, 등록 후 서버 결과에 미전송 수정 Overlay를 적용한다. 일시적인 502/503/504 재시도만 허용하며 오래된 요청은 취소한다. Mutation·새 데이터 형식·Migration은 추가하지 않는다. 링크 교체는 기존 CRDT에 명시적으로 적용하고 로컬 저장 확인 후 기존 Commit Queue로 전송한다.
+
+## Workspace Member와 그룹
+
+다음 API는 Session·Origin과 현재 Workspace Membership을 서버에서 검사한다. 목록/관리 API는 Owner 전용이며 본인 Profile은 활성 참여자가 사용한다. 새 계약은 `packages/shared/src/members.ts`에 있다.
+
+| Method / Path                                                   | 입력 / 동작                                                                                 |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| GET `/v1/workspaces/:id/members`                                | Owner의 Identity별 기기·개별 Grant·그룹·그룹 공유와 `ownIdentityId`                         |
+| GET `/v1/workspaces/:id/profile`                                | 인증 기기의 Workspace Identity와 표시 이름·Owner/member 구분                                |
+| PATCH `/v1/workspaces/:id/profile`                              | `{operationId,name}` · 본인 이름만 변경                                                     |
+| PUT `/v1/workspaces/:id/member-groups/:groupId`                 | `{operationId,expectedRevision,name,memberIds}` · 생성/수정                                 |
+| DELETE `/v1/workspaces/:id/member-groups/:groupId`              | `{operationId,expectedRevision}` · 그룹과 해당 그룹 공유 종료                               |
+| PUT `/v1/workspaces/:id/group-access`                           | `{operationId,id,groupId,pageId,role,includeDescendants,expectedRevision}` · 그룹 Page 공유 |
+| DELETE `/v1/workspaces/:id/group-access/:grantId`               | `{operationId,expectedRevision}` · 해당 그룹 공유만 철회                                    |
+| PATCH `/v1/workspaces/:id/members/:identityId/grants/:grantId`  | `{operationId,expectedRevision,role,includeDescendants}` · 기존 개별 Grant 수정             |
+| DELETE `/v1/workspaces/:id/members/:identityId/grants/:grantId` | `{operationId,expectedRevision}` · 개별 Grant 철회                                          |
+| DELETE `/v1/workspaces/:id/members/:identityId`                 | `{operationId}` · 모든 기기/개별 Grant/그룹 참여 철회, 문서/댓글 보존                       |
+
+그룹/공유 생성의 기대 Revision은 0이며 수정/철회는 현재 값이다. 변경 후 `{id,revision?}`를 Commit 이후 반환한다. 같은 기기·Workspace·입력의 Operation 재시도는 같은 결과다. 입력/대상이 다른 ID 재사용과 Revision 충돌은 409다. 그룹 Member ID는 같은 Workspace의 활성 Identity여야 하며 중복/다른 Workspace/철회 대상은 거절한다. 그룹은 최대 100개, 구성원은 최대 1,000명이며 빈 그룹을 허용한다.
+
+그룹 공유는 현재 구성원에게 동적으로 적용하며 개별/다른 그룹 Grant 중 가장 강한 유효 Role을 사용한다. 하위 범위와 Trash는 기존 Page 정책을 따른다. 관리 변경·기기 철회·초대 수락은 문서 저장과 같은 Content lock을 사용한다. Commit 후 Workspace의 활성 문서 연결을 종료하고 REST/새 연결에서 권한을 재검사한다. Page Share의 기존 strict DTO와 CRDT/Editor Protocol은 유지한다. Profile 이름은 Presence·댓글 Author·Assignee에 같은 Identity로 적용한다. Export/Import/Snapshot은 그룹·접근 권한을 자동 복사하지 않는다.
+
+클라이언트는 관리 변경을 기기에 먼저 저장하고 명시적인 Online 요청만 실행한다. POST/PUT/PATCH/DELETE 확인 후 목록 GET만 실패하면 같은 변경을 다시 쓰지 않고 GET만 확인한다. 불명확한 실패는 같은 Operation으로 재시도한다. 거절/Revision 충돌의 입력과 그룹 초안은 보존한다. Offline 목록은 마지막 확인 상태이며 권한 변경을 자동 전송하지 않는다. Workspace를 기기에서 삭제하면 해당 Member 캐시·대기 기록·그룹 초안도 제거한다. [구현 기준](workspace-members-plan.md).

@@ -11,3 +11,9 @@ Invite: 256-bit 난수 Secret, Hash 서버 저장, 기본 7일 만료, 1회 사�
 Invite 취소는 아직 수락되지 않은 초대를 막는다. Grant 철회는 이미 수락한 사람의 접근을 종료한다. REST와 WebSocket에서 매번 서버 권한을 검증하고 활성 연결도 종료한다.
 
 Workspace Recovery Key는 Owner 권한을 복구하는 별도 Secret이다. Page 초대 수단으로 사용하지 않는다. 표시 이름은 실명 인증을 의미하지 않는다. 철회는 미래 접근 통제이며 받은 사본 회수를 보장하지 않는다.
+
+## Workspace Member와 동적 Group 공유
+
+Workspace Owner는 Member의 개별 Page 권한과 Group을 관리한다. 그룹 생성은 Page 권한을 부여하지 않으며 별도 Group/Page 공유가 필요하다. 개별 Grant와 활성 그룹 공유 중 가장 높은 Role을 적용한다. Group/Member 삭제는 해당 경로의 이후 접근을 종료하며 다른 유효 Grant와 이미 받은 사본을 지우지 않는다. 표시 이름 변경은 자신의 활성 Membership으로 확인한 Identity에만 적용한다.
+
+관리 API는 Online에서 서버 승인을 받고 Operation ID·Revision으로 재전송과 충돌을 구분한다. Offline에는 마지막 확인 목록과 기기에 저장한 그룹 초안만 제공한다. 결과를 모르는 전송과 거절된 입력은 보관하며 서버 승인 표시를 하지 않는다. Commit 이후 활성 연결을 종료하고 읽기 권한이 남아 있어도 Metadata를 다시 받아 Editor/Commenter/Viewer UI를 갱신한다. Migration 010 이후 서버 Rollback은 그룹 권한을 이해하는 버전에 한정한다.

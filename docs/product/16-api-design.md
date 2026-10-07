@@ -13,3 +13,5 @@ Mutation에는 허용 Origin과 세션 검증을 적용한다. Invite/Recovery S
 구현된 정확한 Method/Path/Request는 docs/api.md를 기준으로 함께 갱신한다. Routes는 Validation/Service/Response만 담당한다.
 
 Task Comments는 기존 Page 댓글 Method에 선택형 `rowId`를 추가한다. GET Query, POST 본문, Resolve PATCH 본문은 동일한 활성 Row 범위를 검사한다. 미지정/null은 Page Thread이며 Page GET에는 Row 필드를 추가하지 않는다. 댓글 ID 재시도는 작성 Identity·Page/Row·부모·본문이 같을 때만 허용한다. 다른 입력은 409, 범위가 다른 부모는 400, 삭제 Row는 410이다.
+
+Workspace Member/Group API는 `members.ts` 공유 계약과 service/repository를 사용한다. Owner만 전체 Identity/기기/개별·그룹 Page 권한을 관리하고 활성 Member는 본인 이름만 변경한다. Operation/Payload Hash·Revision으로 동시 변경을 확인한다. 그룹 공유의 현재 구성원과 기존 개별 Grant를 같은 권한 계산에 합치며 Commit 후 연결을 종료한다. [정확한 Method·Body](../api.md), [구현 기준](../workspace-members-plan.md). UI·CI·Production 검증 전에는 전체 완료 수를 올리지 않는다.

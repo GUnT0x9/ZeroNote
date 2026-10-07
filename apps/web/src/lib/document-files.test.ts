@@ -9,12 +9,16 @@ import {
   connectDocument,
   pauseDocumentForAttachmentUpload,
   removeLocalDocument,
+  setDocumentSyncRequest,
 } from "./documents";
 import { stageAttachment } from "./attachments";
 import { api, ApiError } from "./api";
 const providerEvents = vi.hoisted(() => ({
   authenticationFailed: undefined as (() => void) | undefined,
-  close: undefined as (() => void) | undefined,
+  close: undefined as
+    | ((closed?: { event: { code: number; reason: string } }) => void)
+    | undefined,
+  authenticated: undefined as (() => void) | undefined,
 }));
 vi.mock("./api", () => ({
   api: vi.fn(),
@@ -29,16 +33,25 @@ vi.mock("./api", () => ({
 }));
 vi.mock("@hocuspocus/provider", () => ({
   HocuspocusProvider: class {
+    private token?: () => Promise<string>;
     constructor(options: {
       onAuthenticationFailed?: () => void;
-      onClose?: () => void;
+      onClose?: (closed?: { event: { code: number; reason: string } }) => void;
+      onAuthenticated?: () => void;
+      token?: () => Promise<string>;
     }) {
       providerEvents.authenticationFailed = options.onAuthenticationFailed;
       providerEvents.close = options.onClose;
+      providerEvents.authenticated = options.onAuthenticated;
+      this.token = options.token;
     }
     connect = vi.fn(async () => undefined);
     disconnect = vi.fn(async () => undefined);
     destroy = vi.fn();
+    sendToken = vi.fn(async () => {
+      await this.token?.();
+    });
+    startSync = vi.fn();
   },
 }));
 const pages: string[] = [];
@@ -90,6 +103,8 @@ afterEach(async () => {
   vi.resetAllMocks();
   providerEvents.authenticationFailed = undefined;
   providerEvents.close = undefined;
+  providerEvents.authenticated = undefined;
+  setDocumentSyncRequest(() => {});
 });
 it("pauses realtime while a referenced file is pending and resumes only after its upload", async () => {
   const { session, provider, page } = await fixture();
@@ -209,3 +224,73 @@ it.each(["accessible", "unavailable", "offline"])(
     );
   },
 );
+
+it("rejoins a reset document on its open socket and clears the retry only after authentication", async () => {
+  const { session, page } = await fixture();
+  session.provider = undefined;
+  vi.mocked(api).mockResolvedValue({ token: "fixture-token" });
+  const provider = (await connectDocument(session, page))!;
+  const request = vi.fn();
+  setDocumentSyncRequest(request);
+  providerEvents.close!({ event: { code: 1000, reason: "Reset Connection" } });
+  await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+  expect(session.rejoinRequired).toBe(true);
+  expect(await connectDocument(session, page)).toBe(provider);
+  expect(provider.sendToken).toHaveBeenCalledOnce();
+  expect(provider.startSync).toHaveBeenCalledOnce();
+  expect(session.rejoinToken).toBeUndefined();
+  expect(
+    vi
+      .mocked(api)
+      .mock.calls.filter(([url]) => url.endsWith("/realtime-token")),
+  ).toHaveLength(2);
+  expect(provider.connect).not.toHaveBeenCalled();
+  expect(session.rejoinRequired).toBe(true);
+  providerEvents.authenticated!();
+  expect(session.rejoinRequired).toBe(false);
+  await connectDocument(session, page);
+  expect(provider.connect).toHaveBeenCalledOnce();
+});
+
+it("keeps reset access loss disconnected and does not rejoin ordinary socket closes", async () => {
+  const { session, page } = await fixture();
+  session.provider = undefined;
+  vi.mocked(api).mockResolvedValue(undefined);
+  const provider = (await connectDocument(session, page))!;
+  providerEvents.close!({
+    event: { code: 1006, reason: "Network disconnected" },
+  });
+  expect(session.rejoinRequired).not.toBe(true);
+  await connectDocument(session, page);
+  expect(provider.connect).toHaveBeenCalledOnce();
+  expect(provider.sendToken).not.toHaveBeenCalled();
+  vi.mocked(api).mockRejectedValue(new ApiError(403, "Revoked"));
+  providerEvents.close!({ event: { code: 1000, reason: "Reset Connection" } });
+  await vi.waitFor(async () =>
+    expect((await database.pages.get(page.id))?.accessLost).toBe(true),
+  );
+  expect(
+    await connectDocument(session, (await database.pages.get(page.id))!),
+  ).toBeUndefined();
+  expect(provider.sendToken).not.toHaveBeenCalled();
+});
+
+it("retains the document after a reset token failure without starting an unauthenticated sync", async () => {
+  const { session, page } = await fixture();
+  session.provider = undefined;
+  vi.mocked(api).mockResolvedValue(undefined);
+  const provider = (await connectDocument(session, page))!;
+  session.rejoinRequired = true;
+  vi.mocked(api).mockRejectedValue(new ApiError(503, "Token unavailable"));
+  await expect(connectDocument(session, page)).rejects.toThrow(
+    "Token unavailable",
+  );
+  expect(provider.sendToken).not.toHaveBeenCalled();
+  expect(provider.startSync).not.toHaveBeenCalled();
+  expect(session.rejoinRequired).toBe(true);
+  expect((await database.pages.get(page.id))?.accessLost).not.toBe(true);
+  expect((await database.documents.get(page.id))?.state).toBe("saved");
+  vi.mocked(api).mockResolvedValue({ token: "fixture-token" });
+  expect(await connectDocument(session, page)).toBe(provider);
+  expect(provider.startSync).toHaveBeenCalledOnce();
+});

@@ -10,6 +10,8 @@ import { PublicShareStore } from "./public-share-store";
 import { AttachmentStore } from "./attachment-store";
 import { SearchStore } from "./search-store";
 import { CommentStore } from "./comment-store";
+import { MemberStore } from "./member-store";
+import { CONTENT_WRITE_LOCK_ID } from "./locks";
 import type { Page, Workspace, Role } from "@zeronote/shared";
 
 export interface DeviceRecord {
@@ -57,6 +59,7 @@ export class Repository {
   readonly publicShares: PublicShareStore;
   readonly search: SearchStore;
   readonly comments: CommentStore;
+  readonly members: MemberStore;
   constructor(url: string) {
     this.pool = new Pool({
       connectionString: url,
@@ -72,6 +75,7 @@ export class Repository {
     this.publicShares = new PublicShareStore(this);
     this.search = new SearchStore(this);
     this.comments = new CommentStore(this);
+    this.members = new MemberStore(this);
   }
   async query<T>(
     statement: SQL,
@@ -262,7 +266,9 @@ export class Repository {
     executor: Executor = this.database,
   ): Promise<GrantRecord[]> {
     return this.query<GrantRecord>(
-      sql`SELECT id,workspace_id AS "workspaceId",page_id AS "pageId",identity_id AS "identityId",role,include_descendants AS "includeDescendants",revoked_at::text AS "revokedAt" FROM grants WHERE identity_id=${identityId} AND revoked_at IS NULL`,
+      sql`SELECT id,workspace_id AS "workspaceId",page_id AS "pageId",identity_id AS "identityId",role,include_descendants AS "includeDescendants",revoked_at::text AS "revokedAt" FROM grants WHERE identity_id=${identityId} AND revoked_at IS NULL
+        UNION ALL
+        SELECT g.id,m.workspace_id AS "workspaceId",g.page_id AS "pageId",${identityId}::uuid AS "identityId",g.role,g.include_descendants AS "includeDescendants",g.revoked_at::text AS "revokedAt" FROM member_group_grants g JOIN member_groups m ON m.id=g.group_id JOIN member_group_members i ON i.group_id=m.id WHERE i.identity_id=${identityId} AND g.revoked_at IS NULL AND m.deleted_at IS NULL AND EXISTS(SELECT 1 FROM memberships a WHERE a.identity_id=${identityId} AND a.workspace_id=m.workspace_id AND a.revoked_at IS NULL)`,
       executor,
     );
   }
@@ -334,6 +340,9 @@ export class Repository {
     device: DeviceRecord,
   ): Promise<{ pageId: string; workspaceId: string } | undefined> {
     return this.database.transaction(async (transaction) => {
+      await transaction.execute(
+        sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
+      );
       const invite = (
         await this.query<InviteRecord>(
           sql`SELECT id,workspace_id AS "workspaceId",page_id AS "pageId",role,include_descendants AS "includeDescendants",secret_hash AS "secretHash",expires_at::text AS "expiresAt",redeemed_identity_id AS "redeemedIdentityId",revoked_at::text AS "revokedAt" FROM invites WHERE id=${id} FOR UPDATE`,
@@ -350,6 +359,7 @@ export class Repository {
       const membership = await this.getMembership(
         device.id,
         invite.workspaceId,
+        transaction,
       );
       if (invite.redeemedIdentityId)
         return membership?.identityId === invite.redeemedIdentityId &&
@@ -386,7 +396,7 @@ export class Repository {
   }
   async revokeGrant(pageId: string, id: string): Promise<void> {
     await this.database.execute(
-      sql`UPDATE grants SET revoked_at=now() WHERE id=${id} AND page_id=${pageId}`,
+      sql`UPDATE grants SET revoked_at=now(),revision=revision+1 WHERE id=${id} AND page_id=${pageId} AND revoked_at IS NULL`,
     );
   }
   async cancelInvite(pageId: string, id: string): Promise<void> {
@@ -421,11 +431,6 @@ export class Repository {
   > {
     return this.query(
       sql`SELECT d.id,d.name,m.identity_id AS "identityId",m.revoked_at IS NOT NULL AS revoked FROM devices d JOIN memberships m ON m.device_id=d.id WHERE m.workspace_id=${workspaceId}`,
-    );
-  }
-  async revokeDevice(workspaceId: string, deviceId: string): Promise<void> {
-    await this.database.execute(
-      sql`UPDATE memberships SET revoked_at=now() WHERE workspace_id=${workspaceId} AND device_id=${deviceId}`,
     );
   }
 }
