@@ -486,3 +486,5 @@ export * from "./page-tags";
 export * from "./knowledge-projection";
 export * from "./search-results";
 export * from "./search-engine";
+export * from "./knowledge-graph";
+export * from "./knowledge-replacement";

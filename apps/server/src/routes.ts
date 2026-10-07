@@ -39,6 +39,8 @@ import { PublicShareService } from "./public-share-service";
 import { registerPublicShareRoutes } from "./public-share-routes";
 import { SearchService } from "./search-service";
 import { registerSearchRoutes } from "./search-routes";
+import { KnowledgeService } from "./knowledge-service";
+import { registerKnowledgeRoutes } from "./knowledge-routes";
 
 type Handler = (
   request: FastifyRequest,
@@ -61,6 +63,7 @@ export function registerRoutes(
     workspaces = new WorkspaceService(repository, access),
     snapshots = new SnapshotService(repository, access);
   registerSearchRoutes(app, auth, new SearchService(repository, access));
+  registerKnowledgeRoutes(app, auth, new KnowledgeService(repository, access));
   registerAttachmentRoutes(
     app,
     auth,

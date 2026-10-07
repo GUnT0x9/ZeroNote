@@ -17,7 +17,7 @@ export async function requestJson<T>(
 ): Promise<T> {
   const retryable =
     method === "GET" ||
-    (method === "POST" && path === "/search") ||
+    (method === "POST" && ["/search", "/knowledge"].includes(path)) ||
     (typeof body === "object" && body !== null && "operationId" in body);
   const attempts = retryable && timeout !== WAKE_TIMEOUT_MS ? 3 : 1;
   for (let attempt = 0; attempt < attempts; attempt++) {

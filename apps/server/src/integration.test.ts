@@ -36,6 +36,9 @@ import {
   parseSearchQuery,
   getKnowledgeProjection,
   SearchResponseSchema,
+  KnowledgeResponseSchema,
+  getKnowledgeHead,
+  updateTaskField,
 } from "@zeronote/shared";
 
 let app: FastifyInstance, repository: Repository;
@@ -127,13 +130,14 @@ async function page(
   owner: Actor,
   workspaceId: string,
   parentId: string | null = null,
+  kind: "document" | "database" = "document",
 ) {
   const id = crypto.randomUUID(),
     value = {
       id,
       workspaceId,
       parentId,
-      kind: "document",
+      kind,
       title: "Private",
       revision: 0,
       deletedAt: null,
@@ -178,6 +182,341 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const id of created) await repository.deleteWorkspace(id);
   await app.close();
+});
+it("retains independent child grants after parent revocation and does not disclose private parent deletion", async () => {
+  const owner = await actor(),
+    viewer = await actor(),
+    ws = await workspace(owner),
+    parent = await page(owner, ws.id),
+    child = await page(owner, ws.id, parent.id);
+  const doc = new Y.Doc();
+  doc.getText("title").insert(0, "Shared child");
+  const mention = new Y.XmlElement("pageMention");
+  mention.setAttribute("pageId", parent.id);
+  doc.getXmlFragment("content").insert(0, [mention]);
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/documents/${child.id}/commit`,
+        {
+          operationId: crypto.randomUUID(),
+          update: bytesToBase64(Y.encodeStateAsUpdate(doc)),
+        },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  for (const target of [parent, child]) {
+    const invitation = await invite(owner, target.id, "viewer");
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/invites/${invitation.id}/redeem`,
+          { secret: invitation.secret },
+          viewer.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+  }
+  const grants = (
+    await request(
+      "GET",
+      `/v1/pages/${parent.id}/share`,
+      undefined,
+      owner.cookie,
+    )
+  ).json<{ grants: { id: string }[] }>().grants;
+  expect(
+    (
+      await request(
+        "DELETE",
+        `/v1/pages/${parent.id}/grants/${grants[0]!.id}`,
+        undefined,
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  const metadataResponse = await request(
+    "GET",
+    "/v1/metadata",
+    undefined,
+    viewer.cookie,
+  );
+  expect(metadataResponse.statusCode, metadataResponse.body).toBe(200);
+  const metadata = metadataResponse.json<Metadata>();
+  expect(metadata.pages.map((entry) => entry.id)).toEqual([child.id]);
+  const response = await request(
+    "POST",
+    "/v1/knowledge",
+    { pageId: child.id },
+    viewer.cookie,
+  );
+  expect(response.statusCode).toBe(200);
+  const view = KnowledgeResponseSchema.parse(response.json());
+  expect(view.root?.title).toBe("Shared child");
+  expect(view.issues).toEqual([
+    { link: { pageId: parent.id, kind: "mention" }, status: "unverified" },
+  ]);
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/sync/page",
+        {
+          operationId: crypto.randomUUID(),
+          workspaceId: ws.id,
+          pageId: parent.id,
+          expectedRevision: 0,
+          action: "trash",
+        },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/knowledge",
+        { pageId: parent.id },
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(403);
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/knowledge",
+        { pageId: child.id },
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(410);
+  expect(
+    (
+      await request(
+        "GET",
+        `/v1/documents/${parent.id}`,
+        undefined,
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(403);
+  doc.destroy();
+});
+it("returns scoped Graph/Backlinks/related evidence and distinguishes known deletion from hidden targets", async () => {
+  const owner = await actor(),
+    viewer = await actor(),
+    ws = await workspace(owner),
+    reference = await page(owner, ws.id),
+    source = await page(owner, ws.id, null, "database"),
+    privateTarget = await page(owner, ws.id, null, "database"),
+    docs = [new Y.Doc(), new Y.Doc(), new Y.Doc()];
+  const [referenceDoc, sourceDoc, privateDoc] = docs as [Y.Doc, Y.Doc, Y.Doc];
+  referenceDoc.getText("title").insert(0, "Reference");
+  sourceDoc.getText("title").insert(0, "Source");
+  privateDoc.getText("title").insert(0, "Private target name");
+  setPageTag(referenceDoc, "Knowledge");
+  setPageTag(sourceDoc, "knowledge");
+  const sourceRow = createTaskRow(sourceDoc, "Visible source row"),
+    targetRow = createTaskRow(privateDoc, "Private Row name"),
+    relation = addDatabaseProperty(
+      sourceDoc,
+      "Linked",
+      "relation",
+      [],
+      crypto.randomUUID(),
+      { relation: { databaseId: privateTarget.id } },
+    );
+  writeDatabaseValue(sourceDoc, sourceRow, relation, [targetRow]);
+  const mention = new Y.XmlElement("pageMention");
+  mention.setAttribute("pageId", reference.id);
+  sourceDoc.getXmlFragment(`task:${sourceRow}`).insert(0, [mention]);
+  const privateMention = new Y.XmlElement("pageMention");
+  privateMention.setAttribute("pageId", privateTarget.id);
+  sourceDoc.getXmlFragment("content").insert(0, [privateMention]);
+  const paragraph = new Y.XmlElement("paragraph"),
+    text = new Y.XmlText();
+  paragraph.insert(0, [text]);
+  text.insert(0, "😀".repeat(700) + " offline storage ");
+  sourceDoc.getXmlFragment(`task:${sourceRow}`).insert(1, [paragraph]);
+  const commit = async (id: string, document: Y.Doc) => {
+    expect(
+      (
+        await request(
+          "POST",
+          `/v1/documents/${id}/commit`,
+          {
+            operationId: crypto.randomUUID(),
+            update: bytesToBase64(Y.encodeStateAsUpdate(document)),
+          },
+          owner.cookie,
+        )
+      ).statusCode,
+    ).toBe(200);
+  };
+  for (const [id, document] of [
+    [reference.id, referenceDoc],
+    [source.id, sourceDoc],
+    [privateTarget.id, privateDoc],
+  ] as const)
+    await commit(id, document);
+  expect((await repository.search.heads([source.id]))[0]?.head).toEqual(
+    getKnowledgeHead(getKnowledgeProjection(sourceDoc)),
+  );
+  expect(await repository.search.heads([])).toEqual([]);
+  const knowledge = async (
+    cookie: string,
+    pageId: string,
+    overlays: unknown[] = [],
+  ) => {
+    const response = await request(
+      "POST",
+      "/v1/knowledge",
+      { pageId, overlays },
+      cookie,
+    );
+    expect(response.statusCode).toBe(200);
+    return KnowledgeResponseSchema.parse(response.json());
+  };
+  const backlinks = await knowledge(owner.cookie, reference.id);
+  expect(backlinks.incoming).toEqual([
+    {
+      sourceId: source.id,
+      sourceTitle: "Source",
+      sourceRowId: sourceRow,
+      sourceRowTitle: "Visible source row",
+      kind: "mention",
+    },
+  ]);
+  expect(backlinks.related[0]?.reasons).toEqual([
+    "문서 연결",
+    "공통 Tag: knowledge",
+  ]);
+  const invitation = await invite(owner, source.id, "viewer");
+  expect(
+    (
+      await request(
+        "POST",
+        `/v1/invites/${invitation.id}/redeem`,
+        { secret: invitation.secret },
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  const scoped = await knowledge(viewer.cookie, source.id);
+  expect(scoped.nodes.map((node) => node.id)).toEqual([source.id]);
+  expect(scoped.issues).toHaveLength(3);
+  expect(scoped.issues.every((issue) => issue.status === "unverified")).toBe(
+    true,
+  );
+  expect(JSON.stringify(scoped)).not.toMatch(
+    /Private target name|Private Row name|Reference/,
+  );
+  const overlay = {
+    pageId: source.id,
+    projection: { ...getKnowledgeProjection(sourceDoc), links: [] },
+  };
+  expect(
+    (await knowledge(viewer.cookie, source.id, [overlay])).issueCount,
+  ).toBe(3);
+  expect(
+    (await knowledge(owner.cookie, source.id, [overlay])).neighborCount,
+  ).toBe(0);
+  expect((await knowledge(owner.cookie, source.id)).neighborCount).toBe(2);
+  updateTaskField(privateDoc, targetRow, "deleted", true);
+  await commit(privateTarget.id, privateDoc);
+  expect((await knowledge(owner.cookie, source.id)).issues[0]?.status).toBe(
+    "missing_row",
+  );
+  const referencedPage = await repository.getPage(reference.id);
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/sync/page",
+        {
+          operationId: crypto.randomUUID(),
+          workspaceId: ws.id,
+          pageId: reference.id,
+          expectedRevision: referencedPage!.revision,
+          action: "trash",
+        },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  const removed = await knowledge(owner.cookie, source.id);
+  expect(removed.issues.map((issue) => issue.status).sort()).toEqual([
+    "missing_row",
+    "trashed",
+  ]);
+  expect(removed.nodes.map((node) => node.id)).not.toContain(reference.id);
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/knowledge",
+        { pageId: reference.id },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(410);
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/knowledge",
+        { pageId: source.id, offset: -1 },
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(400);
+  expect(
+    (await request("POST", "/v1/knowledge", { pageId: source.id })).statusCode,
+  ).toBe(401);
+  expect(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/v1/knowledge",
+        headers: { cookie: owner.cookie, origin: "https://invalid.example" },
+        payload: { pageId: source.id },
+      })
+    ).statusCode,
+  ).toBe(403);
+  const grants = (
+    await request(
+      "GET",
+      `/v1/pages/${source.id}/share`,
+      undefined,
+      owner.cookie,
+    )
+  ).json<{ grants: { id: string }[] }>().grants;
+  expect(
+    (
+      await request(
+        "DELETE",
+        `/v1/pages/${source.id}/grants/${grants[0]!.id}`,
+        undefined,
+        owner.cookie,
+      )
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await request(
+        "POST",
+        "/v1/knowledge",
+        { pageId: source.id },
+        viewer.cookie,
+      )
+    ).statusCode,
+  ).toBe(403);
+  for (const doc of docs) doc.destroy();
 });
 it("searches committed unopened Pages, preserves temporary edits without writes and filters revoked/Trashed scope", async () => {
   const owner = await actor(),

@@ -113,3 +113,15 @@ Owner 전용 `GET/POST /v1/workspaces/:id/public-shares`, `DELETE /v1/workspaces
 Text는 Unicode NFKC/소문자/공백으로 정리한다. AND 조건, 따옴표·제외어, `type:page|database`, `tag:이름`, `workspace:UUID|"이름"`, `database:UUID`, `after:YYYY-MM-DD`, `before:YYYY-MM-DD`, `prop:속성ID|이름:연산자:값`을 지원한다. before는 UTC 수정일 미만, after는 해당 날짜 이상이다. Property는 contains/equals/not_equals/empty/not_empty/gt/gte/lt/lte를 Table과 같은 규칙으로 처리한다. 빈 값 조건에는 값을 적지 않으며 숫자/boolean을 typed 값으로 해석하고 따옴표 값은 문자열로 유지한다.
 
 8 Page batch와 접근 가능 같은 Workspace의 Database 의존성을 사용하며 source 16MiB를 넘으면 422로 검색 범위를 줄이도록 안내한다. 동시 Search 2개를 넘으면 429를 반환한다. 인증·Origin·Trash·철회 검사는 기존 REST와 동일하다. Search POST는 읽기 전용이므로 일시적인 502/503/504에만 제한된 재시도를 허용한다. 취소된 요청은 재시도하지 않는다. [출시/검증 기록](search-release.md).
+
+## 문서 연결
+
+`POST /v1/knowledge`는 읽기 전용이며 `{pageId,offset:0=기본,overlays:[]=기본}`을 받는다. Offset은 현재 Page의 직접 연결 문서를 199개씩 탐색한다. Page와 Database를 Node로 표시하며 Task/Relation의 Row 연결은 Database로 묶고, Backlinks에서는 원래 Row 본문으로 이동할 수 있다.
+
+응답 `KnowledgeResponseSchema`는 `root`, 최대 200개 `nodes`, 최대 800개 방향성 `edges`, `neighborCount/edgeCount/offset`, `incoming/incomingCount`, 최대 12개 `related`, `issues/issueCount`를 포함한다. Graph·추천·개수에는 허용된 활성 Page만 사용한다. Incoming과 Issue 목록은 각각 최대 200개이며 전체 개수를 함께 반환한다. Graph의 다음/이전 문서 탐색과 선택 문서 중심 이동을 제공한다.
+
+매 요청마다 Session·Origin·현재 Page Role·상위 Trash를 검사한다. Relation은 같은 Workspace의 접근 가능한 Database/활성 Row만 연결한다. 대상이 Metadata 범위 밖이면 존재 여부를 추가 조회하지 않고 `unverified`로 반환한다. 이미 접근 가능한 Metadata에 삭제가 확인된 대상은 `trashed`, 알려진 Database의 활성 Row가 없으면 `missing_row`다. Issue에는 비공개 대상 이름을 포함하지 않는다.
+
+Overlay는 `{pageId,projection}` 최대 32개이며 현재 접근 가능하고 편집 가능한 Page에만 적용한다. 본문·Index·Checkpoint를 변경하지 않는다. 서버는 기존 source Index에서 링크·활성 Row 이름·Tag와 제한된 본문 근거를 읽는다. 같은 Body 정규화/점수 규칙을 Offline에서도 사용한다. 본문 근거는 앞 8,192자, 각 Row 본문 앞 1,024자와 최대 64개 단어로 제한하며 공통 단어를 제외한다. 관련 문서는 직접 연결 100점·공통 Tag당 12점·본문 단어당 1점으로 정렬하고 제목·ID로 같은 점수의 순서를 고정한다. 자기 자신·Trash·다른 Workspace의 추천을 제외한다.
+
+전체 source head 16MiB와 동시 2개 요청 제한을 적용한다. 422/429와 Offline/연결 실패에서는 로컬 결과·범위를 표시한다. 새 Page의 Metadata 등록 대기 중에는 로컬 결과를 유지하며, 등록 후 서버 결과에 미전송 수정 Overlay를 적용한다. 일시적인 502/503/504 재시도만 허용하며 오래된 요청은 취소한다. Mutation·새 데이터 형식·Migration은 추가하지 않는다. 링크 교체는 기존 CRDT에 명시적으로 적용하고 로컬 저장 확인 후 기존 Commit Queue로 전송한다.

@@ -55,8 +55,6 @@ export class AccessService {
     if (!membership || membership.revokedAt)
       throw new DomainError(403, "Page 접근 권한이 없습니다.");
     const pages = await this.repository.listPages(page.workspaceId);
-    if (!allowDeleted && isTrashed(page, pages))
-      throw new DomainError(410, "삭제된 Page입니다.");
     const role =
       membership.identityId === membership.ownerIdentityId
         ? "owner"
@@ -66,6 +64,8 @@ export class AccessService {
             await this.repository.listGrants(membership.identityId),
           );
     if (!role) throw new DomainError(403, "Page 접근 권한이 없습니다.");
+    if (!allowDeleted && isTrashed(page, pages))
+      throw new DomainError(410, "삭제된 Page입니다.");
     return {
       page,
       role,

@@ -11,6 +11,243 @@ import {
   strToU8,
 } from "../apps/web/node_modules/fflate";
 const ORIGIN = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3002";
+test("Knowledge Graph and related Pages find unopened links, then replace a broken link Offline", async ({
+  page,
+  browser,
+}) => {
+  const name = `Graph ${Date.now()}`,
+    key = await createWorkspace(page, name),
+    freshContext = await browser.newContext(),
+    fresh = await freshContext.newPage();
+  const sidebar = page.getByRole("complementary", { name: "Workspace 탐색" });
+  const createNote = async (title: string, body = "") => {
+    await page
+      .getByRole("button", { name: "새 Page 만들기", exact: true })
+      .click();
+    await page.getByRole("button", { name: "새 문서", exact: true }).click();
+    await expect(page.getByLabel("Page 제목")).toHaveValue("제목 없음");
+    await page.getByLabel("Page 제목").fill(title);
+    if (body) await page.getByRole("textbox", { name: "문서 본문" }).fill(body);
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    return new URL(page.url()).searchParams.get("page")!;
+  };
+  try {
+    await page.getByLabel("Page 제목").fill("Graph reference");
+    const referenceId = new URL(page.url()).searchParams.get("page")!;
+    await openPageTool(page, "Properties");
+    await page.getByLabel("Tag 추가").fill("Knowledge");
+    await page.getByLabel("Tag 추가").press("Enter");
+    await page.getByRole("button", { name: "Context Panel 닫기" }).click();
+    await createNote("Graph secret", "private target body");
+    const peerId = await createNote("Tag peer", "separate subject");
+    await openPageTool(page, "Properties");
+    await page.getByLabel("Tag 추가").fill("knowledge");
+    await page.getByLabel("Tag 추가").press("Enter");
+    await page.getByRole("button", { name: "Context Panel 닫기" }).click();
+    const sourceId = await createNote("Linked Graph source"),
+      editor = page.getByRole("textbox", { name: "문서 본문" });
+    await editor.fill("");
+    await editor.pressSequentially("[[Graph reference");
+    await page
+      .getByRole("option", { name: "Graph reference", exact: true })
+      .click();
+    await editor.press("End");
+    await editor.press("Enter");
+    await editor.pressSequentially("[[Graph secret");
+    await page
+      .getByRole("option", { name: "Graph secret", exact: true })
+      .click();
+    await expect(
+      editor.getByRole("button", { name: "Graph reference", exact: true }),
+    ).toBeVisible();
+    await expect(
+      editor.getByRole("button", { name: "Graph secret", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await fresh.goto("/");
+    await fresh.getByRole("button", { name: "기존 Workspace 복구" }).click();
+    await fresh.getByLabel("Recovery Key", { exact: true }).fill(key);
+    await fresh
+      .getByRole("dialog")
+      .getByRole("button", { name: "Workspace 복구", exact: true })
+      .click();
+    await expect(fresh.getByLabel("Page 제목")).toHaveValue("Graph reference");
+    const isSourceCached = () =>
+      fresh.evaluate(async (id) => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open("zeronote-alpha");
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        try {
+          return await new Promise<boolean>((resolve, reject) => {
+            const request = db
+              .transaction("documents")
+              .objectStore("documents")
+              .get(id);
+            request.onsuccess = () => resolve(!!request.result);
+            request.onerror = () => reject(request.error);
+          });
+        } finally {
+          db.close();
+        }
+      }, sourceId);
+    expect(await isSourceCached()).toBe(false);
+    await openPageTool(fresh, "Backlinks");
+    const panel = fresh.getByRole("complementary", {
+      name: "Backlinks",
+      exact: true,
+    });
+    await expect(
+      panel.getByText("접근 가능한 전체 문서의 연결입니다.", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Linked Graph source", exact: true }),
+    ).toBeVisible();
+    expect(await isSourceCached()).toBe(false);
+    await panel
+      .getByRole("button", { name: "Graph 열기", exact: true })
+      .click();
+    const graph = fresh.getByRole("dialog", {
+      name: "Knowledge Graph",
+      exact: true,
+    });
+    await expect(
+      graph.getByText("접근 가능한 전체 연결", { exact: true }),
+    ).toBeVisible();
+    const root = graph.getByRole("button", {
+      name: "연결 탐색: Graph reference",
+      exact: true,
+    });
+    await root.focus();
+    await root.press("ArrowRight");
+    const source = graph.getByRole("button", {
+      name: "연결 탐색: Linked Graph source",
+      exact: true,
+    });
+    await expect(source).toBeFocused();
+    await source.press("Enter");
+    await expect(graph.locator(".knowledge-graph-heading strong")).toHaveText(
+      "Linked Graph source",
+    );
+    await expect(
+      graph.getByText("접근 가능한 전체 연결", { exact: true }),
+    ).toBeVisible();
+    await graph
+      .getByRole("button", { name: "Graph 확대", exact: true })
+      .click();
+    await graph
+      .getByRole("button", { name: "Graph 오른쪽 이동", exact: true })
+      .click();
+    await graph
+      .getByRole("button", { name: "목록으로 보기", exact: true })
+      .click();
+    await expect(
+      graph.getByRole("button", {
+        name: "연결 탐색: Graph secret",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await graph
+      .getByRole("button", { name: "연결 탐색: Graph reference", exact: true })
+      .click();
+    await graph
+      .getByRole("button", { name: "Graph로 보기", exact: true })
+      .click();
+    await graph
+      .getByRole("button", { name: "Graph 전체 맞추기", exact: true })
+      .click();
+    await expect(
+      graph.getByText("접근 가능한 전체 연결", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      graph.getByRole("button", {
+        name: "연결 탐색: Linked Graph source",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await fresh.screenshot({ path: "/tmp/zeronote-knowledge-graph.png" });
+    await fresh.keyboard.press("Escape");
+    await panel.getByRole("tab", { name: "관련 문서", exact: true }).click();
+    await expect(
+      panel.locator(".knowledge-related").filter({ hasText: "Tag peer" }),
+    ).toContainText("공통 Tag: knowledge");
+    await panel.getByRole("tab", { name: "Backlinks", exact: true }).click();
+    await panel
+      .getByRole("button", { name: "Linked Graph source", exact: true })
+      .click();
+    await expect(fresh.getByLabel("Page 제목")).toHaveValue(
+      "Linked Graph source",
+    );
+    await expect.poll(isSourceCached).toBe(true);
+    await sidebar
+      .getByRole("button", { name: "Graph secret", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Page 메뉴", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Trash로 이동", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await fresh.reload();
+    await expect(fresh.getByLabel("Page 제목")).toHaveValue(
+      "Linked Graph source",
+    );
+    await openPageTool(fresh, "Backlinks");
+    await panel.getByRole("tab", { name: "링크 상태", exact: true }).click();
+    await expect(panel.getByText("삭제된 Page", { exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "교체", exact: true }).click();
+    const replacement = fresh.getByRole("dialog", {
+      name: "링크 교체",
+      exact: true,
+    });
+    await freshContext.setOffline(true);
+    await replacement
+      .getByLabel("교체할 Page", { exact: true })
+      .selectOption(peerId);
+    await replacement
+      .getByRole("button", { name: "링크 교체 적용", exact: true })
+      .click();
+    await expect(replacement).not.toBeVisible();
+    const freshEditor = fresh.getByRole("textbox", { name: "문서 본문" });
+    await expect(
+      freshEditor.getByRole("button", { name: "Tag peer", exact: true }),
+    ).toBeVisible();
+    await fresh.reload();
+    await expect(
+      freshEditor.getByRole("button", { name: "Tag peer", exact: true }),
+    ).toBeVisible();
+    await freshContext.setOffline(false);
+    await expect(
+      fresh.getByRole("button", { name: "서버 동기화 완료", exact: true }),
+    ).toBeVisible();
+    await sidebar
+      .getByRole("button", { name: "Linked Graph source", exact: true })
+      .click();
+    await expect(
+      editor.getByRole("button", { name: "Tag peer", exact: true }),
+    ).toBeVisible();
+    await openPageTool(page, "Backlinks");
+    await page
+      .getByRole("complementary", { name: "Backlinks", exact: true })
+      .getByRole("tab", { name: "링크 상태", exact: true })
+      .click();
+    await expect(
+      page.getByText("확인된 끊긴 링크가 없습니다.", { exact: true }),
+    ).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("page")).toBe(sourceId);
+    expect(referenceId).not.toBe(peerId);
+  } finally {
+    await freshContext.setOffline(false);
+    await freshContext.close();
+    await cleanup(page, name);
+  }
+});
 test("Global Search finds unopened Pages and Rows with filters, operators, fuzzy matches and unsent local edits", async ({
   page,
   browser,
@@ -1156,6 +1393,36 @@ test("Mobile viewport supports full editing, capture and comments with touch", a
     await expect(
       page.getByText("Touch comment", { exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Context Panel 닫기", exact: true })
+      .tap();
+    await openPageTool(page, "Backlinks");
+    await page.getByRole("button", { name: "Graph 열기", exact: true }).tap();
+    const graph = page.getByRole("dialog", {
+      name: "Knowledge Graph",
+      exact: true,
+    });
+    await expect(graph).toBeVisible();
+    await graph.getByRole("button", { name: "Graph 확대", exact: true }).tap();
+    await graph
+      .getByRole("button", { name: "Graph 오른쪽 이동", exact: true })
+      .tap();
+    await graph
+      .getByRole("button", { name: "목록으로 보기", exact: true })
+      .tap();
+    await expect(
+      graph.getByRole("button", {
+        name: "연결 탐색: Mobile edited page",
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await graph.getByRole("button", { name: "닫기", exact: true }).tap();
+    await expect(graph).not.toBeVisible();
   } finally {
     await cleanup(page, name);
     await context.close();

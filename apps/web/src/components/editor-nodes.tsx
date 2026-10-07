@@ -14,21 +14,31 @@ import { getTaskRows } from "@zeronote/shared";
 import { database } from "@/lib/database";
 import { useLiveValue } from "@/lib/hooks";
 import { useUiStore } from "@/lib/ui-store";
+import { readLinkedPage } from "@/lib/linked-page";
 
 function PageMentionView({ node }: NodeViewProps) {
   const id = typeof node.attrs.pageId === "string" ? node.attrs.pageId : "";
-  const page = useLiveValue(() => database.pages.get(id), [id], undefined);
+  const data = useLiveValue(() => readLinkedPage(id), [id], {
+    page: undefined,
+    visible: false,
+  });
   return (
     <NodeViewWrapper as="span" className="page-mention" contentEditable={false}>
       <button
         onClick={() => {
-          if (page && !page.accessLost)
-            useUiStore.getState().select(page.workspaceId, page.id);
+          if (data.page && data.visible)
+            useUiStore.getState().select(data.page.workspaceId, data.page.id);
         }}
-        disabled={!page || page.accessLost}
+        disabled={!data.visible}
       >
         <FileText size={13} />
-        {page && !page.accessLost ? page.title : "접근 제한"}
+        {data.page && data.visible
+          ? data.page.title
+          : data.page &&
+              !data.page.accessLost &&
+              (data.page.deletedAt || data.page.ancestorTrashed)
+            ? "삭제된 Page"
+            : "접근 제한"}
       </button>
     </NodeViewWrapper>
   );
@@ -62,15 +72,20 @@ function TaskLinkView({ node }: NodeViewProps) {
   const databaseId = String(node.attrs.databaseId ?? ""),
     rowId = String(node.attrs.rowId ?? "");
   const data = useLiveValue(
-    async () => ({
-      page: await database.pages.get(databaseId),
-      record: await database.documents.get(databaseId),
-    }),
+    async () => {
+      const { page, visible } = await readLinkedPage(databaseId);
+      return {
+        page,
+        visible,
+        record: visible ? await database.documents.get(databaseId) : undefined,
+      };
+    },
     [databaseId],
-    { page: undefined, record: undefined },
+    { page: undefined, record: undefined, visible: false },
   );
-  let title = "Task 열기",
-    status = "todo";
+  let title = data.visible ? "Task 열기" : "접근 확인 불가",
+    status = "todo",
+    unavailable = false;
   if (data.record) {
     const doc = new Y.Doc();
     try {
@@ -79,7 +94,13 @@ function TaskLinkView({ node }: NodeViewProps) {
       if (row) {
         title = row.title;
         status = row.status;
+      } else {
+        title = "삭제되거나 없는 Task";
+        unavailable = true;
       }
+    } catch {
+      title = "연결 확인 불가";
+      unavailable = true;
     } finally {
       doc.destroy();
     }
@@ -88,12 +109,12 @@ function TaskLinkView({ node }: NodeViewProps) {
     <NodeViewWrapper className="task-link" contentEditable={false}>
       <button
         onClick={() => {
-          if (data.page && !data.page.accessLost)
+          if (data.page && data.visible && !unavailable)
             useUiStore
               .getState()
               .select(data.page.workspaceId, databaseId, rowId);
         }}
-        disabled={!data.page || data.page.accessLost}
+        disabled={!data.visible || unavailable}
       >
         <CheckSquare size={17} />
         <span className={status === "done" ? "completed" : ""}>{title}</span>

@@ -517,7 +517,7 @@ describe("Local search and visibility", () => {
     first.parentId = first.id;
     expect(availablePages([first])).toEqual([]);
   });
-  it("hides a shared child when its private parent is trashed or inaccessible", () => {
+  it("hides Trash descendants while retaining independently authorized children of inaccessible parents", () => {
     const child = {
       ...page("Shared child"),
       parentId: crypto.randomUUID(),
@@ -534,7 +534,7 @@ describe("Local search and visibility", () => {
         parent,
         { ...child, parentId: parent.id, ancestorTrashed: false },
       ]),
-    ).toEqual([]);
+    ).toEqual([{ ...child, parentId: parent.id, ancestorTrashed: false }]);
   });
   it("accepts valid binary CRDT exports without credentials", async () => {
     const doc = new Y.Doc();

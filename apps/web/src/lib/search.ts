@@ -39,12 +39,7 @@ export function availablePages(pages: LocalPage[]): LocalPage[] {
       if (seen.has(parent)) return false;
       seen.add(parent);
       const ancestor = index.get(parent);
-      if (
-        ancestor?.deletedAt ||
-        ancestor?.ancestorTrashed ||
-        ancestor?.accessLost
-      )
-        return false;
+      if (ancestor?.deletedAt || ancestor?.ancestorTrashed) return false;
       parent = ancestor?.parentId ?? null;
     }
     return true;

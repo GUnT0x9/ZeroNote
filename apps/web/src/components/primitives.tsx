@@ -27,6 +27,11 @@ export function Dialog({
         element?.querySelectorAll<HTMLElement>(
           'button:not(:disabled),input,textarea,select,a[href],[tabindex="0"]',
         ) ?? [],
+      ).filter(
+        (item) =>
+          item.tabIndex >= 0 &&
+          item.getClientRects().length > 0 &&
+          !item.closest("[inert]"),
       );
     (
       element?.querySelector<HTMLElement>(

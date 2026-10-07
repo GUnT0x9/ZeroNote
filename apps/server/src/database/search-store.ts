@@ -6,6 +6,12 @@ import {
   knowledgeSourceText,
   normalizeSearchText,
   type KnowledgeProjection,
+  KnowledgeHeadContentSchema,
+  knowledgeHeadFromContent,
+  knowledgeBodyText,
+  type KnowledgeHead,
+  KNOWLEDGE_TEXT_LIMIT,
+  KNOWLEDGE_ROW_TEXT_LIMIT,
 } from "@zeronote/shared";
 import type { Repository, Executor } from "./repository";
 
@@ -40,6 +46,37 @@ export class SearchStore {
     return rows.map((row) => ({
       ...row,
       projection: KnowledgeProjectionSchema.parse(row.projection),
+    }));
+  }
+  /** Read only visible link/Row labels and a bounded body prefix, never full CRDT history. */
+  async heads(
+    pageIds: string[],
+  ): Promise<{ pageId: string; head: KnowledgeHead }[]> {
+    if (!pageIds.length) return [];
+    const rows = await this.repository.query<{
+      pageId: string;
+      tags: unknown;
+      links: unknown;
+      rows: { id: string; title: string; body: string }[];
+      body: string;
+    }>(sql`SELECT page_id AS "pageId",projection->'tags' AS tags,
+      projection->'links' AS links,left(projection->>'body',${KNOWLEDGE_TEXT_LIMIT}) AS body,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'id',item->'row'->>'id','title',item->'row'->>'title','body',left(item->>'body',${KNOWLEDGE_ROW_TEXT_LIMIT})))
+        FROM jsonb_array_elements(projection->'rows') AS item),'[]'::jsonb) AS rows
+      FROM search_documents WHERE page_id IN
+        (SELECT value::uuid FROM jsonb_array_elements_text(${JSON.stringify(pageIds)}::jsonb))
+      ORDER BY page_id`);
+    return rows.map((row) => ({
+      pageId: row.pageId,
+      head: knowledgeHeadFromContent(
+        KnowledgeHeadContentSchema.parse({
+          tags: row.tags,
+          links: row.links,
+          rows: row.rows.map(({ id, title }) => ({ id, title })),
+          text: knowledgeBodyText(row.body, row.rows),
+        }),
+      ),
     }));
   }
   /** Startup-only migration of committed content, with the same Page lock as writers. */

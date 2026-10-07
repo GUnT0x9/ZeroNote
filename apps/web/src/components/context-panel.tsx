@@ -39,7 +39,7 @@ import { DatabaseRowProperties } from "./database-property";
 import { PublicShareManager } from "./public-share-manager";
 import { HistoryPanel } from "./history-panel";
 import { PageTags } from "./page-tags";
-import { availablePages } from "@/lib/search";
+import { KnowledgePanel } from "./knowledge-panel";
 
 const PANEL_NAMES = {
   history: "기록",
@@ -89,7 +89,7 @@ export function ContextPanel({
       ) : ui.panel === "share" ? (
         <SharePanel key={page.id} page={page} />
       ) : ui.panel === "backlinks" ? (
-        <BacklinksPanel page={page} data={data} />
+        <KnowledgePanel key={page.id} page={page} data={data} />
       ) : (
         <PropertiesPanel key={page.id} page={page} data={data} />
       )}
@@ -472,49 +472,6 @@ function SharePanel({ page }: { page: LocalPage }) {
         <summary>웹에 게시 · 공개 링크</summary>
         <PublicShareManager workspaceId={page.workspaceId} currentPage={page} />
       </details>
-    </div>
-  );
-}
-function BacklinksPanel({
-  page,
-  data,
-}: {
-  page: LocalPage;
-  data: WorkspaceData;
-}) {
-  const accessible = new Map(
-    availablePages(data.pages).map((source) => [source.id, source]),
-  );
-  const ui = useUiStore(),
-    linked = data.documents
-      .filter((document) => document.references.includes(page.id))
-      .flatMap((document) => {
-        const source = accessible.get(document.id);
-        return source ? [source] : [];
-      });
-  return (
-    <div className="context-content">
-      <div className="panel-description">
-        이 기기에 저장된 문서에서 이 Page를 연결한 기록입니다.
-      </div>
-      {!linked.length ? (
-        <div className="panel-empty">
-          <Link2 size={25} />
-          <p>이 기기의 문서에서 연결을 찾지 못했습니다.</p>
-          <small>문서에서 [[ 를 입력해 연결하세요.</small>
-        </div>
-      ) : (
-        linked.map((source) => (
-          <button
-            key={source.id}
-            className="backlink-item"
-            onClick={() => ui.select(source.workspaceId, source.id)}
-          >
-            <Link2 size={15} />
-            {source.title}
-          </button>
-        ))
-      )}
     </div>
   );
 }

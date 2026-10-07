@@ -112,3 +112,19 @@ it("cancels an in-flight obsolete query without retrying or converting it to a s
   await result;
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+it("retries the explicit read-only Knowledge endpoint while leaving other POSTs non-retryable", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+    .mockResolvedValue(new Response('{"nodes":[]}'));
+  vi.stubGlobal("fetch", fetch);
+  expect(await requestJson("/knowledge", "POST", { pageId: "page" })).toEqual({
+    nodes: [],
+  });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  fetch.mockReset().mockResolvedValue(new Response("{}", { status: 503 }));
+  await expect(
+    requestJson("/knowledge/write", "POST", {}),
+  ).rejects.toMatchObject({ status: 503 });
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
