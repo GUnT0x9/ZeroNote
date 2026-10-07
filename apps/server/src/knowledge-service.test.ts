@@ -124,9 +124,13 @@ it("accepts only editable temporary heads and returns current committed scope wi
     committed.filter((item) => ids.includes(item.pageId)),
   );
   input.overlays = [{ pageId: root.id, projection }];
-  expect((await service.view("device", input)).neighborCount).toBe(1);
+  const temporary = await service.view("device", input);
+  expect(temporary.neighborCount).toBe(1);
+  expect(temporary.root?.title).toBe("Temporary");
   metadata.roles[root.id] = "viewer";
   vi.mocked(access.metadata).mockResolvedValue(metadata);
-  expect((await service.view("device", input)).neighborCount).toBe(0);
+  const committedView = await service.view("device", input);
+  expect(committedView.neighborCount).toBe(0);
+  expect(committedView.root?.title).toBe("Page");
   expect(repository.search.heads).toHaveBeenCalled();
 });

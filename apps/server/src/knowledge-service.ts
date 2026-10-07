@@ -2,6 +2,7 @@ import {
   canEdit,
   createKnowledgeView,
   getKnowledgeHead,
+  PageSchema,
   type KnowledgeRequest,
   type KnowledgeResponse,
   type KnowledgeSource,
@@ -41,14 +42,20 @@ export class KnowledgeService {
       active = metadata.pages.filter(
         (page) => !page.deletedAt && !page.ancestorTrashed,
       ),
-      heads = new Map<string, KnowledgeHead>();
+      heads = new Map<string, KnowledgeHead>(),
+      titles = new Map<string, string>();
     const allowed = new Set(active.map((page) => page.id));
     for (const overlay of input.overlays)
       if (
         allowed.has(overlay.pageId) &&
         canEdit(metadata.roles[overlay.pageId]!)
-      )
+      ) {
         heads.set(overlay.pageId, getKnowledgeHead(overlay.projection));
+        titles.set(
+          overlay.pageId,
+          PageSchema.shape.title.parse(overlay.projection.title) || "제목 없음",
+        );
+      }
     const pending = active.filter((page) => !heads.has(page.id));
     let bytes = [...heads.values()].reduce(
       (total, head) => total + Buffer.byteLength(JSON.stringify(head)),
@@ -78,7 +85,7 @@ export class KnowledgeService {
       page: {
         id: page.id,
         workspaceId: page.workspaceId,
-        title: page.title,
+        title: titles.get(page.id) ?? page.title,
         kind: page.kind,
         trashed: !!page.deletedAt || !!page.ancestorTrashed,
       },
