@@ -150,3 +150,5 @@ Page/Document 중첩 탐색을 Set으로 바꾸고 변경 없는 캐시 문서�
 | `apps/web/src/lib/local-first.test.ts`              | 변경 없는 캐시 재저장 방지와 재시작 후 최신 변경 복구 검증              |
 
 배포 검증 설정: `PLAYWRIGHT_BASE_URL=https://zeronote-kohl.vercel.app`을 사용하면 로컬 Server를 띄우지 않고 실제 서비스를 검사한다. HTTPS에서는 Session Cookie의 Domain·Secure·HttpOnly·SameSite를 추가 검증한다.
+
+2026-10-07 최신 앱 소스 `86c9a01`의 CI 499 Tests/31 E2E/Docker/512MiB/20개 테이블 암호화 복원과 Render → Vercel 동일 소스 배포, 실제 HTTPS 9개 흐름 통과. Migration 10·Group Index 3개·Scope 오류/검색 Index 누락/검증용 Workspace 0건을 확인했다. [Member/Group 출시 기록](workspace-members-release.md).

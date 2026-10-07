@@ -147,3 +147,5 @@ Verified 2026-10-07: `522637e`의 CI 479 Tests/29 E2E/Docker/512MiB/암호화 �
 Confirmed: 남은 요구 42·43의 Member 관리와 Member Group을 구현·배포한다. Accepted default: 기존 Workspace Identity를 관리 단위로 사용하고 Owner Recovery는 같은 사람으로 묶는다. 모든 협업 기기를 한 사람으로 Pairing하는 기능은 별도 미완료 항목이다. Group 구성은 현재 Page 공유에 동적으로 적용하고 개별 Grant와의 가장 높은 유효 Role을 유지한다. Owner만 다른 Member/Group/권한을 관리하며 본인 표시 이름은 활성 Membership으로 확인한다. Member 제거는 모든 기기의 Membership·개별 Grant·그룹 참여를 함께 철회하고 원본 문서/댓글은 유지한다.
 
 Migration 010은 기존 DTO·CRDT·Editor Protocol을 유지한다. 권한 변경은 Content lock·Operation ID·Revision으로 승인하고 Commit 이후 연결을 재인증한다. Offline 초안과 전송 결과가 불명확한 변경은 기기에 보관하며 자동 권한 재전송이나 유휴 Polling을 추가하지 않는다. 배포 검증 전에는 완료 수 60/148을 유지한다. [구현 기준](../workspace-members-plan.md).
+
+Verified 2026-10-07: `86c9a01`의 CI 499 Tests/31 E2E/Docker/512MiB/암호화 복원과 Render → Vercel 및 실제 HTTPS 9개 흐름 통과. 문서 재설정 후 열린 Socket 재인증과 저장 Transaction 내부 권한 재검사를 보강했다. [검증/배포 기록](../workspace-members-release.md). 62/148 완료·86개 계속 구현.

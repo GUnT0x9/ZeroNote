@@ -37,3 +37,5 @@ Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Rec
 2026-10-07 Task 확장 5개를 구현·배포했다. 58/148 완료·90개 계속 구현. [출시 기록](../task-extension-release.md). 다음은 [Task별 Comment Thread/Comment](../task-comments-plan.md)이며 Activity/Member/Notification과 나머지 전체 요구도 유지한다.
 
 2026-10-07 Task 댓글 2개와 Commit 확인 전 저장 표시를 구현·배포했다. CI 479 Tests/29 E2E/Docker/512MiB/암호화 복원 및 실제 HTTPS 7개 흐름 통과. [출시 기록](../task-comments-release.md). 60/148 완료·88개 계속 구현하며 Activity/Member/Notification과 전체 남은 범위를 유지한다.
+
+2026-10-07 Member/Group 2개를 구현·배포했다. CI 499 Tests/31 E2E/Docker/512MiB/20개 테이블 암호화 복원 및 실제 HTTPS 9개 흐름 통과. [출시 기록](../workspace-members-release.md). 62/148 완료·86개 계속 구현하며 다음 Activity/Task Activity·Mention·Notification과 전체 미완료 범위를 유지한다.

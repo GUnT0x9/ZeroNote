@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 60개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md), [검색 기록](search-release.md), [Knowledge 기록](knowledge-release.md), [Task 확장 기록](task-extension-release.md), [Task 댓글 기록](task-comments-release.md)에 남긴다. 나머지 88개는 계속 구현 대상이다. Task 댓글 2개는 479 Tests·29 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS 7개 흐름을 확인하고 배포했다. Activity/Member/Notification과 전체 미완료 요구를 계속 진행하며 기반 코드만으로 완료를 집계하지 않는다.
+현재 62개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md), [검색 기록](search-release.md), [Knowledge 기록](knowledge-release.md), [Task 확장 기록](task-extension-release.md), [Task 댓글 기록](task-comments-release.md), [Member/Group 기록](workspace-members-release.md)에 남긴다. 나머지 86개는 계속 구현 대상이다. Task 댓글 2개는 479 Tests·29 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS 7개 흐름을 확인하고 배포했다. Member/Group 2개는 499 Tests·31 E2E·Docker/512MiB·20개 테이블 암호화 복원 및 실제 HTTPS 9개 흐름으로 확인했다. Activity/Mention/Notification과 전체 미완료 요구를 계속 진행하며 기반 코드만으로 완료를 집계하지 않는다.
 
 ## 항목별 완료 증거
 
@@ -60,8 +60,8 @@
 | 39   | Database                 | Formula                               | 구현·배포 / ID AST·제한된 계산·속성 이름 변경·공개 범위 / formula.test.ts, database-advanced-release.md        |
 | 40   | Database                 | Relation                              | 구현·배포 / Database/Row ID·이름 변경·권한 철회·Import 재매핑 / database-advanced-release.md                   |
 | 41   | Database                 | Rollup                                | 구현·배포 / 집계·대상 변경·접근 범위·Snapshot / database-computation.test.ts, database-advanced-release.md     |
-| 42   | Collaboration            | Workspace Member 관리                 | 미구현                                                                                                         |
-| 43   | Collaboration            | Member Group                          | 미구현                                                                                                         |
+| 42   | Collaboration            | Workspace Member 관리                 | 구현·배포 / 멤버·그룹·역할/범위·재인증·Offline/재시도 / workspace-members-release.md                           |
+| 43   | Collaboration            | Member Group                          | 구현·배포 / 멤버·그룹·역할/범위·재인증·Offline/재시도 / workspace-members-release.md                           |
 | 44   | Collaboration            | Mention `@user`                       | 미구현                                                                                                         |
 | 45   | Collaboration            | 사용자 Notification                   | 미구현                                                                                                         |
 | 46   | Collaboration            | 공동 편집 Cursor 색상 설정            | 미구현                                                                                                         |

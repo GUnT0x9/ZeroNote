@@ -23,3 +23,5 @@ Owner는 그룹 이름과 활성 구성원을 만들고 수정/삭제한다. 빈
 `/v1/workspaces/:id/members` 목록/멤버 철회, `/profile` 본인 조회/이름 변경, `/member-groups/:groupId` 생성/수정/삭제, `/group-access` 공유와 `/group-access/:grantId` 철회를 추가한다. 개인 Grant 수정/철회는 `/members/:identityId/grants/:grantId`에서 처리한다. 공유 Zod 계약·repository/service·기존 인증/Origin 검사를 사용한다.
 
 검증은 Owner/비Owner/철회 기기, Workspace 교차 입력, 동일 Operation 재전송/ID 충돌/동시 적용, Revision 충돌, 빈/중복/철회 멤버, 그룹 공유의 Role 중첩과 하위 Page, 삭제/재초대·Recovery, REST·WebSocket 즉시 철회, Offline 초안/보존, 두 기기·모바일·기존 초대/댓글/검색/복구 호환을 포함한다. lint/type-check/test/test:e2e/build/Docker·Migration 백업 복원과 실제 HTTPS 검증 후 완료로 반영한다.
+
+Verified 2026-10-07: 이 기획을 `86c9a01`로 구현·배포하고 CI·실제 HTTPS 검증을 완료했다. 채택 당시 완료 수 60에서 현재 62/148로 갱신했으며 86개를 계속 구현한다. [최종 검증 기록](workspace-members-release.md).

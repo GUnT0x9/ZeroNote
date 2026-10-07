@@ -1,6 +1,6 @@
 # ZeroNote 기능 체크리스트
 
-2026-10-07 Knowledge·Task 확장·Task 댓글까지 구현/배포 검증 반영. [x]는 사용 가능한 기능이며 후속 항목을 완료로 표시하지 않는다.
+2026-10-07 Knowledge·Task 확장·Task 댓글·Member/Group까지 구현/배포 검증 반영. [x]는 사용 가능한 기능이며 후속 항목을 완료로 표시하지 않는다.
 
 - History/Restore는 Owner 전용 Online Snapshot과 새 비공유 Page 복구다. 원본 덮어쓰기, Compare, Branch/Merge는 포함하지 않는다.
 - Generic Database는 기존 Task Row 저장 구조를 재사용하며 17가지 속성 종류와 Saved View를 제공한다. File/Formula/Relation/Rollup의 권한·Offline·복구 동작은 [배포 기록](database-advanced-release.md)을 따른다.
@@ -10,7 +10,7 @@
 - 전체 미완료 항목은 [전체 완료 목표](full-completion.md)에서 추적한다. 이번 추가 기능의 검증/배포 상태는 [파일·Editor 확장 기록](editor-files-release.md)에 기록한다. 일부 기능 구현으로 전체 목표를 종료하지 않는다.
 - 파일은 4MiB/개, Workspace 25MiB/200개다. PDF·Audio·Video·이미지·소스 미리보기와 파일을 포함한 Export/Import/Snapshot 복구를 제공한다. Storage 관리 UI와 참조 검사·영구 정리는 CI와 실제 HTTPS 검증을 통과해 배포했다. [검증 기록](storage-release.md)을 따른다.
 - Page Template과 Task Template을 구분한다. Task Template은 기본/사용자 정의 수정 가능 속성과 본문·파일을 복사하며 날짜·관계 초기화와 변경된 속성 확인을 제공한다. [검증/배포 기록](task-extension-release.md)을 따른다.
-- Public 공유는 Owner가 선택한 Page만 게시하며 보호 링크와 첫 Session 내용 고정, 기본 noindex/SEO opt-in을 제공한다. [CI·실제 HTTPS 기록](public-sharing-release.md)을 따른다. Task 댓글까지 반영한 전체 완료 수는 60/148이며 88개는 계속 개발한다.
+- Public 공유는 Owner가 선택한 Page만 게시하며 보호 링크와 첫 Session 내용 고정, 기본 noindex/SEO opt-in을 제공한다. [CI·실제 HTTPS 기록](public-sharing-release.md)을 따른다. Member/Group까지 반영한 전체 완료 수는 62/148이며 86개는 계속 개발한다.
 - Task 댓글은 Page/Row별 Thread·답글·해결·초안·Offline Queue와 삭제 후 복사/제거를 제공한다. 서버 Commit 전 좌측 저장 모션을 유지한다. [CI·실제 HTTPS 검증 기록](task-comments-release.md)을 따른다.
 
 ## Workspace / 인증
@@ -190,8 +190,8 @@
 - [x] 초대 링크 생성
 - [x] 초대 취소
 - [x] 사용자 접근 권한 철회
-- [ ] Workspace Member 관리
-- [ ] Member Group
+- [x] Workspace Member 관리
+- [x] Member Group
 - [ ] Mention `@user`
 - [ ] 사용자 Notification
 - [ ] 공동 편집 Cursor 색상 설정
@@ -464,3 +464,5 @@
 - [ ] Desktop App
 
 데이터 이전의 구현/호환 범위와 검증은 [Export·Import 기록](transfer-release.md)을 따른다. 이 묶음에서도 전체 미구현 완료 목표는 유지한다.
+
+Member/Group은 Settings에서 관리하며 현재 그룹 구성과 가장 높은 유효 Page Role을 적용한다. 기기 Pairing과 Workspace 전체 Role 부여는 별도 요구다. [499 Tests·31 E2E·실제 HTTPS 9개 흐름과 배포 기록](workspace-members-release.md). 전체 148개 중 62개 완료·86개는 계속 구현한다.
