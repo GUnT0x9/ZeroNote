@@ -86,6 +86,7 @@ export class DocumentStore {
     operationId: string,
     update: Uint8Array,
     editorProtocol = EDITOR_PROTOCOL,
+    authorize?: (executor: Executor) => Promise<void>,
   ): Promise<void> {
     if (update.byteLength > MAX_DOCUMENT_BYTES)
       throw new DomainError(413, "문서 크기 제한을 초과했습니다.");
@@ -95,6 +96,7 @@ export class DocumentStore {
         sql`SELECT pg_advisory_xact_lock(${CONTENT_WRITE_LOCK_ID})`,
       );
       await this.lock(pageId, tx);
+      await authorize?.(tx);
       // Validate before deduplication too: a previous operation cannot grant an
       // incompatible client access to the current document state.
       if (editorProtocol < (await this.minimumProtocol(pageId, tx)))

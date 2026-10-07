@@ -638,3 +638,86 @@ it("rejects cross-workspace group access and reserves shared IDs across targets"
   ).toBe(200);
   expect((await members(owner, space.id)).groupGrants).toEqual([]);
 });
+
+it.each(["role", "member"] as const)(
+  "rejects a queued document Commit after %s access is removed, without recording the update",
+  async (change) => {
+    const owner = await actor(),
+      peer = await actor(),
+      space = await workspace(owner),
+      root = await page(owner, space.id);
+    const identity = await join(owner, peer, space.id, root.id, "editor");
+    const directory = await members(owner, space.id),
+      grant = directory.members.find((member) => member.id === identity.id)!
+        .grants[0]!;
+    const document = new Y.Doc();
+    document.getText("title").insert(0, "Rejected queued edit");
+    const operationId = crypto.randomUUID();
+    let resume!: () => void, entered!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const reached = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const original = repository.documents.commit.bind(repository.documents);
+    const spy = vi
+      .spyOn(repository.documents, "commit")
+      .mockImplementation(async (...args) => {
+        if (args[0] === root.id) {
+          entered();
+          await gate;
+        }
+        return original(...args);
+      });
+    const pending = request("POST", `/documents/${root.id}/commit`, peer, {
+      operationId,
+      update: bytesToBase64(Y.encodeStateAsUpdate(document)),
+    });
+    try {
+      await reached;
+      const result =
+        change === "role"
+          ? await request(
+              "PATCH",
+              `/workspaces/${space.id}/members/${identity.id}/grants/${grant.id}`,
+              owner,
+              {
+                ...operation(),
+                expectedRevision: grant.revision,
+                role: "viewer",
+                includeDescendants: false,
+              },
+            )
+          : await request(
+              "DELETE",
+              `/workspaces/${space.id}/members/${identity.id}`,
+              owner,
+              operation(),
+            );
+      expect(result.statusCode).toBe(200);
+      resume();
+      expect((await pending).statusCode).toBe(403);
+      expect(
+        await repository.query(
+          sql`SELECT operation_id FROM document_operations WHERE operation_id=${operationId}`,
+        ),
+      ).toEqual([]);
+      const stored = new Y.Doc();
+      try {
+        for (const update of await repository.documents.load(root.id))
+          Y.applyUpdate(stored, update);
+        expect(stored.getText("title").toString()).not.toBe(
+          "Rejected queued edit",
+        );
+      } finally {
+        stored.destroy();
+      }
+    } finally {
+      resume();
+      await pending;
+      spy.mockRestore();
+      document.destroy();
+    }
+  },
+);

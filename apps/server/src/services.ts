@@ -92,8 +92,13 @@ export class AccessService {
       name: membership.name,
     };
   }
-  async editor(deviceId: string, pageId: string, allowDeleted = false) {
-    const access = await this.page(deviceId, pageId, allowDeleted);
+  async editor(
+    deviceId: string,
+    pageId: string,
+    allowDeleted = false,
+    executor: Executor = this.repository.database,
+  ) {
+    const access = await this.page(deviceId, pageId, allowDeleted, executor);
     if (!canEdit(access.role))
       throw new DomainError(403, "Editor 권한이 필요합니다.");
     return access;
@@ -428,6 +433,9 @@ export class DocumentService {
       operationId,
       update,
       editorProtocol,
+      async (tx) => {
+        await this.access.editor(deviceId, pageId, false, tx);
+      },
     );
     return update;
   }

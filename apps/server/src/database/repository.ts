@@ -316,8 +316,15 @@ export class Repository {
     operationId: string,
     update: Uint8Array,
     editorProtocol?: number,
+    authorize?: (executor: Executor) => Promise<void>,
   ): Promise<void> {
-    await this.documents.commit(pageId, operationId, update, editorProtocol);
+    await this.documents.commit(
+      pageId,
+      operationId,
+      update,
+      editorProtocol,
+      authorize,
+    );
   }
   async checkpoint(
     pageId: string,

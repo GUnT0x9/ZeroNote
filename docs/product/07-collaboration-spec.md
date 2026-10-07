@@ -28,3 +28,5 @@ Offline 편집은 CRDT 병합한다. 권한 철회·삭제된 문서의 변경�
 ## Workspace Member·Group 확장 기본안
 
 Member는 Workspace Identity이며 Owner Recovery의 여러 기기는 한 사람으로 표시한다. Owner가 기기/멤버·개별 Grant·그룹·그룹별 Page 공유를 관리한다. 그룹 공유는 현재 구성원과 선택한 Page/하위 범위에 적용하며 개별/다른 그룹 중 가장 강한 유효 Role을 유지한다. 멤버 제거는 모든 해당 기기·Grant·그룹 참여를 철회하고 작성한 문서/댓글은 남긴다. 본인 표시 이름은 서버가 확인한 Identity로만 바꾼다. 권한/그룹 변경은 Online에서 명시적으로 실행하며 초안/불명확한 요청은 기기에 보존한다. [구현·검증 기준](../workspace-members-plan.md).
+
+문서 연결만 재설정된 뒤 Socket이 열린 경우 Token과 Sync handshake를 다시 시작한다. Token 발급 실패에서는 문서 사본을 유지하고 인증되지 않은 Sync를 보내지 않는다. REST와 WebSocket 문서 Commit은 Content/Page lock을 얻은 뒤 같은 Transaction에서 현재 편집 권한을 재검사한다. 권한 변경 이후 대기하던 Update를 승인하거나 Operation 기록을 만들지 않는다.

@@ -23,6 +23,7 @@ Commit 이후 활성 문서 연결을 재인증하며 읽기 권한이 남아도
 - Local Workspace 삭제가 해당 Member 데이터만 지우는 회귀 검사를 추가했다.
 - 문서 연결만 종료된 뒤 같은 Socket이 남는 재연결 문제를 수정했다. Token 발급 실패에서는 인증되지 않은 동기화를 시작하지 않으며 재인증 13개 회귀 검사 통과.
 - 로컬 Build와 두 브라우저 권한 전환/멤버 제거·댓글 보존, Offline 초안·실제 Commit 후 503/새로고침/동일 Operation 재시도 및 390px 키보드 탐색 검사 2개 통과.
+- 권한 확인 뒤 대기하던 문서 Commit이 Role 변경/Member 제거 후에도 승인되는 두 race를 재현하고, Content/Page lock 이후 같은 Transaction에서 현재 편집 권한을 다시 검사하도록 수정했다. 두 거절 검사를 포함한 Member·Realtime·저장 통합 56개 테스트와 lint·TypeScript 검사 통과.
 - CI의 최종 소스 Build·전체 E2E·Docker/512MiB·백업 복원·실제 HTTPS와 배포 소스 확인은 진행 중이다.
 
 ## 배포와 호환성
