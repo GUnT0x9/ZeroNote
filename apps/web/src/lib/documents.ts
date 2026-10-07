@@ -14,6 +14,7 @@ import { database, errorMessage, type LocalPage } from "./database";
 import { api, ApiError } from "./api";
 import { collaborationUrl } from "./env";
 import { useUiStore } from "./ui-store";
+import { notifyDocumentActivity } from "./document-activity";
 
 export interface DocumentSession {
   id: string;
@@ -36,6 +37,11 @@ export function setDocumentSyncRequest(callback: () => void): void {
 }
 export function getDocumentSession(id: string): DocumentSession | undefined {
   return sessions.get(id);
+}
+export function getLiveDocumentGenerations(): ReadonlyMap<string, number> {
+  return new Map(
+    [...sessions].map(([id, session]) => [id, session.generation]),
+  );
 }
 export async function openDocument(page: LocalPage): Promise<DocumentSession> {
   const existing = sessions.get(page.id);
@@ -108,6 +114,7 @@ async function hydrate(
     ) => {
       session.generation++;
       session.localSaveError = undefined;
+      notifyDocumentActivity();
       if (session.saveTimer) clearTimeout(session.saveTimer);
       session.saveTimer = setTimeout(() => {
         session.saving = saveLocal(session, page);

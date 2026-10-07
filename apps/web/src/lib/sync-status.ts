@@ -40,7 +40,7 @@ export function getSyncStatus(input: SyncStatusInput): SyncStatusPresentation {
       kind: "saving",
       label: "서버에 저장 중",
       detail:
-        "이 기기에 저장한 변경사항을 전송하고 있습니다. 서버의 저장 확인을 기다립니다.",
+        "변경사항을 기기에 저장하고 서버와 동기화합니다. 서버의 저장 확인을 기다립니다.",
     };
   return {
     kind: "saved",
@@ -54,6 +54,7 @@ export function getWorkspaceSyncStatus(
   data: WorkspaceData,
   workspaceId: string | null,
   connection: Pick<SyncStatusInput, "connection" | "error">,
+  liveGenerations: ReadonlyMap<string, number> = new Map(),
 ): SyncStatusPresentation {
   const workspace = data.workspaces.find((item) => item.id === workspaceId);
   const pageIds = new Set(
@@ -69,6 +70,17 @@ export function getWorkspaceSyncStatus(
   const documents = data.documents.filter(
     (document) => pageIds.has(document.id) && document.state !== "preserved",
   );
+  const storedDocuments = new Map(
+    data.documents.map((document) => [document.id, document]),
+  );
+  const pendingLiveDocument = [...liveGenerations].some(([id, generation]) => {
+    const stored = storedDocuments.get(id);
+    return (
+      pageIds.has(id) &&
+      stored?.state !== "preserved" &&
+      generation > (stored?.committedGeneration ?? 0)
+    );
+  });
   const operations = data.operations.filter(
     (operation) => operation.payload.workspaceId === workspaceId,
   );
@@ -100,6 +112,7 @@ export function getWorkspaceSyncStatus(
       attachments.find((file) => file.error)?.error ??
       null,
     pending:
+      pendingLiveDocument ||
       !!workspace?.pendingCreation ||
       documents.some(
         (document) => document.generation > document.committedGeneration,

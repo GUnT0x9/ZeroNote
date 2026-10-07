@@ -99,6 +99,40 @@ describe("sync presentation", () => {
 });
 
 describe("workspace sync presentation", () => {
+  it("waits for live edits before the Local projection and ignores other scopes or preserved documents", () => {
+    expect(
+      getWorkspaceSyncStatus(data, workspaceId, online, new Map([[pageId, 3]]))
+        .kind,
+    ).toBe("saving");
+    expect(
+      getWorkspaceSyncStatus(data, workspaceId, online, new Map([[pageId, 2]]))
+        .kind,
+    ).toBe("saved");
+    expect(
+      getWorkspaceSyncStatus(
+        data,
+        workspaceId,
+        online,
+        new Map([[crypto.randomUUID(), 3]]),
+      ).kind,
+    ).toBe("saved");
+    expect(
+      getWorkspaceSyncStatus(
+        { ...data, documents: [{ ...data.documents[0]!, state: "preserved" }] },
+        workspaceId,
+        online,
+        new Map([[pageId, 3]]),
+      ).kind,
+    ).toBe("saved");
+    expect(
+      getWorkspaceSyncStatus(
+        { ...data, documents: [] },
+        workspaceId,
+        online,
+        new Map([[pageId, 1]]),
+      ).kind,
+    ).toBe("saving");
+  });
   it("waits for attachment commits and reports retained upload errors", () => {
     const pending: WorkspaceData = {
       ...data,

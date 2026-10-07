@@ -519,10 +519,35 @@ test("Task Subtask Dependency Label Estimate and Template survive Offline collab
     await page
       .getByLabel("선행 Task 선택")
       .selectOption({ label: "Ship extension" });
-    await page
-      .getByRole("button", { name: "선행 작업 추가", exact: true })
-      .click();
+    let releaseCommit!: () => void, commitStarted!: () => void;
+    const commitGate = new Promise<void>((resolve) => {
+      releaseCommit = resolve;
+    });
+    const commitObserved = new Promise<void>((resolve) => {
+      commitStarted = resolve;
+    });
+    const commitUrl = `${ORIGIN}/v1/documents/${databaseId}/commit`;
+    await page.route(commitUrl, async (route) => {
+      commitStarted();
+      await commitGate;
+      await route.continue();
+    });
+    try {
+      await page
+        .getByRole("button", { name: "선행 작업 추가", exact: true })
+        .click();
+      await expect(
+        page.getByTestId("sync-status").filter({ visible: true }),
+      ).toHaveAttribute("data-state", /saving|connecting/);
+      await commitObserved;
+      await expect(
+        page.getByTestId("sync-status").filter({ visible: true }),
+      ).not.toHaveAttribute("data-state", "saved");
+    } finally {
+      releaseCommit();
+    }
     await ack(page);
+    await page.unroute(commitUrl);
     await page
       .getByRole("button", { name: "상위 Task 열기", exact: true })
       .click();

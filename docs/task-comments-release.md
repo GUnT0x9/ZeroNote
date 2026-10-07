@@ -18,7 +18,13 @@ CommentStore/CommentService는 문서 Commit과 같은 Content lock/Page lock의
 
 Snapshot/새 Page 복구는 Task 내용만 복제하고 Comments·초대·권한을 복제하지 않는다. 새로운 환경변수, Yjs 원본 형식, Editor Protocol 변경은 없다. 배포는 암호화 백업 → CI 확인 → Render(Migration) → Vercel이며 DB를 자동 되감지 않는다.
 
+Migration 009 이후 서버 Rollback은 Row 범위를 이해하는 버전이어야 한다. 이전 서버는 Task 댓글을 Page 댓글로 섞어 조회하므로 그대로 되돌리지 않는다. 이전 Web으로의 Rollback은 새 서버의 기존 Page DTO 호환으로 가능하다. Row 열·댓글 데이터를 지우거나 Migration을 자동 되감지 않는다.
+
 ## 검증 상태
+
+첫 Production 검증(`8b4c4a6`)은 새 댓글 2개·검색·협업/Recovery·Mobile·File/Formula/Relation/Rollup의 6개 흐름이 통과했다. 기존 Task 확장 Snapshot 검증은 실패했다. Trace에서 Snapshot 요청 04:26:18.264 UTC 이후 선행 관계가 포함된 첫 Commit이 04:26:18.518 UTC에 실행된 것을 확인했다. 로컬 Projection의 80ms 저장 지연 전에 이전 완료 상태가 보일 수 있었다.
+
+수정은 기기에 열린 Yjs 문서의 generation 변경을 즉시 구독하여 서버 Commit 확인까지 좌측 저장 모션을 유지한다. 새로운 Polling과 상단 알림은 추가하지 않는다. Commit 응답을 의도적으로 보류하는 브라우저 검증으로 미확인 상태가 완료로 바뀌지 않음을 확인한다. 실패한 첫 결과로 완료 수를 갱신하지 않는다.
 
 서버·공유 계약 집중 9 Tests, Local Queue/초안/동기화 14 Tests와 초기 전체 475 Tests/56 files 통과. 초기 브라우저의 삭제 Task/모바일 Focus 흐름은 통과했고 역할·전환 흐름은 `To-Do` 제목을 과거 이름으로 기대한 테스트를 수정했다. 최종 로컬 전체 476 Tests/56 files 통과(200.54초), lint/type-check/Web·Server build 통과. 취소된 지연 응답을 포함한 Local 댓글/동기화 15 Tests 통과. Task 범위/초안/Offline/역할/Snapshot 흐름 38.2초, 삭제 Task 보존/모바일 Focus 18.4초 통과. 기존 협업·Comments·Viewer·Recovery 23.7초, Mobile Touch 편집/Capture/Comments 15.4초로 브라우저 4개가 모두 통과했다(2.9분). CI·Production 결과는 아래에 추가한다. 실제 Android Chrome/iOS Safari 기기 검증은 아직 하지 않았다.
 
@@ -32,3 +38,5 @@ Snapshot/새 Page 복구는 Task 내용만 복제하고 Comments·초대·권한
 | `apps/web/src/components/comments-panel.tsx`, `context-panel.tsx`, `app/globals.css`                                    | Task/Database 댓글 범위·답글/해결·실패 복구·모바일 입력                      |
 | `apps/web/src/lib/comments.ts`, `database.ts`, `sync.ts`                                                                | 초안 직렬화·Queue/ACK·캐시 범위·문서 Commit 이후 전송                        |
 | 공유/서버/Local Tests, `tests/workspace.spec.ts`, CI                                                                    | 기존 데이터·동시 재시도·권한·Offline·두 기기·모바일·Migration 백업 복원 회귀 |
+
+최종 저장 표시 보강 후 로컬 lint/type-check, 전체 479 Tests/57 files(125.81초), 댓글/동기화/활동 구독/표시 집중 28 Tests를 통과했다. Task 범위/초안/Offline/역할/Snapshot 29.4초, 삭제 Task/모바일 Focus 18.1초, 기존 협업/Recovery 18.1초와 Mobile 회귀도 통과했다. 지연 Commit 회귀의 첫 실행은 숨겨진 모바일/Sidebar 아이콘을 함께 고른 strict locator 오류였으며 보이는 아이콘으로 한정한 Task/관계/Template/Snapshot 재실행이 23.7초에 통과했다. 후속 CI·Production 검증 전 완료 수는 58/148로 유지한다.

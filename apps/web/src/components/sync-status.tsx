@@ -1,5 +1,11 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   Check,
   CircleAlert,
@@ -8,12 +14,24 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import type { WorkspaceData } from "@/lib/hooks";
-import { getDocumentSession } from "@/lib/documents";
+import {
+  getDocumentSession,
+  getLiveDocumentGenerations,
+} from "@/lib/documents";
+import {
+  getDocumentActivityRevision,
+  subscribeDocumentActivity,
+} from "@/lib/document-activity";
 import { getWorkspaceSyncStatus } from "@/lib/sync-status";
 import { requestSync } from "@/lib/sync";
 import { useUiStore } from "@/lib/ui-store";
 
 export function SyncStatus({ data }: { data: WorkspaceData }) {
+  useSyncExternalStore(
+    subscribeDocumentActivity,
+    getDocumentActivityRevision,
+    () => 0,
+  );
   const ui = useUiStore(),
     [open, setOpen] = useState(false),
     ref = useRef<HTMLDivElement>(null),
@@ -28,10 +46,15 @@ export function SyncStatus({ data }: { data: WorkspaceData }) {
     )
     .map((page) => getDocumentSession(page.id)?.localSaveError)
     .find(Boolean);
-  const status = getWorkspaceSyncStatus(data, ui.workspaceId, {
-    connection: ui.syncState,
-    error: localError ? `이 기기 저장 실패 · ${localError}` : ui.syncError,
-  });
+  const status = getWorkspaceSyncStatus(
+    data,
+    ui.workspaceId,
+    {
+      connection: ui.syncState,
+      error: localError ? `이 기기 저장 실패 · ${localError}` : ui.syncError,
+    },
+    getLiveDocumentGenerations(),
+  );
   const busy = status.kind === "connecting" || status.kind === "saving";
   const Icon = busy
     ? LoaderCircle
