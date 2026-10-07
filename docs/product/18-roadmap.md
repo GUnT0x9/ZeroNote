@@ -35,3 +35,5 @@ Foundation → Page/Block/Local Persistence → 서버 Metadata/Identity → Rec
 2026-10-07 Knowledge 3개와 전체 Backlinks의 서버 Index 연결을 배포했다. 53/148 항목 검증 완료·95개 계속 구현. [출시 기록](../knowledge-release.md). 다음은 [Subtask·Dependency·Label·Estimate·Template 구현](../task-extension-plan.md)이며 후속 Task/Comments/Member/Notification과 전체 미완료 요구도 계속 진행한다.
 
 2026-10-07 Task 확장 5개를 구현·배포했다. 58/148 완료·90개 계속 구현. [출시 기록](../task-extension-release.md). 다음은 [Task별 Comment Thread/Comment](../task-comments-plan.md)이며 Activity/Member/Notification과 나머지 전체 요구도 유지한다.
+
+2026-10-07 Task 댓글 2개와 Commit 확인 전 저장 표시를 구현·배포했다. CI 479 Tests/29 E2E/Docker/512MiB/암호화 복원 및 실제 HTTPS 7개 흐름 통과. [출시 기록](../task-comments-release.md). 60/148 완료·88개 계속 구현하며 Activity/Member/Notification과 전체 남은 범위를 유지한다.

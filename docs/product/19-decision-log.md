@@ -138,4 +138,6 @@ Verified 2026-10-07: `bee64d1`의 CI 460 Tests/27 E2E/Docker/512MiB/암호화 �
 
 ### DEC-049 — Task 댓글 범위와 전송 확인
 
-Accepted default: 기존 Page Comments에 선택형 Row ID를 추가하고 같은 Database 권한을 상속한다. 작성 Identity·Page/Row·부모·본문이 같은 ID 재시도만 승인한다. 기존 Page DTO와 댓글은 유지한다. 댓글 작성은 committed Row 상태와 같은 Content/Page lock에서 승인하며 Pool 내부 executor로 권한을 검사한다. 초안/Queue를 범위별 보존하고 POST 저장 확인 이후 재조회 실패는 GET만 재시도한다. 삭제된 Task의 미전송 댓글은 Database 댓글 패널에서 복사·재시도·제거한다. Snapshot에 댓글은 복제하지 않는다. [검증 기록](../task-comments-release.md)은 Production 검증 전 미완료 상태다.
+Accepted default: 기존 Page Comments에 선택형 Row ID를 추가하고 같은 Database 권한을 상속한다. 작성 Identity·Page/Row·부모·본문이 같은 ID 재시도만 승인한다. 기존 Page DTO와 댓글은 유지한다. 댓글 작성은 committed Row 상태와 같은 Content/Page lock에서 승인하며 Pool 내부 executor로 권한을 검사한다. 초안/Queue를 범위별 보존하고 POST 저장 확인 이후 재조회 실패는 GET만 재시도한다. 삭제된 Task의 미전송 댓글은 Database 댓글 패널에서 복사·재시도·제거한다. Snapshot에 댓글은 복제하지 않는다. [검증 기록](../task-comments-release.md)에 구현·배포 증거를 기록한다.
+
+Verified 2026-10-07: `522637e`의 CI 479 Tests/29 E2E/Docker/512MiB/암호화 복원과 Render → Vercel 및 실제 HTTPS 7개 흐름 통과. 최초 Production 회귀에서 확인한 Local Projection 전 완료 표시를 즉시 generation 구독으로 수정하고 지연 Commit 검증을 추가했다. Migration 009는 기존 댓글을 보존하며 이후 서버 Rollback은 Row 범위를 이해하는 버전으로 제한한다. 60/148 완료·88개 계속 구현.

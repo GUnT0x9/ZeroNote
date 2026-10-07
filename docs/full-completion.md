@@ -13,7 +13,7 @@
 5. Canvas → Capture/Extension → Desktop/Mobile 패키지 → 테마/Offline/Sync UI/운영 지원.
 6. 전체 항목 증거 대조, 회귀·보안·성능·Production·패키지 검증 후 goal 종료.
 
-현재 58개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md), [검색 기록](search-release.md), [Knowledge 기록](knowledge-release.md), [Task 확장 기록](task-extension-release.md)에 남긴다. 나머지 90개는 계속 구현 대상이다. Task 확장 5개는 460 Tests·27 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS 7개 흐름을 확인하고 배포했다. 다음은 [Task별 Comment 구현](task-comments-plan.md)이며 기반 코드만으로 완료를 집계하지 않는다.
+현재 60개 항목을 구현·배포했고 CI와 실제 HTTPS 회귀로 확인했다. Production 증거는 [파일·Editor 기록](editor-files-release.md), [데이터 이전 기록](transfer-release.md), [Storage 기록](storage-release.md), [Public Sharing 기록](public-sharing-release.md), [Database 속성 확장 기록](database-advanced-release.md), [Page Tags 기록](tags-release.md), [검색 기록](search-release.md), [Knowledge 기록](knowledge-release.md), [Task 확장 기록](task-extension-release.md), [Task 댓글 기록](task-comments-release.md)에 남긴다. 나머지 88개는 계속 구현 대상이다. Task 댓글 2개는 479 Tests·29 E2E·Docker/512MiB·암호화 백업 복원과 실제 HTTPS 7개 흐름을 확인하고 배포했다. Activity/Member/Notification과 전체 미완료 요구를 계속 진행하며 기반 코드만으로 완료를 집계하지 않는다.
 
 ## 항목별 완료 증거
 
@@ -54,7 +54,7 @@
 | 33   | Task / Project           | Recurring Task                        | 미구현                                                                                                         |
 | 34   | Task / Project           | Task Reminder                         | 미구현                                                                                                         |
 | 35   | Task / Project           | Task Activity Log                     | 미구현                                                                                                         |
-| 36   | Task / Project           | Task별 Comment Thread                 | 미구현                                                                                                         |
+| 36   | Task / Project           | Task별 Comment Thread                 | 구현·배포 / Row 범위·답글/해결·Offline 초안/Queue·역할·삭제 복구 / task-comments-release.md                    |
 | 37   | Task / Project           | Task Template                         | 구현·배포 / 관계·동시 병합·Viewer·Offline·Template 파일/값·Snapshot / task-extension-release.md                |
 | 38   | Database                 | File Property                         | 구현·배포 / 파일 연결·Preview·다운로드·Offline·Snapshot / database-advanced-release.md                         |
 | 39   | Database                 | Formula                               | 구현·배포 / ID AST·제한된 계산·속성 이름 변경·공개 범위 / formula.test.ts, database-advanced-release.md        |
@@ -71,7 +71,7 @@
 | 50   | Comments                 | Comment Mention                       | 미구현                                                                                                         |
 | 51   | Comments                 | Comment Reaction                      | 미구현                                                                                                         |
 | 52   | Comments                 | Comment Notification                  | 미구현                                                                                                         |
-| 53   | Comments                 | Task별 Comment                        | 미구현                                                                                                         |
+| 53   | Comments                 | Task별 Comment                        | 구현·배포 / Row 범위·답글/해결·Offline 초안/Queue·역할·삭제 복구 / task-comments-release.md                    |
 | 54   | Local-first / Offline    | Offline 첫 방문                       | 미구현                                                                                                         |
 | 55   | Local-first / Offline    | 아직 열지 않은 Page 완전 Offline 접근 | 미구현                                                                                                         |
 | 56   | Local-first / Offline    | Sync History UI                       | 미구현                                                                                                         |

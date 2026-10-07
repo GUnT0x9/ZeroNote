@@ -115,3 +115,5 @@ Render Free의 512MiB 제한에서 첫 배포가 실패했다. 원인은 Runtime
 2026-10-07 Knowledge 운영 반영: `34bc93e`, Render `dep-db2pce7lk1mc7388jo4g`, Vercel `dpl_AE4bWzSwT5m9qy9BTNXaqZ5qm8Vz`. CI 440 Tests/26 E2E/Docker/512MiB/암호화 복원과 실제 HTTPS 5개 흐름을 확인했다. Migration 8개·Protocol 1–4·Index 누락 0건·QA Workspace 0개. [Graph·관련 문서·링크 상태 기록](knowledge-release.md). 전체 53/148 완료·95개 계속 개발.
 
 2026-10-07 Task 확장 운영 반영: `bee64d1`, Render `dep-db2qi20m7kps73builtg`, Vercel `dpl_F9cm2TfHshTaQqgR9yxvNp11tMKh`. CI 460 Tests/27 E2E/Docker/512MiB/암호화 복원 및 실제 HTTPS 7개 흐름 통과. Migration 8개·Protocol 1–4·Index 누락 0건·QA Workspace 0개. [Task 확장 기록](task-extension-release.md). 58/148 완료·90개 계속 구현.
+
+2026-10-07 Task 댓글 운영 반영: `522637e`, Render `dep-db2suf0m7kps73c727n0`, Vercel `dpl_6TAakDRJvAY9UZ5DuHNgFZk3QPmM`. CI 479 Tests/29 E2E/Docker/512MiB/암호화 복원 및 실제 HTTPS 7개 흐름(4.0분) 통과. Production 백업 후 같은 소스 SHA와 Alias를 확인했다. Migration 9개·댓글 Scope Index 1개·Protocol 1–4·Index 누락 0건·QA Workspace 0개·DB 11,517,952 bytes. [댓글·Commit 표시 검증 기록](task-comments-release.md). 60/148 완료·88개 계속 구현. 서버 Rollback은 Migration 009의 Row 범위 댓글을 이해하는 버전으로 제한하며 DB를 자동 되감지 않는다.

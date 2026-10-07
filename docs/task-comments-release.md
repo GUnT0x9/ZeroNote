@@ -1,6 +1,6 @@
 # Task 댓글 구현 기록
 
-2026-10-07 구현 중. 미완료 항목 36(Task별 Comment Thread)·53(Task별 Comment)는 같은 Row 범위 Thread 기능으로 제공한다. CI·배포·실제 HTTPS 검증 전에는 완료 수를 올리지 않는다. 현재 검증 완료 58/148, 미완료 90개다.
+2026-10-07 구현·배포·실제 HTTPS 검증 완료. 항목 36(Task별 Comment Thread)·53(Task별 Comment)는 같은 Row 범위 Thread 기능으로 제공한다. 앱 소스는 `522637eeb20a90fffd92dc25508c14ebcbb4b840`이며 전체 검증 완료는 60/148, 남은 요구는 88개다. 전체 목표는 계속 진행한다.
 
 ## 동작
 
@@ -22,6 +22,24 @@ Migration 009 이후 서버 Rollback은 Row 범위를 이해하는 버전이어�
 
 ## 검증 상태
 
+최종 [CI 37572647579](https://github.com/GUnT0x9/ZeroNote/actions/runs/37572647579)는 동일 소스의 lint/type-check, 479 Tests/57 files, Web·Server build, 29 E2E(3.6분), 서버 Docker build/512MiB Health, 암호화 백업 복원을 모두 통과했다. PostgreSQL 17 복원 DB의 Migration 9개와 16개 테이블의 내용 fingerprint를 확인했다.
+
+Production 암호화 백업을 생성하고 최근 4개를 보관한 뒤 Render `dep-db2suf0m7kps73c727n0` → Vercel `dpl_6TAakDRJvAY9UZ5DuHNgFZk3QPmM` 순서로 수동 배포했다. Render Live/Health 200과 Vercel Production Alias의 Ready/프로젝트/소스 SHA를 확인했다. [Beta 사이트](https://zeronote-kohl.vercel.app)는 `522637e`를 실행한다. 이후 검증 문서 Commit은 앱 소스를 바꾸지 않는다.
+
+실제 HTTPS Chromium에서 다음 7개 흐름을 4.0분에 모두 통과했다.
+
+| 흐름                                                                     | 결과          |
+| ------------------------------------------------------------------------ | ------------- |
+| Task 댓글 범위·초안·Offline 답글·Commenter/Viewer·Snapshot 댓글 제외     | 통과 · 42.9초 |
+| 삭제 Task의 실패 댓글/초안 보존·복사·제거·모바일 Focus                   | 통과 · 26.3초 |
+| Task 관계·Label·Estimate·Template·Offline·지연 Commit 표시·Snapshot 복구 | 통과 · 32.8초 |
+| 미열람 Page/Row 전체 검색·조건/연산자/Fuzzy·미전송 편집                  | 통과 · 32.6초 |
+| Page 초대·두 기기 공동 편집·댓글·Viewer·Recovery                         | 통과 · 28.5초 |
+| 모바일 Touch 편집·Capture·Comments                                       | 통과 · 20.3초 |
+| File/Formula/Relation/Rollup·이름 변경·Offline Reload·Snapshot 복제      | 통과 · 38.5초 |
+
+검증 종료 후 Production DB는 Migration 9개, 댓글 Scope Index 1개, Editor Protocol 1–4, Checkpoint 검색 Index 누락 0건, QA Workspace 0개, 11,517,952 bytes였다. 실제 Android Chrome/iOS Safari 기기는 접근 가능한 실기기가 없어 별도로 검증하지 못했다. 위 모바일 결과는 Chromium Touch viewport 검증이다.
+
 첫 Production 검증(`8b4c4a6`)은 새 댓글 2개·검색·협업/Recovery·Mobile·File/Formula/Relation/Rollup의 6개 흐름이 통과했다. 기존 Task 확장 Snapshot 검증은 실패했다. Trace에서 Snapshot 요청 04:26:18.264 UTC 이후 선행 관계가 포함된 첫 Commit이 04:26:18.518 UTC에 실행된 것을 확인했다. 로컬 Projection의 80ms 저장 지연 전에 이전 완료 상태가 보일 수 있었다.
 
 수정은 기기에 열린 Yjs 문서의 generation 변경을 즉시 구독하여 서버 Commit 확인까지 좌측 저장 모션을 유지한다. 새로운 Polling과 상단 알림은 추가하지 않는다. Commit 응답을 의도적으로 보류하는 브라우저 검증으로 미확인 상태가 완료로 바뀌지 않음을 확인한다. 실패한 첫 결과로 완료 수를 갱신하지 않는다.
@@ -37,6 +55,7 @@ Migration 009 이후 서버 Rollback은 Row 범위를 이해하는 버전이어�
 | `apps/server/src/database/migrations.ts`, `migrations/009-task-comments.sql`                                            | 기존 댓글 보존과 Row 조회 Index                                              |
 | `apps/web/src/components/comments-panel.tsx`, `context-panel.tsx`, `app/globals.css`                                    | Task/Database 댓글 범위·답글/해결·실패 복구·모바일 입력                      |
 | `apps/web/src/lib/comments.ts`, `database.ts`, `sync.ts`                                                                | 초안 직렬화·Queue/ACK·캐시 범위·문서 Commit 이후 전송                        |
+| `apps/web/src/lib/document-activity.ts`, `documents.ts`, `sync-status.ts`, `components/sync-status.tsx`                 | 즉시 generation 구독과 서버 Commit 확인 전 완료 표시 방지                    |
 | 공유/서버/Local Tests, `tests/workspace.spec.ts`, CI                                                                    | 기존 데이터·동시 재시도·권한·Offline·두 기기·모바일·Migration 백업 복원 회귀 |
 
-최종 저장 표시 보강 후 로컬 lint/type-check, 전체 479 Tests/57 files(125.81초), 댓글/동기화/활동 구독/표시 집중 28 Tests를 통과했다. Task 범위/초안/Offline/역할/Snapshot 29.4초, 삭제 Task/모바일 Focus 18.1초, 기존 협업/Recovery 18.1초와 Mobile 회귀도 통과했다. 지연 Commit 회귀의 첫 실행은 숨겨진 모바일/Sidebar 아이콘을 함께 고른 strict locator 오류였으며 보이는 아이콘으로 한정한 Task/관계/Template/Snapshot 재실행이 23.7초에 통과했다. 후속 CI·Production 검증 전 완료 수는 58/148로 유지한다.
+최종 저장 표시 보강 후 로컬 lint/type-check, 전체 479 Tests/57 files(125.81초), 댓글/동기화/활동 구독/표시 집중 28 Tests를 통과했다. Task 범위/초안/Offline/역할/Snapshot 29.4초, 삭제 Task/모바일 Focus 18.1초, 기존 협업/Recovery 18.1초와 Mobile 회귀도 통과했다. 지연 Commit 회귀의 첫 실행은 숨겨진 모바일/Sidebar 아이콘을 함께 고른 strict locator 오류였으며 보이는 아이콘으로 한정한 Task/관계/Template/Snapshot 재실행이 23.7초에 통과했다. 당시에는 완료 수를 58/148로 유지했고 최종 CI·Production 검증 후 60/148로 갱신했다.

@@ -2,6 +2,8 @@
 
 2026-10-07 Accepted implementation defaults. 전체 미완료 요구 중 Task별 Comment Thread(36)와 Task별 Comment(53)는 같은 Row 범위의 Thread/답글/해결 사용 흐름으로 구현한다. 기반 코드만으로 완료로 집계하지 않는다.
 
+Verified 2026-10-07: `522637e`의 CI 479 Tests/29 E2E/Docker/512MiB/암호화 복원과 실제 HTTPS 7개 흐름을 통과하고 Render → Vercel에 배포했다. [구현·배포 기록](task-comments-release.md). 전체 60/148 완료·88개 계속 개발.
+
 ## 동작
 
 Task 상세에서 Comments Context Panel을 열면 선택한 Task의 Thread만 표시한다. Database 자체를 열면 기존 Page Thread를 표시한다. 각각 제목과 범위를 표시하고 이동/전환하면 Draft/답글 대상/해결 필터를 올바른 범위로 관리한다. Row 제목 변경 후에도 안정적인 Row ID를 사용한다. Snapshot/복제의 새 Page는 원본 Comments를 자동 복사하지 않는다.
