@@ -99,3 +99,7 @@ Migration 010은 기존 직접 Grant에 Revision 기본값 0을 추가하고 Gro
 | `packages/shared/src/members.test.ts`                           | 권한·재시도·충돌·Offline·캐시·실시간 재인증과 저장 회귀 검증  |
 | `packages/shared/src/members.ts`                                | 공유 Zod 계약과 순환 import를 피하는 Identity 기본 Schema     |
 | `tests/workspace.spec.ts`                                       | 권한·재시도·충돌·Offline·캐시·실시간 재인증과 저장 회귀 검증  |
+| `docs/beta-validation.md`                                       | 최신 운영 소스·Migration·HTTPS 검증 결과 기록                 |
+| `docs/feature-checklist.md`                                     | 실제 검증된 Member/Group 체크와 전체 완료 수 갱신             |
+| `docs/full-completion.md`                                       | 148개 요구의 두 완료 증거와 남은 86개 범위 유지               |
+| `docs/product/18-roadmap.md`                                    | Member/Group 배포 결과와 다음 협업 기능 순서 기록             |
